@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Consola · Harbor Desk</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Consola del agente</h1>
+      <p class="lede">Cola de casos con el paquete verificado. No hay texto crudo del cliente.</p>
+    </div>
+    <nav>
+      <a href="/">Cliente</a>
+      <a href="/agent">Consola</a>
+      <a href="/metrics">Métricas</a>
+    </nav>
+  </header>
+  <main>
+    <div class="row">
+      <input id="token" placeholder="Token del agente" />
+      <button id="load" class="primary" type="button">Ver cola</button>
+    </div>
+    <section id="queue"></section>
+    <pre id="packet"></pre>
+  </main>
+  <script src="/static/js/agent.js"></script>
+</body>
+</html>

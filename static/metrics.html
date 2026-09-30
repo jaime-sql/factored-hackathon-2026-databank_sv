@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Métricas · Harbor Desk</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Métricas</h1>
+      <p class="lede">El tablero deja fuera el tráfico de evaluación. Las tasas de seguridad que necesitan etiquetas viven en el informe offline.</p>
+    </div>
+    <nav>
+      <a href="/">Cliente</a>
+      <a href="/agent">Consola</a>
+      <a href="/metrics">Métricas</a>
+    </nav>
+  </header>
+  <main>
+    <label class="toggle">
+      <input id="include-eval" type="checkbox" />
+      <span id="eval-label">Demo sample (fraud-enriched, ~11x HIGH rate vs full data)</span>
+    </label>
+    <div id="tiles" class="grid"></div>
+    <pre id="raw"></pre>
+  </main>
+  <script src="/static/js/metrics.js"></script>
+</body>
+</html>
