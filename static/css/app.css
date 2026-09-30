@@ -50,6 +50,15 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
   text-transform: uppercase;
 }
 pre.packet-panel { margin-top: 0.6rem; }
+.queue-status {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
+  font-family: "Segoe UI", sans-serif;
+}
+.queue-status.error { border-color: var(--warn); color: var(--warn); }
+.queue-status.loading { color: #5c564c; }
 .protected {
   display: inline-block;
   margin: 0 0 0.45rem;

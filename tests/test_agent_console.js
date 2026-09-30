@@ -86,4 +86,83 @@ assert.match(desk, /Protegido/);
 assert.match(desk, /className = "protected"/);
 assert.match(desk, /\/api\/cases\/\$\{encodeURIComponent\(caseId\)\}\/trail/);
 assert.equal(desk.includes("onclick="), false);
-console.log("agent console js ok");
+
+assert.equal(
+  context.queueNotice(200, { queue: [] }, "es").text,
+  "No hay casos en la cola. Abre un caso desde la vista Cliente.",
+);
+assert.equal(
+  context.queueNotice(200, { queue: [] }, "pt").text,
+  "Não há casos na fila. Abra um caso na vista Cliente.",
+);
+assert.equal(context.queueNotice(401, { message: "Agent sign-in required" }, "es").text, "Token inválido");
+assert.equal(context.queueNotice(403, {}, "pt").text, "Token inválido");
+assert.equal(context.queueNotice(500, null, "es").kind, "error");
+assert.equal(context.queueNotice(0, null, "es").text, "No se pudo leer la cola.");
+assert.equal(context.queueNotice(200, { queue: [{ case_id: "x" }] }, "es").kind, "cards");
+
+async function checkLoadQueue() {
+  const box = {
+    kids: [],
+    replaceChildren() {
+      this.kids = [];
+    },
+    appendChild(node) {
+      this.kids.push(node);
+    },
+    setAttribute(name, value) {
+      this[name] = value;
+    },
+    removeAttribute(name) {
+      delete this[name];
+    },
+  };
+  context.document = {
+    documentElement: { lang: "es" },
+    getElementById(id) {
+      if (id === "queue") return box;
+      if (id === "token") return { value: "not-a-token" };
+      return null;
+    },
+    createElement() {
+      return { className: "", textContent: "" };
+    },
+  };
+  let releaseFetch;
+  context.fetch = () =>
+    new Promise((resolve) => {
+      releaseFetch = resolve;
+    });
+  const running = context.loadQueue();
+  await Promise.resolve();
+  assert.equal(box["aria-busy"], "true");
+  assert.ok(box.kids.some((node) => node.className.includes("loading")));
+  assert.ok(box.kids.some((node) => node.textContent === "Cargando la cola…"));
+  releaseFetch({
+    status: 200,
+    json: async () => ({ queue: [] }),
+  });
+  await running;
+  assert.equal(box["aria-busy"], undefined);
+  assert.ok(box.kids.some((node) => node.textContent.includes("No hay casos en la cola")));
+
+  context.consoleState.language = "pt";
+  context.fetch = async () => ({ status: 401, json: async () => ({ message: "no" }) });
+  await context.loadQueue();
+  assert.ok(box.kids.some((node) => node.textContent === "Token inválido"));
+  assert.ok(box.kids.some((node) => node.className.includes("error")));
+
+  context.fetch = async () => {
+    throw new Error("offline");
+  };
+  await context.loadQueue();
+  assert.ok(box.kids.some((node) => node.textContent === "Não foi possível ler a fila."));
+  context.consoleState.language = "es";
+}
+
+checkLoadQueue()
+  .then(() => console.log("agent console js ok"))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

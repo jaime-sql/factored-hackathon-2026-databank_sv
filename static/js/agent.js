@@ -1,5 +1,42 @@
 const tokenInput = typeof document === "undefined" ? null : document.getElementById("token");
 
+const queueCopy = {
+  es: {
+    lang: "Español",
+    empty: "No hay casos en la cola. Abre un caso desde la vista Cliente.",
+    invalid: "Token inválido",
+    failed: "No se pudo leer la cola.",
+    loading: "Cargando la cola…",
+  },
+  pt: {
+    lang: "Português",
+    empty: "Não há casos na fila. Abra um caso na vista Cliente.",
+    invalid: "Token inválido",
+    failed: "Não foi possível ler a fila.",
+    loading: "Carregando a fila…",
+  },
+};
+
+const consoleState = { language: "es" };
+
+function queueNotice(status, body, language) {
+  const copy = queueCopy[language === "pt" ? "pt" : "es"];
+  if (status === 401 || status === 403) return { kind: "error", text: copy.invalid };
+  if (!status || status >= 400) return { kind: "error", text: copy.failed };
+  const queue = body && body.queue;
+  if (!Array.isArray(queue)) return { kind: "error", text: copy.failed };
+  if (queue.length === 0) return { kind: "empty", text: copy.empty };
+  return { kind: "cards", text: "" };
+}
+
+function showQueueStatus(box, kind, text) {
+  box.replaceChildren();
+  const note = document.createElement("p");
+  note.className = `queue-status ${kind}`;
+  note.textContent = text;
+  box.appendChild(note);
+}
+
 function renderPacket(panel, view, trail) {
   const actions = (view.actions_taken || [])
     .map((action) => `${action.name} ${action.verification_status}`)
@@ -80,17 +117,39 @@ function fillCard(card, item) {
   card.append(title, meta, merchant, when, reason, button, resolve, panel);
 }
 
+function agentToken() {
+  const input = typeof document === "undefined" ? null : document.getElementById("token");
+  return input ? input.value : "";
+}
+
 async function loadQueue() {
-  const response = await fetch("/api/handoff", {
-    headers: { authorization: `Bearer ${tokenInput.value}` },
-  });
-  const body = await response.json();
   const box = document.getElementById("queue");
-  box.replaceChildren();
-  if (!response.ok || !body.queue) {
-    box.textContent = body.message || "No se pudo leer la cola";
+  const copy = queueCopy[consoleState.language === "pt" ? "pt" : "es"];
+  showQueueStatus(box, "loading", copy.loading);
+  box.setAttribute("aria-busy", "true");
+  let status = 0;
+  let body = null;
+  try {
+    const response = await fetch("/api/handoff", {
+      headers: { authorization: `Bearer ${agentToken()}` },
+    });
+    status = response.status;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+  } catch {
+    status = 0;
+    body = null;
+  }
+  box.removeAttribute("aria-busy");
+  const notice = queueNotice(status, body, consoleState.language);
+  if (notice.kind !== "cards") {
+    showQueueStatus(box, notice.kind, notice.text);
     return;
   }
+  box.replaceChildren();
   for (const item of body.queue) {
     const card = document.createElement("article");
     fillCard(card, item);
@@ -131,10 +190,28 @@ async function resolveCase(caseId, panel) {
   panel.textContent = response.ok ? "Resuelto" : "No se pudo resolver";
 }
 
+function applyConsoleLanguage() {
+  const copy = queueCopy[consoleState.language === "pt" ? "pt" : "es"];
+  document.documentElement.lang = consoleState.language === "pt" ? "pt" : "es";
+  const button = document.getElementById("lang");
+  if (button) button.textContent = copy.lang;
+}
+
 if (typeof document !== "undefined" && document.getElementById("load")) {
+  const langButton = document.getElementById("lang");
+  if (langButton) {
+    langButton.addEventListener("click", () => {
+      consoleState.language = consoleState.language === "es" ? "pt" : "es";
+      applyConsoleLanguage();
+    });
+    applyConsoleLanguage();
+  }
   document.getElementById("load").addEventListener("click", loadQueue);
   boot();
 }
 
 globalThis.renderPacket = renderPacket;
 globalThis.fillCard = fillCard;
+globalThis.queueNotice = queueNotice;
+globalThis.loadQueue = loadQueue;
+globalThis.consoleState = consoleState;

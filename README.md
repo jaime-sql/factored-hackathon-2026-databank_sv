@@ -23,7 +23,7 @@ Open [http://127.0.0.1:8091](http://127.0.0.1:8091). The other pages are `/agent
 
 `make check` runs ruff, mypy, and pytest.
 
-SQLite uses the synthetic fixture in `app/bank/fixture.py`. With `DATABASE_URL` set, the personas map to real challenge-data customers. The demo database is not in git. Startup builds `data/bank.sqlite` and `data/ops.sqlite`. `data/` is gitignored. There is nothing to download.
+SQLite uses the synthetic fixture in `app/bank/fixture.py`. With `DATABASE_URL` set, the personas map to real challenge-data customers. The demo database is not in git. Startup builds `data/bank.sqlite` and `data/ops.sqlite`. `data/` is gitignored. There is nothing to download. The local SQLite handoff queue starts empty: open a case from the customer view, then click Ver cola.
 
 ## Postgres
 
