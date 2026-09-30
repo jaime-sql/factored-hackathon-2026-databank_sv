@@ -1,0 +1,13 @@
+cat_group,case_type,n
+Fees (Cobro indebido),Complaint,8171
+Fees (Cobro indebido),Claim,3357
+Fees (Cobro indebido),Request,1367
+Fees (Cobro indebido),Suggestion,658
+Other categories,Complaint,24042
+Other categories,Claim,9906
+Other categories,Request,4065
+Other categories,Suggestion,1949
+Transactions (Cargo no reconocido),Complaint,8239
+Transactions (Cargo no reconocido),Claim,3335
+Transactions (Cargo no reconocido),Request,1329
+Transactions (Cargo no reconocido),Suggestion,677

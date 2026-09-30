@@ -1,0 +1,5 @@
+segment,transactions,pending,pending_pct,reversed,reversed_pct,pending_or_reversed,pending_or_reversed_pct,declined,fraud_score_nonnull,fs_gt30,fs_gt30_pct_all,fs_gt30_pct_scored,fs_gt30_excl_pend_rev,is_fraud,is_fraud_pct,is_fraud_and_fs_gt30
+Basic,2650179,52824,1.993,26854,1.013,79678,3.007,132252,2119924,1443,0.0544,0.0681,1405,2596,0.098,1443
+Plus,1110263,22340,2.012,11161,1.005,33501,3.017,55488,888030,585,0.0527,0.0659,567,1097,0.0988,585
+Premium,443830,8785,1.979,4504,1.015,13289,2.994,22385,355170,213,0.048,0.06,208,395,0.089,213
+Student,220736,4394,1.991,2231,1.011,6625,3.001,11109,176727,132,0.0598,0.0747,129,228,0.1033,132

@@ -1,0 +1,7 @@
+scenario,loaded_usd_per_hour,handle_time_stat,disputes_per_month,cost_per_contact_usd,monthly_human_cost_usd,monthly_cost_if_per_resolution_usd
+low,6.0,mean,377.49,0.72,273.43,626.52
+mid,12.0,mean,377.49,1.45,546.86,1253.03
+high,20.0,mean,377.49,2.41,911.43,2088.39
+low,6.0,median,377.49,0.72,271.16,621.32
+mid,12.0,median,377.49,1.44,542.32,1242.64
+high,20.0,median,377.49,2.39,903.87,2071.06

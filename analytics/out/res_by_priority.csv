@@ -1,0 +1,5 @@
+priority,complaints,final_status,final_pct,resolved,closed,rejected,open,in_process,escalated,n_with_open_and_close_ts,res_days_p50,res_days_p75,res_days_p90,res_days_mean,col_resolution_days_p50,col_resolution_days_p75,col_resolution_days_p90,sla_breached,sla_breach_pct_all,sla_breached_final,sla_breach_pct_final
+Medium,33439,8413,25.16,6795,1265,353,10010,13337,1679,7736,16.0,23.0,28.0,15.55,16.0,23.0,28.0,6734,20.14,1678,19.95
+Low,20411,5071,24.84,4050,802,219,6180,8152,1008,4668,16.0,23.0,28.0,15.71,16.0,23.0,28.0,4093,20.05,1016,20.04
+High,9890,2517,25.45,2005,411,101,2931,3991,451,2316,16.0,24.0,28.0,15.65,16.0,24.0,28.0,2024,20.47,523,20.78
+Critical,3355,825,24.59,662,131,32,1004,1343,183,767,15.0,24.0,28.0,15.51,15.0,24.0,28.0,644,19.2,140,16.97

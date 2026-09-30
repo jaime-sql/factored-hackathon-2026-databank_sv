@@ -1,0 +1,5 @@
+transaction_status,n,scored,fs_gt30,is_fraud
+Approved,4070681,3256373,2196,3986
+Declined,221234,177042,113,215
+Pending,88343,70675,46,79
+Reversed,44750,35761,18,36
