@@ -367,8 +367,14 @@ def reply_clarify(language: str) -> str:
 
 def reply_injection(language: str) -> str:
     if language == "pt":
-        return "Só posso ajudar com uma cobrança da sua lista. Descreva o cargo, sem instruções para o assistente."
-    return "Solo puedo ayudar con un cargo de su lista. Describa el cargo, sin instrucciones para el asistente."
+        return (
+            "Protegido. Não reembolso, não emito um crédito e não mudo as regras. "
+            "Só posso ajudar com uma cobrança da sua lista."
+        )
+    return (
+        "Protegido. No reembolso, no emito un crédito y no cambio las reglas. "
+        "Solo puedo ayudar con un cargo de su lista."
+    )
 
 
 def reply_permission(language: str) -> str:
@@ -462,6 +468,43 @@ def handoff_reason_label(
     if not reason:
         return "Motivo não registrado" if pt else "Motivo no registrado"
     return reason
+
+
+def trail_customer_reason(
+    language: str,
+    *,
+    reason: str,
+    status: str,
+    band: str,
+    case_type: str,
+    card_blocked: bool,
+) -> str:
+    """Customer-safe why-line. No model version, score, or flag name."""
+    pt = language == "pt"
+    if reason in {"prompt_injection", "injection_detected"} or status == "injection_blocked":
+        return "Mensagem bloqueada" if pt else "Mensaje bloqueado"
+    if reason:
+        return handoff_reason_label(
+            language,
+            reason,
+            band=band,
+            case_type=case_type,
+            synthetic=False,
+            card_blocked=card_blocked,
+        )
+    labels = {
+        "pending_explained": "Cobrança pendente" if pt else "Cargo pendiente",
+        "reversed_explained": "Cobrança estornada" if pt else "Cargo reversado",
+        "merchant_explained": "Explicação do comércio" if pt else "Explicación del comercio",
+        "duplicate_explained": "Possível duplicado" if pt else "Posible duplicado",
+        "merchant_recognized": "Comércio reconhecido" if pt else "Comercio reconocido",
+        "awaiting_block_confirmation": (
+            "Confirmação de bloqueio" if pt else "Confirmación de bloqueo"
+        ),
+    }
+    if status in labels:
+        return labels[status]
+    return "Motivo não registrado" if pt else "Motivo no registrado"
 
 
 def threshold_crossed(

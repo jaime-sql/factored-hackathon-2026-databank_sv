@@ -1,6 +1,6 @@
 const tokenInput = typeof document === "undefined" ? null : document.getElementById("token");
 
-function renderPacket(panel, view) {
+function renderPacket(panel, view, trail) {
   const actions = (view.actions_taken || [])
     .map((action) => `${action.name} ${action.verification_status}`)
     .join(", ");
@@ -18,6 +18,27 @@ function renderPacket(panel, view) {
     view.reason_label,
     view.recommended_next_step,
   ];
+  if (view.band_evidence) lines.push(view.band_evidence);
+  for (const step of (trail && trail.steps) || []) {
+    if (step.kind === "action") {
+      const action = `${step.action || ""} ${step.verification || ""}`.trim();
+      lines.push([step.at, action].filter(Boolean).join(" · "));
+    } else {
+      lines.push(
+        [
+          step.at,
+          step.rule_or_model,
+          step.band,
+          step.threshold,
+          (step.guardrail_flags || []).join(","),
+          step.handoff,
+          step.reason_label,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      );
+    }
+  }
   panel.textContent = lines.join("\n");
   panel.hidden = false;
 }
@@ -83,15 +104,17 @@ async function togglePacket(panel, caseId) {
     return;
   }
   panel.hidden = false;
-  const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}`, {
-    headers: { authorization: `Bearer ${tokenInput.value}` },
-  });
+  const headers = { authorization: `Bearer ${tokenInput.value}` };
+  const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}`, { headers });
   if (!response.ok) {
     panel.textContent = "No se pudo abrir el paquete";
     return;
   }
   const body = await response.json();
-  renderPacket(panel, body.view || {});
+  let trail = { steps: [] };
+  const trailResponse = await fetch(`/api/cases/${encodeURIComponent(caseId)}/trail`, { headers });
+  if (trailResponse.ok) trail = await trailResponse.json();
+  renderPacket(panel, body.view || {}, trail);
   panel.dataset.loaded = "1";
 }
 

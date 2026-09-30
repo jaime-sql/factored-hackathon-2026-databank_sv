@@ -362,6 +362,35 @@ class OpsStore:
         rows = self.execute(f"SELECT * FROM {self._table('audit_current')}")
         return [_normalize_audit(row) for row in rows]
 
+    def audit_chain(self, case_id: str) -> list[dict[str, Any]]:
+        """Tip from audit_current, then each superseded parent. Read-only."""
+        tips = self.execute(
+            f"SELECT * FROM {self._table('audit_current')} WHERE case_id = ?",
+            (case_id,),
+        )
+        found: dict[str, dict[str, Any]] = {}
+        for tip in tips:
+            self._walk_supersedes(_normalize_audit(tip), found, 0)
+        return list(found.values())
+
+    def _walk_supersedes(
+        self, row: dict[str, Any], found: dict[str, dict[str, Any]], depth: int
+    ) -> None:
+        audit_id = str(row.get("audit_id") or "")
+        if not audit_id or audit_id in found or depth > 40:
+            return
+        found[audit_id] = row
+        previous = row.get("supersedes_audit_id")
+        if not previous:
+            return
+        older = self.execute(
+            f"SELECT * FROM {self._table('audit_case')} WHERE audit_id = ?",
+            (str(previous),),
+        )
+        if not older:
+            return
+        self._walk_supersedes(_normalize_audit(older[0]), found, depth + 1)
+
     def audit_case_count(self, case_id: str) -> int:
         rows = self.execute(
             f"SELECT count(*) AS n FROM {self._table('audit_case')} WHERE case_id = ?",

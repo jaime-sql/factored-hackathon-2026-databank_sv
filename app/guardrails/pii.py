@@ -17,7 +17,6 @@ _LABELED_ID = re.compile(
     r"(?i)\b(?:ssn|social security|national\s*id|nin|id\s*number)\b[:\s#-]*[A-Z0-9-]{4,}"
 )
 _ACCOUNT = re.compile(r"(?i)\b(?:account|acct)(?:\s+(?:number|no\.?|#))?[\s:#-]*\d{6,17}\b")
-_CARD = re.compile(r"\b(?:\d{4}[ -]){3}\d{4}\b|\b\d{13,19}\b")
 _NAME_INTRO = re.compile(r"(?i)\bmy name is\s+[a-z][a-z'’.-]+(?:\s+[a-z][a-z'’.-]+){0,2}")
 
 _SENSITIVE_KEYS = {
@@ -65,16 +64,49 @@ def luhn_ok(number: str) -> bool:
     return total % 10 == 0
 
 
-def _mask_cards(text: str) -> str:
-    def replace(match: re.Match[str]) -> str:
-        raw = match.group(0)
-        digits = re.sub(r"\D", "", raw)
-        grouped = bool(re.search(r"\d{4}[ -]\d{4}", raw))
-        if 13 <= len(digits) <= 19 and (luhn_ok(digits) or grouped):
-            return "[CARD]"
-        return raw
+_GROUP_RUN = re.compile(r"(?:\d{4}[ -]){2,}\d{4}")
+_GROUPED_CARD = re.compile(r"(?:\d{4}[ -]){3}\d{4}")
+_CONTIGUOUS_CARD = re.compile(r"(?<!\d)\d{13,19}(?!\d)")
 
-    return _CARD.sub(replace, text)
+
+def _overlaps(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
+    return any(start < other_end and end > other_start for other_start, other_end in spans)
+
+
+def _mask_cards(text: str) -> str:
+    """Mask a Luhn PAN even when a nearby 4-digit amount would swallow it."""
+    spans: list[tuple[int, int]] = []
+    for run in _GROUP_RUN.finditer(text):
+        groups = list(re.finditer(r"\d{4}", run.group(0)))
+        index = 0
+        while index + 3 < len(groups):
+            digits = "".join(group.group(0) for group in groups[index : index + 4])
+            if luhn_ok(digits):
+                start = run.start() + groups[index].start()
+                end = run.start() + groups[index + 3].end()
+                if not _overlaps(start, end, spans):
+                    spans.append((start, end))
+                index += 4
+            else:
+                index += 1
+    for match in _CONTIGUOUS_CARD.finditer(text):
+        if luhn_ok(match.group(0)) and not _overlaps(match.start(), match.end(), spans):
+            spans.append((match.start(), match.end()))
+    for match in _GROUPED_CARD.finditer(text):
+        if not _overlaps(match.start(), match.end(), spans):
+            spans.append((match.start(), match.end()))
+    if not spans:
+        return text
+    pieces: list[str] = []
+    cursor = 0
+    for start, end in sorted(spans):
+        if start < cursor:
+            continue
+        pieces.append(text[cursor:start])
+        pieces.append("[CARD]")
+        cursor = end
+    pieces.append(text[cursor:])
+    return "".join(pieces)
 
 
 def redact(text: str, extra_names: list[str] | None = None) -> str:

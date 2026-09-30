@@ -132,6 +132,7 @@ class CaseResult:
             "eval_run_id": self.eval_run_id,
             "case_source": self.case_source,
             "money_movement": "none",
+            "protected": "prompt_injection" in self.guardrail_flags,
         }
 
 
@@ -163,9 +164,9 @@ class Engine:
         flags: list[str] = []
         redacted, changed = _redact(message or "")
         if changed:
-            flags.append("pii_redacted_input")
+            flags.append("pii_masked")
         if detect_injection(redacted).blocked:
-            return self._injection(customer_key, lang, flags, eval_run_id, case_source)
+            return self._injection(customer_key, lang, flags, eval_run_id, case_source, redacted)
         if not transaction_key:
             return self._clarify(customer_key, lang, flags, eval_run_id, case_source)
         customer = self.bank.get_customer(customer_key)
@@ -960,8 +961,9 @@ class Engine:
         flags: list[str],
         eval_run_id: str | None,
         case_source: str | None,
+        redacted_message: str,
     ) -> CaseResult:
-        flags.append("injection_detected")
+        flags.append("prompt_injection")
         customer = self.bank.get_customer(customer_key)
         if customer is None:
             raise APIError(404, "not_found", "Customer not found")
@@ -997,7 +999,7 @@ class Engine:
             closed=now,
             decision="abandoned",
             automation=False,
-            reason="injection_detected",
+            reason="prompt_injection",
             packet_complete=None,
             lang=lang,
             version=RULE_VERSION,
@@ -1007,6 +1009,13 @@ class Engine:
             is_eval=is_eval,
             eval_run_id=eval_run_id,
             case_source=case_source,
+        )
+        self._event(
+            case_id,
+            "guardrail",
+            "input",
+            {"message": redact(redacted_message)},
+            "verified",
         )
         return CaseResult(
             case_id,

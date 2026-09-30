@@ -6,19 +6,33 @@ const copy = {
     pick: "Elija una persona sintética",
     charges: "Sus cargos, en su hora local",
     dispute: "No reconozco este cargo",
+    message: "Mensaje",
+    send: "Enviar",
+    why: "¿Por qué?",
   },
   pt: {
     lang: "Português",
     pick: "Escolha uma pessoa sintética",
     charges: "Suas cobranças, no seu horário local",
     dispute: "Não reconheço esta cobrança",
+    message: "Mensagem",
+    send: "Enviar",
+    why: "Por quê?",
   },
 };
 
-document.getElementById("lang").addEventListener("click", () => {
-  state.language = state.language === "es" ? "pt" : "es";
+function applyLanguage() {
   document.documentElement.lang = state.language === "pt" ? "pt" : "es";
   document.getElementById("lang").textContent = copy[state.language].lang;
+  const message = document.getElementById("message");
+  if (message) message.placeholder = copy[state.language].message;
+  const send = document.getElementById("send");
+  if (send) send.textContent = copy[state.language].send;
+}
+
+document.getElementById("lang").addEventListener("click", () => {
+  state.language = state.language === "es" ? "pt" : "es";
+  applyLanguage();
 });
 
 async function loadPersonas() {
@@ -95,6 +109,12 @@ function render(body) {
   box.innerHTML = "";
   const card = document.createElement("article");
   card.className = "card";
+  if (body.protected) {
+    const notice = document.createElement("p");
+    notice.className = "protected";
+    notice.textContent = "Protegido";
+    card.appendChild(notice);
+  }
   const text = document.createElement("p");
   text.className = "reply";
   text.textContent = body.reply || body.message || "";
@@ -107,6 +127,47 @@ function render(body) {
     card.appendChild(button);
   }
   box.appendChild(card);
+  if (body.case_id) attachWhy(card, body.case_id);
 }
 
+async function attachWhy(card, caseId) {
+  const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/trail`, {
+    headers: { authorization: `Bearer ${state.token}` },
+  });
+  if (!response.ok) return;
+  const body = await response.json();
+  const details = document.createElement("details");
+  details.className = "why";
+  const summary = document.createElement("summary");
+  summary.textContent = copy[state.language].why;
+  details.appendChild(summary);
+  const list = document.createElement("ol");
+  for (const step of body.steps || []) {
+    const item = document.createElement("li");
+    item.textContent = [step.at, step.band, step.reason].filter(Boolean).join(" · ");
+    list.appendChild(item);
+  }
+  details.appendChild(list);
+  card.appendChild(details);
+}
+
+document.getElementById("composer").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.token) return;
+  const input = document.getElementById("message");
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = "";
+  const response = await fetch("/cases", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${state.token}`,
+    },
+    body: JSON.stringify({ message, language: state.language }),
+  });
+  render(await response.json());
+});
+
+applyLanguage();
 loadPersonas();

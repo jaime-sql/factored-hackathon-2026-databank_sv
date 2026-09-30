@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
+from app.band_evidence import BandEvidenceSource
 from app.bank.fixture import PERSONAS, init_bank
 from app.bank.repository import SQLBankRepository
 from app.cases.engine import Engine
@@ -52,6 +53,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.bank = bank
         app.state.ops = ops
         app.state.thresholds = ThresholdSource(threshold_path)
+        app.state.band_evidence = BandEvidenceSource(
+            root / "triage" / "artifacts" / "band_evidence.json"
+        )
         app.state.triage = LightGBMTriage()
         app.state.engine = Engine(bank, ops, app.state.thresholds, active, app.state.triage)
         yield

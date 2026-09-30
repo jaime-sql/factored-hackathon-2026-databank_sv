@@ -42,4 +42,48 @@ for (const part of [
 ]) {
   assert.ok(panel.textContent.includes(part), part);
 }
+assert.equal(panel.textContent.includes("fraud rate"), false);
+
+const withTrail = { textContent: "", hidden: true, dataset: {} };
+context.renderPacket(
+  withTrail,
+  {
+    band: "review",
+    model_version: "lgbm:v",
+    threshold_crossed: "score >= 0.0002756",
+    amount: "1,400.00 MXN",
+    merchant: "T•••••",
+    reason_label: "Modelo: revisión",
+    recommended_next_step: "Revisar",
+    band_evidence:
+      "band review, crossed threshold 0.0002756039, fraud rate in this band on val 1.2% (CI 0.8–1.7%)",
+  },
+  {
+    steps: [
+      {
+        kind: "decision",
+        at: "15 ene 2026, 12:00 CST",
+        rule_or_model: "lgbm:v",
+        band: "review",
+        threshold: "score >= 0.0002756",
+        guardrail_flags: [],
+        handoff: "handoff",
+        reason_label: "Modelo: revisión",
+      },
+      { kind: "action", at: "15 ene 2026, 12:01 CST", action: "handoff", verification: "verified" },
+    ],
+  },
+);
+assert.ok(withTrail.textContent.includes("fraud rate in this band on val 1.2%"));
+assert.ok(withTrail.textContent.includes("lgbm:v"));
+assert.ok(withTrail.textContent.includes("handoff verified"));
+
+assert.match(source, /\/api\/cases\/\$\{encodeURIComponent\(caseId\)\}\/trail/);
+const desk = fs.readFileSync("static/js/desk.js", "utf8");
+assert.match(desk, /¿Por qué\?/);
+assert.match(desk, /Por quê\?/);
+assert.match(desk, /Protegido/);
+assert.match(desk, /className = "protected"/);
+assert.match(desk, /\/api\/cases\/\$\{encodeURIComponent\(caseId\)\}\/trail/);
+assert.equal(desk.includes("onclick="), false);
 console.log("agent console js ok");

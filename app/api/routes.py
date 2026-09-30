@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.auth.session import agent_role, read_customer, sign_customer
 from app.bank.fixture import PERSONAS
+from app.cases.trail import build_steps
 from app.config import Settings
 from app.errors import APIError
 from app.eval_access import accept_eval_fields
@@ -223,6 +224,38 @@ def get_case(case_id: str, request: Request) -> dict[str, Any]:
     }
 
 
+@router.get("/api/cases/{case_id}/trail")
+def case_trail(case_id: str, request: Request) -> dict[str, Any]:
+    settings = _settings(request)
+    role = agent_role(settings, _bearer(request))
+    customer_key = ""
+    if role is None:
+        customer_key = _customer(request)
+    case = request.app.state.ops.get_case(case_id)
+    if case is None or (role is None and case["customer_key"] != customer_key):
+        raise APIError(404, "not_found", "Case not found")
+    customer = request.app.state.bank.get_customer(str(case["customer_key"]))
+    tz = customer.tz if customer is not None else None
+    country = customer.customer_country if customer is not None else case.get("country")
+    language = str(case.get("language") or "es")
+    t_low, high_value = _thresholds(request)
+    steps = build_steps(
+        request.app.state.ops.audit_chain(case_id),
+        request.app.state.ops.list_events(case_id),
+        tz=tz,
+        country=None if country is None else str(country),
+        language=language,
+        t_low=t_low,
+        high_value=high_value,
+        safe=role is None,
+    )
+    return {
+        "case_id": case_id,
+        "scope": "customer" if role is None else "agent",
+        "steps": steps,
+    }
+
+
 def _audit_for(request: Request, case_id: str) -> dict[str, Any] | None:
     for row in request.app.state.ops.current_audit_cases():
         if row.get("case_id") == case_id:
@@ -262,10 +295,14 @@ def handoff_case(case_id: str, request: Request) -> dict[str, Any]:
         for event in events
     ]
     t_low, high_value = _thresholds(request)
+    view = packet_view(row, _audit_for(request, case_id), t_low=t_low, high_value=high_value)
+    evidence = request.app.state.band_evidence.line(str(view.get("band") or ""))
+    if evidence:
+        view["band_evidence"] = evidence
     return {
         "handoff": row,
         "events": safe_events,
-        "view": packet_view(row, _audit_for(request, case_id), t_low=t_low, high_value=high_value),
+        "view": view,
     }
 
 
