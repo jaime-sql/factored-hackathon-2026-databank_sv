@@ -395,25 +395,11 @@ def next_step_review(language: str) -> str:
     return "Revisar el cargo con una persona. No bloquear la tarjeta desde este paquete. No se emitió un crédito."
 
 
-_FALLBACK_MERCHANT_PREFIXES = (
-    "categoría ",
-    "categoria ",
-    "tipo ",
-)
-_FALLBACK_MERCHANT_EXACT = {
-    "comercio no identificado",
-    "comércio não identificado",
-}
-
-
 def mask_merchant(label: str) -> str:
-    """Hide a real merchant name. Category and type fallbacks stay readable."""
+    """Mask every merchant label the same way, including category fallbacks."""
     text = (label or "").strip()
     if not text:
         return ""
-    lowered = text.lower()
-    if lowered in _FALLBACK_MERCHANT_EXACT or lowered.startswith(_FALLBACK_MERCHANT_PREFIXES):
-        return text
     masked: list[str] = []
     for word in text.split():
         masked.append(word if len(word) <= 1 else word[0] + ("•" * (len(word) - 1)))
@@ -483,6 +469,8 @@ def trail_customer_reason(
     pt = language == "pt"
     if reason in {"prompt_injection", "injection_detected"} or status == "injection_blocked":
         return "Mensagem bloqueada" if pt else "Mensaje bloqueado"
+    if reason == "fraud_model":
+        return "Requer revisão de um especialista" if pt else "Requiere revisión de un especialista"
     if reason:
         return handoff_reason_label(
             language,

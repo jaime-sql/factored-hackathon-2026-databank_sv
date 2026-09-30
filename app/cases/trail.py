@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.guardrails.pii import redact
-from app.i18n import threshold_crossed, trail_customer_reason
+from app.i18n import handoff_reason_label, threshold_crossed, trail_customer_reason
 from app.timeutil import as_utc, present_time
 
 _HIGH_STATUS = {
@@ -109,14 +109,24 @@ def build_steps(
         reason = _text(audit.get("handoff_reason"))
         status = _text(audit.get("final_resolution_status"))
         case_type = _text(audit.get("case_type"))
+        blocked = _card_blocked(events, at)
         label = trail_customer_reason(
             language,
             reason=reason,
             status=status,
             band=band,
             case_type=case_type,
-            card_blocked=_card_blocked(events, at),
+            card_blocked=blocked,
         )
+        if not safe and reason == "fraud_model":
+            label = handoff_reason_label(
+                language,
+                reason,
+                band=band,
+                case_type=case_type,
+                synthetic=False,
+                card_blocked=blocked,
+            )
         shown = present_time(at, tz, country, language)
         if safe:
             items.append(

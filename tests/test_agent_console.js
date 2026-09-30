@@ -28,6 +28,7 @@ context.renderPacket(panel, {
   recommended_next_step: "Revisar la tarjeta bloqueada.",
 });
 assert.equal(panel.hidden, false);
+assert.equal(panel.textContent.split("\n").includes(""), false);
 for (const part of [
   "high",
   "rule_fs_gt30_v1",

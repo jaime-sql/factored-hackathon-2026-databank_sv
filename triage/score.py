@@ -67,8 +67,11 @@ def _matrix(df: pd.DataFrame, art: dict) -> pd.DataFrame:
     out = {}
     for col in art["features"]:
         if col in art["categorical"]:
-            series = df[col].astype("object").where(df[col].notna(), None)
-            out[col] = pd.Categorical(series, categories=art["cat_maps"][col])
+            series = df[col].astype("object")
+            allowed = art["cat_maps"][col]
+            # Unknown labels become missing, which is how the booster already treats them.
+            series = series.where(series.isin(allowed), None)
+            out[col] = pd.Categorical(series, categories=allowed)
         else:
             out[col] = pd.to_numeric(df[col].astype("object"), errors="coerce").astype("float32")
     return pd.DataFrame(out, index=df.index)

@@ -18,8 +18,9 @@ JUDGE = "judge-demo-token"
 
 def test_mask_and_reason_labels() -> None:
     assert mask_merchant("Tienda Don José") == "T••••• D•• J•••"
-    assert mask_merchant("categoría Food") == "categoría Food"
-    assert mask_merchant("Comercio no identificado") == "Comercio no identificado"
+    assert mask_merchant("Uber") == "U•••"
+    assert mask_merchant("categoría Food") == "c•••••••• F•••"
+    assert mask_merchant("Comercio no identificado") == "C••••••• n• i•••••••••••"
     assert (
         handoff_reason_label(
             "es",

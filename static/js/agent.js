@@ -44,7 +44,9 @@ function renderPacket(panel, view, trail) {
   const lines = [
     view.band,
     view.model_version,
-    view.model_risk_score == null ? "" : String(view.model_risk_score),
+  ];
+  if (view.model_risk_score != null) lines.push(String(view.model_risk_score));
+  lines.push(
     view.threshold_crossed,
     view.amount,
     view.merchant,
@@ -54,7 +56,7 @@ function renderPacket(panel, view, trail) {
     actions || "ninguna",
     view.reason_label,
     view.recommended_next_step,
-  ];
+  );
   if (view.band_evidence) lines.push(view.band_evidence);
   for (const step of (trail && trail.steps) || []) {
     if (step.kind === "action") {

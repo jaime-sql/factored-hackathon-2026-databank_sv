@@ -256,3 +256,42 @@ def test_attack_masks_pan_refuses_and_flags(client: TestClient) -> None:
     assert refund.status_code == 200, refund.text
     assert refund.json()["protected"] is False
     assert refund.json()["band"] == "low"
+
+
+def test_customer_trail_does_not_name_the_model(client: TestClient) -> None:
+    maria = login(client, "maria")
+    opened = client.post(
+        "/cases",
+        headers=maria,
+        json={
+            "transaction_key": "tx_maria_review",
+            "message": "No reconozco este cargo",
+            "language": "es",
+        },
+    )
+    assert opened.status_code == 200, opened.text
+    case_id = opened.json()["case_id"]
+    customer = client.get(f"/api/cases/{case_id}/trail", headers=maria)
+    assert customer.status_code == 200, customer.text
+    assert customer.json()["steps"][0]["reason"] == "Requiere revisión de un especialista"
+    assert "Modelo" not in customer.text
+
+    portuguese = client.post(
+        "/cases",
+        headers=maria,
+        json={
+            "transaction_key": "tx_maria_review",
+            "message": "Não reconheço esta cobrança",
+            "language": "pt",
+        },
+    )
+    assert portuguese.status_code == 200, portuguese.text
+    pt_trail = client.get(f"/api/cases/{portuguese.json()['case_id']}/trail", headers=maria)
+    assert pt_trail.json()["steps"][0]["reason"] == "Requer revisão de um especialista"
+
+    agent = client.get(
+        f"/api/cases/{case_id}/trail",
+        headers={"Authorization": "Bearer demo-agent-local"},
+    )
+    decision = next(step for step in agent.json()["steps"] if step["kind"] == "decision")
+    assert decision["reason_label"] == "Modelo: revisión"
