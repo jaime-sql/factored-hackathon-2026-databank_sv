@@ -1,0 +1,5 @@
+segment,complaints,final_status,final_pct,resolved,closed,rejected,open,in_process,escalated,n_with_open_and_close_ts,res_days_p50,res_days_p75,res_days_p90,res_days_mean,col_resolution_days_p50,col_resolution_days_p75,col_resolution_days_p90,sla_breached,sla_breach_pct_all,sla_breached_final,sla_breach_pct_final
+Basic,40135,10063,25.07,8084,1538,441,12013,16035,2024,9231,15.0,23.0,28.0,15.54,15.0,23.0,28.0,8070,20.11,2028,20.15
+Plus,16835,4254,25.27,3416,666,172,5013,6768,800,3944,16.0,23.0,28.0,15.7,16.0,23.0,28.0,3405,20.23,873,20.52
+Premium,6764,1673,24.73,1358,260,55,2070,2696,325,1539,16.0,23.0,28.0,15.76,16.0,23.0,27.7,1370,20.25,312,18.65
+Student,3361,836,24.87,654,145,37,1029,1324,172,773,16.0,24.0,27.0,15.76,15.0,24.0,28.0,650,19.34,144,17.22

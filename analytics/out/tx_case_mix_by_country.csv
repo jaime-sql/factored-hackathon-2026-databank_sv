@@ -1,0 +1,13 @@
+country,case_bucket,n,pct
+Argentina,1 HIGH,476,0.054
+Argentina,2 Pending,17730,2.015
+Argentina,3 Reversed,8877,1.009
+Argentina,4 Other,852922,96.922
+Colombia,1 HIGH,674,0.051
+Colombia,2 Pending,26472,1.993
+Colombia,3 Reversed,13431,1.011
+Colombia,4 Other,1287995,96.946
+México,1 HIGH,1223,0.055
+México,2 Pending,44095,1.989
+México,3 Reversed,22424,1.012
+México,4 Other,2148689,96.944

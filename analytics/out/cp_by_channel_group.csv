@@ -1,0 +1,19 @@
+reception_channel,cat_group,n
+App,Fees (Cobro indebido),1369
+App,Other categories,3947
+App,Transactions (Cargo no reconocido),1411
+Branch,Fees (Cobro indebido),542
+Branch,Other categories,1618
+Branch,Transactions (Cargo no reconocido),523
+Call Center,Fees (Cobro indebido),6846
+Call Center,Other categories,20066
+Call Center,Transactions (Cargo no reconocido),6849
+Email,Fees (Cobro indebido),2654
+Email,Other categories,8038
+Email,Transactions (Cargo no reconocido),2631
+Regulator,Fees (Cobro indebido),140
+Regulator,Other categories,421
+Regulator,Transactions (Cargo no reconocido),156
+Web,Fees (Cobro indebido),2002
+Web,Other categories,5872
+Web,Transactions (Cargo no reconocido),2010

@@ -1,0 +1,19 @@
+cat_group,status,n,pct,n_with_dates,sla_breached
+Fees (Cobro indebido),In Process,5468,40.35,0,1103
+Fees (Cobro indebido),Open,4028,29.72,0,785
+Fees (Cobro indebido),Resolved,2738,20.2,2615,517
+Fees (Cobro indebido),Escalated,700,5.16,0,144
+Fees (Cobro indebido),Closed,486,3.59,486,103
+Fees (Cobro indebido),Rejected,133,0.98,0,28
+Other categories,In Process,15948,39.91,0,3263
+Other categories,Open,12057,30.17,0,2363
+Other categories,Resolved,7994,20.0,7616,1615
+Other categories,Escalated,1944,4.86,0,394
+Other categories,Closed,1572,3.93,1570,340
+Other categories,Rejected,447,1.12,0,101
+Transactions (Cargo no reconocido),In Process,5407,39.82,0,1132
+Transactions (Cargo no reconocido),Open,4040,29.75,0,799
+Transactions (Cargo no reconocido),Resolved,2780,20.47,2649,531
+Transactions (Cargo no reconocido),Escalated,677,4.99,0,155
+Transactions (Cargo no reconocido),Closed,551,4.06,551,100
+Transactions (Cargo no reconocido),Rejected,125,0.92,0,22

@@ -1,0 +1,4 @@
+country,transactions,pending,pending_pct,reversed,reversed_pct,pending_or_reversed,pending_or_reversed_pct,declined,fraud_score_nonnull,fs_gt30,fs_gt30_pct_all,fs_gt30_pct_scored,fs_gt30_excl_pend_rev,is_fraud,is_fraud_pct,is_fraud_and_fs_gt30
+México,2216431,44118,1.99,22432,1.012,66550,3.003,111077,1773428,1223,0.0552,0.069,1192,2194,0.099,1223
+Colombia,1328572,26489,1.994,13438,1.011,39927,3.005,66104,1062527,674,0.0507,0.0634,650,1238,0.0932,674
+Argentina,880005,17736,2.015,8880,1.009,26616,3.025,44053,703896,476,0.0541,0.0676,467,884,0.1005,476

@@ -1,0 +1,13 @@
+contact_type,handle_time_stat,handle_time_sec,scenario,loaded_usd_per_hour,resolution_rate,cost_per_contact_usd,cost_per_resolution_usd
+Transaccional,mean,220.8028,low,6.0,0.9152,0.368,0.4021
+Transaccional,mean,220.8028,mid,12.0,0.9152,0.736,0.8042
+Transaccional,mean,220.8028,high,20.0,0.9152,1.2267,1.3404
+Transaccional,median,205.0,low,6.0,0.9152,0.3417,0.3733
+Transaccional,median,205.0,mid,12.0,0.9152,0.6833,0.7467
+Transaccional,median,205.0,high,20.0,0.9152,1.1389,1.2445
+Queja,mean,434.6059,low,6.0,0.4364,0.7243,1.6597
+Queja,mean,434.6059,mid,12.0,0.4364,1.4487,3.3194
+Queja,mean,434.6059,high,20.0,0.4364,2.4145,5.5324
+Queja,median,431.0,low,6.0,0.4364,0.7183,1.6459
+Queja,median,431.0,mid,12.0,0.4364,1.4367,3.2919
+Queja,median,431.0,high,20.0,0.4364,2.3944,5.4865

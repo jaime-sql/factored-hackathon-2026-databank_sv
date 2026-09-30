@@ -1,0 +1,2 @@
+transactions,pending,pending_pct,reversed,reversed_pct,pending_or_reversed,pending_or_reversed_pct,declined,fraud_score_nonnull,fs_gt30,fs_gt30_pct_all,fs_gt30_pct_scored,fs_gt30_excl_pend_rev,is_fraud,is_fraud_pct,is_fraud_and_fs_gt30
+4425008,88343,1.996,44750,1.011,133093,3.008,221234,3539851,2373,0.0536,0.067,2309,4316,0.0975,2373
