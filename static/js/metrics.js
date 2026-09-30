@@ -10,10 +10,10 @@ async function load() {
   const handoff = body.k5_handoff.display;
   const containment = body.k6_containment.display;
   tiles.innerHTML = `
-    <article class="card tile"><span class="meta">Casos</span><strong>${volume}</strong></article>
-    <article class="card tile"><span class="meta">Handoff</span><strong>${handoff}</strong></article>
-    <article class="card tile"><span class="meta">Contención</span><strong>${containment}</strong></article>
-    <article class="card tile"><span class="meta">Eval excluido</span><strong>${body.excluded_eval_cases}</strong></article>
+    <article class="card tile" data-metric="cases"><span class="meta">Casos</span><strong>${volume}</strong></article>
+    <article class="card tile" data-metric="handoff"><span class="meta">Handoff</span><strong>${handoff}</strong></article>
+    <article class="card tile" data-metric="containment"><span class="meta">Contención</span><strong>${containment}</strong></article>
+    <article class="card tile" data-metric="eval"><span class="meta">Eval excluido</span><strong>${body.excluded_eval_cases}</strong></article>
   `;
   document.getElementById("raw").textContent = JSON.stringify(body, null, 2);
 }

@@ -91,6 +91,34 @@ details.why { margin-top: 0.7rem; font-family: "Segoe UI", sans-serif; font-size
 .warn { color: var(--warn); }
 label.toggle { display: flex; gap: 0.6rem; align-items: center; font-family: "Segoe UI", sans-serif; }
 pre { overflow: auto; background: #241f1a; color: #f6f1e7; padding: 1rem; border-radius: 12px; }
+.tour-shade {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 25, 21, 0.55);
+  z-index: 30;
+}
+.tour-target {
+  position: relative;
+  z-index: 31;
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+.tour-tip {
+  position: fixed;
+  z-index: 32;
+  width: min(22rem, calc(100vw - 1.5rem));
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 12px 40px rgba(28, 25, 21, 0.25);
+  font-family: "Segoe UI", sans-serif;
+}
+.tour-tip p { margin: 0.35rem 0 0; }
+.tour-note { color: #5c564c; font-size: 0.85rem; }
+.tour-bar { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.75rem; }
+.tour-count { margin-right: auto; font-size: 0.85rem; }
 @media (max-width: 700px) {
   header { flex-direction: column; align-items: start; }
 }

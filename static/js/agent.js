@@ -110,10 +110,12 @@ function fillCard(card, item) {
   panel.hidden = true;
   const button = document.createElement("button");
   button.type = "button";
+  button.setAttribute("data-action", "packet");
   button.textContent = "Abrir paquete";
   button.addEventListener("click", () => togglePacket(panel, item.case_id));
   const resolve = document.createElement("button");
   resolve.type = "button";
+  resolve.setAttribute("data-action", "resolve");
   resolve.textContent = "Resolver";
   resolve.addEventListener("click", () => resolveCase(item.case_id, panel));
   card.append(title, meta, merchant, when, reason, button, resolve, panel);

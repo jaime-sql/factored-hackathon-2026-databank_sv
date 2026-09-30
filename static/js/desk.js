@@ -41,6 +41,7 @@ async function loadPersonas() {
   box.innerHTML = "";
   for (const persona of payload.personas) {
     const button = document.createElement("button");
+    button.setAttribute("data-action", "persona");
     const note = persona.note ? ` · ${persona.note}` : "";
     button.textContent = `${persona.label} · ${persona.tz}${note}`;
     button.addEventListener("click", () => signIn(persona.id));
@@ -68,6 +69,7 @@ async function signIn(persona) {
       <div class="meta">${tx.local_time} · ${tx.transaction_city} · ${tx.amount} ${tx.currency} · ${tx.transaction_status}</div>`;
     const button = document.createElement("button");
     button.className = "primary";
+    button.setAttribute("data-action", "select-charge");
     button.textContent = copy[state.language].dispute;
     button.addEventListener("click", () => openCase(tx.transaction_key, button.textContent));
     card.appendChild(button);
@@ -109,6 +111,7 @@ function render(body) {
   box.innerHTML = "";
   const card = document.createElement("article");
   card.className = "card";
+  if (body.band) card.setAttribute("data-band", body.band);
   if (body.protected) {
     const notice = document.createElement("p");
     notice.className = "protected";
@@ -121,6 +124,7 @@ function render(body) {
   card.appendChild(text);
   for (const action of body.actions || []) {
     const button = document.createElement("button");
+    button.setAttribute("data-action", action.id);
     button.textContent = action.label;
     if (action.emphasis === "primary") button.className = "primary";
     button.addEventListener("click", () => sendAction(action.id));

@@ -6,7 +6,7 @@
   <title>Métricas · Harbor Desk</title>
   <link rel="stylesheet" href="/static/css/app.css" />
 </head>
-<body>
+<body data-tour-page="metrics">
   <header>
     <div>
       <h1>Métricas</h1>
@@ -16,6 +16,7 @@
       <a href="/">Cliente</a>
       <a href="/agent">Consola</a>
       <a href="/metrics">Métricas</a>
+      <button type="button" id="tour">¿Cómo funciona?</button>
     </nav>
   </header>
   <main>
@@ -27,5 +28,6 @@
     <pre id="raw"></pre>
   </main>
   <script src="/static/js/metrics.js"></script>
+  <script src="/static/js/tour.js"></script>
 </body>
 </html>
