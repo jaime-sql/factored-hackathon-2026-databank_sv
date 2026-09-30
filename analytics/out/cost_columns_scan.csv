@@ -1,0 +1,13 @@
+table_name,column_name,data_type
+call_center_interactions,duration_seconds,DOUBLE
+call_center_interactions,wait_time_seconds,DOUBLE
+call_transcripts,duration_seconds,DOUBLE
+campaign_sends,conversion_value,DOUBLE
+campaign_sends,send_cost,DOUBLE
+complaints,claimed_amount,DOUBLE
+complaints,compensation_granted,DOUBLE
+digital_events,duration_seconds,DOUBLE
+digital_events,event_value,DOUBLE
+marketing_campaigns,budget,DOUBLE
+transactions,amount,DOUBLE
+transactions,amount_usd,DOUBLE

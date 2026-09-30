@@ -1,0 +1,32 @@
+metric,reported,from_source,match
+val transactions,643787.0,643787.0,True
+val fraud,599.0,599.0,True
+HIGH n,325.0,325.0,True
+HIGH share %,0.05,0.05,True
+HIGH fraud rate %,100.0,100.0,True
+HIGH share of fraud %,54.3,54.3,True
+REVIEW share %,84.46,84.46,True
+REVIEW fraud rate %,0.045,0.045,True
+REVIEW share of fraud %,40.9,40.9,True
+LOW share %,15.49,15.49,True
+LOW fraud rate %,0.029,0.029,True
+LOW fraud n,29.0,29.0,True
+LOW share of fraud %,4.8,4.8,True
+wrongful auto-closes /10k tx,0.45,0.45,True
+wrongful auto-closes /10k auto-handled,2.9,2.9,True
+90%: LOW share %,25.8,25.8,True
+90%: wrongful /10k tx,0.92,0.92,True
+full table tx,4425008.0,4425008.0,True
+Pending n,88343.0,88343.0,True
+Pending %,2.0,2.0,True
+Reversed n,44750.0,44750.0,True
+Reversed %,1.01,1.01,True
+Train+val Pending/Reversed fraud n,106.0,106.0,True
+Train+val Pending fraud caught by HIGH,44.0,44.0,True
+Train+val Reversed fraud caught by HIGH,16.0,16.0,True
+Train+val Pending/Reversed fraud caught by HIGH,60.0,60.0,True
+Train+val Pending/Reversed non-fraud sent HIGH,0.0,0.0,True
+VAL Pending/Reversed fraud n,11.0,11.0,True
+VAL Pending/Reversed fraud caught HIGH,5.0,5.0,True
+Train Pending/Reversed fraud n,95.0,95.0,True
+Train Pending/Reversed fraud caught HIGH,55.0,55.0,True

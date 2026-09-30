@@ -1,0 +1,5 @@
+case_bucket,n,pct,is_fraud
+1 HIGH,2373,0.054,2373
+2 Pending,88297,1.995,33
+3 Reversed,44732,1.011,18
+4 Other,4289606,96.94,1892

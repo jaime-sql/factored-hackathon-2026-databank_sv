@@ -1,0 +1,13 @@
+scenario,loaded_usd_per_hour,automated_share,human_cases_per_month,projected_monthly_human_cost_usd,human_cost_avoided_usd,llm_cost_per_case_usd,monthly_llm_cost_usd,net_monthly_savings_usd
+low,6.0,0.0,377.5,273.43,0.0,TBD,TBD,TBD
+low,6.0,0.25,283.1,205.07,68.36,TBD,TBD,TBD
+low,6.0,0.5,188.7,136.71,136.71,TBD,TBD,TBD
+low,6.0,0.75,94.4,68.36,205.07,TBD,TBD,TBD
+mid,12.0,0.0,377.5,546.86,0.0,TBD,TBD,TBD
+mid,12.0,0.25,283.1,410.14,136.71,TBD,TBD,TBD
+mid,12.0,0.5,188.7,273.43,273.43,TBD,TBD,TBD
+mid,12.0,0.75,94.4,136.71,410.14,TBD,TBD,TBD
+high,20.0,0.0,377.5,911.43,0.0,TBD,TBD,TBD
+high,20.0,0.25,283.1,683.57,227.86,TBD,TBD,TBD
+high,20.0,0.5,188.7,455.72,455.72,TBD,TBD,TBD
+high,20.0,0.75,94.4,227.86,683.57,TBD,TBD,TBD

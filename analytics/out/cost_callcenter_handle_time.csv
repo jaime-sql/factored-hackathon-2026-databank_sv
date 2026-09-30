@@ -1,0 +1,7 @@
+reason_category,interactions,n_duration,aht_sec_mean,aht_sec_p50,wait_sec_mean,resolved_pct,escalated_pct,followup_pct
+Transaccional,240056,206465,220.8,205.0,119.7,91.51,9.93,22.14
+Producto,150863,129644,266.4,263.0,120.0,89.63,9.96,23.81
+Queja,117021,100727,434.6,431.0,120.0,43.6,10.03,62.97
+Técnico,102899,88493,360.5,360.0,120.2,69.93,10.07,40.59
+Comercial,54879,47082,539.9,540.0,120.2,65.21,9.84,44.55
+Retención,20578,17651,479.2,478.0,120.9,60.16,9.85,49.08

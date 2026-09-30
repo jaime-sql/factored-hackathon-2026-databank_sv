@@ -1,0 +1,3 @@
+operating_point,per_10k_approved_declined_val,per_10k_all_charges_base_case,per_10k_auto_handled_val,fraud_in_low_val,val_n,note
+95% recall (v2 chosen),0.45045954640276986,0.43691086752820424,2.908492798973001,29,643787,all-charges figure assumes the rule-based path (Pending/Reversed) causes no wrongful fraud closes; it is not model-scored
+90% recall (sensitivity),0.9164521806125318,0.8888876270401397,3.547485193758831,59,643787,all-charges figure assumes the rule-based path (Pending/Reversed) causes no wrongful fraud closes; it is not model-scored

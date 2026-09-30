@@ -1,0 +1,13 @@
+country,segment,interactions,aht_sec_mean,resolved_pct
+Argentina,Basic,28658,220.6,91.57
+Argentina,Plus,11866,220.0,91.56
+Argentina,Premium,4761,217.5,91.89
+Argentina,Student,2375,221.9,90.95
+Colombia,Basic,43349,220.7,91.55
+Colombia,Plus,18185,220.9,91.32
+Colombia,Premium,7328,222.8,91.55
+Colombia,Student,3649,222.6,91.78
+México,Basic,71656,221.1,91.52
+México,Plus,30247,220.6,91.34
+México,Premium,12140,220.2,91.56
+México,Student,5842,221.7,91.63
