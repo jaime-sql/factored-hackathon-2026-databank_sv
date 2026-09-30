@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Harbor Desk</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Harbor Desk</h1>
+      <p class="lede">Un cargo a la vez. El asistente no mueve dinero: explica, bloquea la tarjeta solo si usted lo confirma, o pasa el caso a una persona.</p>
+    </div>
+    <nav>
+      <a href="/">Cliente</a>
+      <a href="/agent">Consola</a>
+      <a href="/metrics">Métricas</a>
+      <button type="button" id="lang">Español</button>
+    </nav>
+  </header>
+  <main>
+    <section id="personas" class="row"></section>
+    <section id="charges"></section>
+    <section id="thread"></section>
+  </main>
+  <script src="/static/js/desk.js"></script>
+</body>
+</html>

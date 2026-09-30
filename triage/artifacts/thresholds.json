@@ -1,0 +1,140 @@
+{
+  "version": "v2-rule-high-2026-09-29",
+  "score_space": "t_low is on the raw LightGBM probability (model.txt); displayed prob is Platt-calibrated",
+  "t_low": 0.000275603870032301,
+  "t_low_calibrated_prob": 0.0002581031492112152,
+  "bands": {
+    "high": "fraud_score > 30 -> offer card block (customer confirms) + human handoff",
+    "review": "not HIGH and LightGBM raw score >= t_low -> human handoff (review), no block",
+    "low": "not HIGH and LightGBM raw score < t_low (incl. missing fraud_score scored by model) -> agent auto-explains, may close"
+  },
+  "scope": "transaction_status NOT IN ('Pending','Reversed'); those are handled by deterministic rules",
+  "selection": {
+    "function": "triage.thresholds.select_low_threshold_given_high",
+    "low_recall_target": 0.95,
+    "definition": "highest t_low with (HIGH fraud + non-HIGH fraud scoring >= t_low) >= 95% of all VAL fraud",
+    "t_low_rederived": 0.000275603870032301,
+    "t_low_changed": false,
+    "sensitivity_90": {
+      "t_low": 0.0002899319648996252,
+      "low_recall_target": 0.9,
+      "recall_outside_low": 0.9015025041736227,
+      "fraud_in_low": 59,
+      "legit_share_in_low": 0.25848740959097494,
+      "share_all_in_low": 0.2583385498619885,
+      "false_auto_close_per_10k_tx": 0.9164521806125318
+    }
+  },
+  "val": {
+    "high": {
+      "flagged": 325,
+      "tp": 325,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 0.5425709515859767,
+      "fpr": 0.0,
+      "wrongful_flags_per_10k_legit": 0.0
+    },
+    "low": {
+      "t_low": 0.000275603870032301,
+      "low_recall_target": 0.95,
+      "recall_outside_low": 0.9515859766277128,
+      "fraud_in_low": 29,
+      "legit_share_in_low": 0.1549764610036257,
+      "share_all_in_low": 0.15487731190595647,
+      "false_auto_close_per_10k_tx": 0.45045954640276986
+    },
+    "bands": {
+      "low": {
+        "n": 99708,
+        "share": 0.15487731190595647,
+        "fraud": 29,
+        "fraud_rate": 0.00029084927989730014,
+        "share_of_all_fraud": 0.048414023372287146,
+        "share_of_legit": 0.1549764610036257
+      },
+      "review": {
+        "n": 543754,
+        "share": 0.8446178627403162,
+        "fraud": 245,
+        "fraud_rate": 0.0004505713980954623,
+        "share_of_all_fraud": 0.4090150250417362,
+        "share_of_legit": 0.8450235389963743
+      },
+      "high": {
+        "n": 325,
+        "share": 0.0005048253537272421,
+        "fraud": 325,
+        "fraud_rate": 1.0,
+        "share_of_all_fraud": 0.5425709515859767,
+        "share_of_legit": 0.0
+      },
+      "false_auto_close_per_10k_tx": 0.45045954640276986,
+      "false_auto_close_per_10k_auto_handled": 2.908492798973001
+    },
+    "band_counts": {
+      "high": 325,
+      "review": 543754,
+      "low": 99708
+    }
+  },
+  "calibration": {
+    "method": "platt",
+    "scheme": "5 contiguous time folds within VAL; each fold calibrated by a calibrator fit on the other 4 folds (out-of-fold); final calibrator refit on all VAL"
+  },
+  "model_sha256": "fb972233981238cc2fb148b27d0f77a1f313c69c6a6c0920b44cee7ca9de6884",
+  "mlflow_final_run_id": "947e1aa21010476d829d6d6f60995546",
+  "mlflow_search_run_id": "90c54e2931c04d82aa28d8fa473c29c9",
+  "data_hashes": {
+    "train": "8c85d3bb41ce96c6188980815f14bdfb6a1facf3c423a7c9dd097797add64584",
+    "val": "8cc3b47d7c907dc48acaf50b6c3c5ce710999a4a1c2165cec3053ffe9266de14"
+  },
+  "supersedes": {
+    "version": "val-frozen-2026-09-29",
+    "mlflow_run_id": "8adb62ca0c7e477e8af3e2dd2a96630e"
+  },
+  "high_rule": {
+    "expr": "fraud_score > 30",
+    "column": "fraud_score",
+    "op": ">",
+    "value": 30.0,
+    "missing": "not HIGH",
+    "rationale": "Found on VAL: every legit transaction with fraud_score >= 30 sits at exactly 30.00 (88 rows); fraud_score > 30 flagged 325 rows, all fraud.",
+    "val": {
+      "flagged": 325,
+      "tp": 325,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 0.5425709515859767,
+      "fpr": 0.0,
+      "wrongful_flags_per_10k_legit": 0.0
+    }
+  },
+  "superseded_v1": {
+    "t_high_model_raw": 0.016488805994500002,
+    "t_high_calibrated_prob": 0.014996829003316052,
+    "note": "v1 HIGH was model raw score >= t_high; replaced by high_rule"
+  },
+  "status_rule": {
+    "order": [
+      "high_rule (fraud_score > 30)",
+      "Pending/Reversed shortcut -> out_of_scope",
+      "model REVIEW/LOW"
+    ],
+    "out_of_scope_statuses": [
+      "Pending",
+      "Reversed"
+    ],
+    "decided": "2026-09-29 team decision",
+    "pending_reversed_val": {
+      "rows": 19837,
+      "fraud": 11,
+      "fraud_caught_high": 5,
+      "legit_flagged_high": 0,
+      "missing_fraud_score": 4008,
+      "fraud_missing_fraud_score": 3,
+      "legit_at_exactly_30": 2,
+      "high_rows": 5
+    }
+  }
+}

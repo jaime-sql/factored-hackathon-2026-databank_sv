@@ -1,0 +1,65 @@
+[project]
+name = "harbor-desk"
+version = "0.1.0"
+description = "Synthetic AI card-dispute desk for the Factored AI & Data Hackathon 2026"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "fastapi>=0.115.6",
+  "uvicorn[standard]>=0.34.0",
+  "pydantic>=2.10.4",
+  "pydantic-settings>=2.7.0",
+  "openai>=1.58.1",
+  "httpx>=0.28.1",
+  "psycopg[binary]>=3.2.3",
+  "pyjwt[crypto]>=2.10.1",
+]
+
+[dependency-groups]
+dev = [
+  "mypy>=1.14.0",
+  "pytest>=8.3.4",
+  "ruff>=0.8.4",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --tb=short"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/bank/fixture.py" = ["E501"]
+"app/i18n.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["app"]
+pretty = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["triage.*", "pandas"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true

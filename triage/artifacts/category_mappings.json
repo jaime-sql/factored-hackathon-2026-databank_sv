@@ -1,0 +1,113 @@
+{
+  "currency": [
+    "ARS",
+    "COP",
+    "USD"
+  ],
+  "channel": [
+    "ATM",
+    "App",
+    "Branch",
+    "POS",
+    "Transfer",
+    "Web"
+  ],
+  "transaction_type": [
+    "Adjustment",
+    "Deposit",
+    "Payment",
+    "Purchase",
+    "Transfer",
+    "Withdrawal"
+  ],
+  "transaction_category": [
+    "Entertainment",
+    "Food",
+    "Health",
+    "Other",
+    "Services",
+    "Transport"
+  ],
+  "merchant_category": [
+    "Entertainment",
+    "Food",
+    "Health",
+    "Other",
+    "Services",
+    "Transport"
+  ],
+  "merchant_name": [
+    "Boutique Moda",
+    "Cable TV",
+    "Centro Comercial",
+    "Cine Premium",
+    "Cl\u00ednica M\u00e9dica",
+    "Conciertos Live",
+    "Empresa Telef\u00f3nica",
+    "Estaci\u00f3n de Servicio",
+    "Farmacia Salud",
+    "Ferreter\u00eda",
+    "Gasolinera Express",
+    "Internet Plus",
+    "Laboratorio Central",
+    "Mercado Central",
+    "Restaurante El Buen Sabor",
+    "Servicios P\u00fablicos",
+    "Streaming Music",
+    "Super Ahorro",
+    "Taxi Seguro",
+    "Teatro Nacional",
+    "Tienda Don Jos\u00e9",
+    "Tienda General",
+    "Uber",
+    "\u00d3ptica Visi\u00f3n"
+  ],
+  "transaction_country": [
+    "Argentina",
+    "Brazil",
+    "Colombia",
+    "Mexico",
+    "Spain",
+    "USA"
+  ],
+  "transaction_city": [
+    "Barcelona",
+    "Barranquilla",
+    "Bogot\u00e1",
+    "Bras\u00edlia",
+    "Buenos Aires",
+    "Cali",
+    "Cartagena",
+    "Ciudad de M\u00e9xico",
+    "C\u00f3rdoba",
+    "Guadalajara",
+    "Houston",
+    "La Plata",
+    "Los Angeles",
+    "Madrid",
+    "Medell\u00edn",
+    "Mendoza",
+    "Miami",
+    "Monterrey",
+    "New York",
+    "Puebla",
+    "Quer\u00e9taro",
+    "Rio de Janeiro",
+    "Rosario",
+    "Salvador",
+    "Sevilla",
+    "S\u00e3o Paulo",
+    "Tijuana",
+    "Valencia"
+  ],
+  "product_type": [
+    "Cuenta Ahorro",
+    "Cuenta Corriente",
+    "Inversi\u00f3n",
+    "Pr\u00e9stamo Hipotecario",
+    "Pr\u00e9stamo Personal",
+    "Seguro",
+    "Tarjeta Cr\u00e9dito",
+    "Tarjeta D\u00e9bito"
+  ]
+}
