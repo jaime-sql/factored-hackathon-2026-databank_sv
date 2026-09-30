@@ -10,7 +10,7 @@ from typing import Any
 
 APP_ROLE = "app_rw"
 STATEMENT_TIMEOUT = "15s"
-SEARCH_PATH = "app, public"
+SEARCH_PATH = "app,public"
 
 _role_ok: set[str] = set()
 

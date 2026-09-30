@@ -17,6 +17,8 @@ make dev
 
 Open [http://127.0.0.1:8091](http://127.0.0.1:8091). The other pages are `/agent` and `/metrics`.
 
+`GET /health` is the health check. `GET /healthz` returns the same JSON. On Cloud Run, probe `/health`: the run.app front end reserves `/healthz` and answers 404 before the container.
+
 `make check` runs ruff, mypy, and pytest.
 
 The demo database is not in git. Startup builds `data/bank.sqlite` and `data/ops.sqlite` from the synthetic fixture in `app/bank/fixture.py` (four labeled personas, not the bank extract). `data/` is gitignored. There is nothing to download.

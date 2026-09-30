@@ -60,8 +60,7 @@ def _agent(request: Request) -> None:
         raise APIError(401, "auth_required", "Agent sign-in required")
 
 
-@router.get("/healthz")
-def healthz(request: Request) -> dict[str, str]:
+def _health(request: Request) -> dict[str, str]:
     settings = _settings(request)
     return {
         "status": "ok",
@@ -69,6 +68,16 @@ def healthz(request: Request) -> dict[str, str]:
         "ops": "postgres" if settings.database_url else "sqlite",
         "llm": settings.resolved_llm_provider(),
     }
+
+
+@router.get("/healthz")
+def healthz(request: Request) -> dict[str, str]:
+    return _health(request)
+
+
+@router.get("/health")
+def health(request: Request) -> dict[str, str]:
+    return _health(request)
 
 
 @router.get("/api/auth/config")
