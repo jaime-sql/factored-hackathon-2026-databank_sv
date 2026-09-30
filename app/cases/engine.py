@@ -37,6 +37,7 @@ from app.i18n import (
     next_step_block,
     next_step_contest,
     next_step_review,
+    packet_merchant,
     recognize_label,
     reply_block_failed,
     reply_blocked,
@@ -383,7 +384,14 @@ class Engine:
                     ActionButton("confirm_block", confirm_block_label(lang), "primary"),
                     ActionButton("decline_block", decline_block_label(lang)),
                 ],
-                reply_high(lang, tx.merchant_name, amount, when),
+                reply_high(
+                    lang,
+                    tx.merchant_name,
+                    amount,
+                    when,
+                    category=tx.merchant_category,
+                    transaction_type=tx.transaction_type,
+                ),
             )
         if route == "pending":
             return (
@@ -394,7 +402,14 @@ class Engine:
                 None,
                 "pending_explained",
                 [ActionButton("contest", contest_label(lang), "primary")],
-                reply_pending(lang, tx.merchant_name, amount, when),
+                reply_pending(
+                    lang,
+                    tx.merchant_name,
+                    amount,
+                    when,
+                    category=tx.merchant_category,
+                    transaction_type=tx.transaction_type,
+                ),
             )
         if route == "reversed":
             return (
@@ -405,7 +420,14 @@ class Engine:
                 None,
                 "reversed_explained",
                 [ActionButton("contest", contest_label(lang), "primary")],
-                reply_reversed(lang, tx.merchant_name, amount, when),
+                reply_reversed(
+                    lang,
+                    tx.merchant_name,
+                    amount,
+                    when,
+                    category=tx.merchant_category,
+                    transaction_type=tx.transaction_type,
+                ),
             )
         if case_type == "duplicate_synthetic" and band == "low":
             other_when = when
@@ -425,7 +447,15 @@ class Engine:
                     ActionButton("recognize", recognize_label(lang)),
                     ActionButton("open_dispute", dispute_label(lang), "primary"),
                 ],
-                reply_duplicate(lang, tx.merchant_name, amount, when, other),
+                reply_duplicate(
+                    lang,
+                    tx.merchant_name,
+                    amount,
+                    when,
+                    other,
+                    category=tx.merchant_category,
+                    transaction_type=tx.transaction_type,
+                ),
             )
         if band == "low":
             return (
@@ -440,7 +470,13 @@ class Engine:
                     ActionButton("open_dispute", dispute_label(lang), "primary"),
                 ],
                 reply_low(
-                    lang, tx.merchant_name, tx.merchant_category, tx.transaction_city, when, amount
+                    lang,
+                    tx.merchant_name,
+                    tx.merchant_category,
+                    tx.transaction_city,
+                    when,
+                    amount,
+                    transaction_type=tx.transaction_type,
                 ),
             )
         return (
@@ -451,7 +487,13 @@ class Engine:
             "fraud_model",
             "handed_off",
             [],
-            reply_review(lang, tx.merchant_name, amount),
+            reply_review(
+                lang,
+                tx.merchant_name,
+                amount,
+                category=tx.merchant_category,
+                transaction_type=tx.transaction_type,
+            ),
         )
 
     def _confirm_block(self, case: dict[str, Any]) -> CaseResult:
@@ -757,8 +799,11 @@ class Engine:
     ) -> HandoffPacket:
         safe_band = band if band in {"high", "review", "low", "out_of_scope"} else "review"
         language = lang if lang in {"es", "pt"} else "other"
+        merchant = packet_merchant(
+            lang, tx.merchant_name, tx.merchant_category, tx.transaction_type
+        )
         base = [
-            f"merchant={tx.merchant_name}",
+            f"merchant={merchant}",
             f"status={tx.transaction_status}",
             f"fraud_score={fraud_score}",
             f"utc={shown['utc']}",
@@ -774,7 +819,7 @@ class Engine:
             transaction=TransactionFacts(
                 transaction_key=tx.transaction_key,
                 product_key=tx.product_key,
-                merchant_name=tx.merchant_name,
+                merchant_name=merchant,
                 merchant_category=tx.merchant_category,
                 transaction_city=tx.transaction_city,
                 transaction_country=tx.transaction_country,

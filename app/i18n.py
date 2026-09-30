@@ -36,6 +36,63 @@ def money(amount: float, currency: str) -> str:
     return f"{amount:,.2f} {currency}"
 
 
+def merchant_label(language: str, name: str, category: str, transaction_type: str) -> str:
+    """Readable merchant for replies. Empty when name, category, and type are blank."""
+    cleaned_name = (name or "").strip()
+    if cleaned_name:
+        return cleaned_name
+    cleaned_category = (category or "").strip()
+    if cleaned_category:
+        if language == "pt":
+            return f"categoria {cleaned_category}"
+        return f"categoría {cleaned_category}"
+    cleaned_type = (transaction_type or "").strip()
+    if cleaned_type:
+        if language == "pt":
+            return f"tipo {cleaned_type}"
+        return f"tipo {cleaned_type}"
+    return ""
+
+
+def packet_merchant(language: str, name: str, category: str, transaction_type: str) -> str:
+    """Same fallback as replies. A last resort label keeps the handoff packet complete."""
+    label = merchant_label(language, name, category, transaction_type)
+    if label:
+        return label
+    if language == "pt":
+        return "Comércio não identificado"
+    return "Comercio no identificado"
+
+
+def _charge_with_amount(
+    language: str, name: str, category: str, transaction_type: str, amount: str
+) -> str:
+    label = merchant_label(language, name, category, transaction_type)
+    if language == "pt":
+        if not (name or "").strip() and (category or "").strip():
+            return f"A cobrança da categoria {(category or '').strip()} ({amount})"
+        if (
+            not (name or "").strip()
+            and not (category or "").strip()
+            and (transaction_type or "").strip()
+        ):
+            return f"A cobrança do tipo {(transaction_type or '').strip()} ({amount})"
+        if label:
+            return f"A cobrança de {label} ({amount})"
+        return f"A cobrança ({amount})"
+    if not (name or "").strip() and (category or "").strip():
+        return f"El cargo de la categoría {(category or '').strip()} ({amount})"
+    if (
+        not (name or "").strip()
+        and not (category or "").strip()
+        and (transaction_type or "").strip()
+    ):
+        return f"El cargo de tipo {(transaction_type or '').strip()} ({amount})"
+    if label:
+        return f"El cargo de {label} ({amount})"
+    return f"El cargo ({amount})"
+
+
 def contest_label(language: str) -> str:
     if language == "pt":
         return "Continuo sem reconhecer esta cobrança"
@@ -79,74 +136,129 @@ def _contest_footer(language: str) -> str:
     )
 
 
-def reply_pending(language: str, merchant: str, amount: str, when: str) -> str:
+def reply_pending(
+    language: str,
+    merchant: str,
+    amount: str,
+    when: str,
+    *,
+    category: str = "",
+    transaction_type: str = "",
+) -> str:
+    charge = _charge_with_amount(language, merchant, category, transaction_type, amount)
     if language == "pt":
         body = (
-            f"A cobrança de {merchant} ({amount}) em {when} ainda está pendente. "
+            f"{charge} em {when} ainda está pendente. "
             "Ainda não é definitiva, então não há o que contestar agora. "
             "Nenhum dinheiro foi movido por este assistente."
         )
     else:
         body = (
-            f"El cargo de {merchant} ({amount}) del {when} sigue pendiente. "
+            f"{charge} del {when} sigue pendiente. "
             "Todavía no es definitivo, así que no hay nada que disputar. "
             "Este asistente no movió dinero."
         )
     return body + "\n\n" + _contest_footer(language)
 
 
-def reply_reversed(language: str, merchant: str, amount: str, when: str) -> str:
+def reply_reversed(
+    language: str,
+    merchant: str,
+    amount: str,
+    when: str,
+    *,
+    category: str = "",
+    transaction_type: str = "",
+) -> str:
+    charge = _charge_with_amount(language, merchant, category, transaction_type, amount)
     if language == "pt":
         body = (
-            f"A cobrança de {merchant} ({amount}) em {when} já foi estornada. "
+            f"{charge} em {when} já foi estornada. "
             "O valor já voltou. Este assistente não moveu dinheiro."
         )
     else:
         body = (
-            f"El cargo de {merchant} ({amount}) del {when} ya fue reversado. "
+            f"{charge} del {when} ya fue reversado. "
             "El dinero ya regresó. Este asistente no movió dinero."
         )
     return body + "\n\n" + _contest_footer(language)
 
 
-def reply_high(language: str, merchant: str, amount: str, when: str) -> str:
+def reply_high(
+    language: str,
+    merchant: str,
+    amount: str,
+    when: str,
+    *,
+    category: str = "",
+    transaction_type: str = "",
+) -> str:
+    charge = _charge_with_amount(language, merchant, category, transaction_type, amount)
     if language == "pt":
         return (
-            f"A cobrança de {merchant} ({amount}) em {when} supera a regra de risco "
+            f"{charge} em {when} supera a regra de risco "
             "(pontuação de fraude maior que 30). Podemos bloquear o cartão. "
             "O bloqueio só acontece se você confirmar. Nenhum dinheiro foi movido."
         )
     return (
-        f"El cargo de {merchant} ({amount}) del {when} supera la regla de riesgo "
+        f"{charge} del {when} supera la regla de riesgo "
         "(puntaje de fraude mayor que 30). Podemos bloquear la tarjeta. "
         "El bloqueo solo se hace si usted lo confirma. No se movió dinero."
     )
 
 
 def reply_low(
-    language: str, merchant: str, category: str, city: str, when: str, amount: str
+    language: str,
+    merchant: str,
+    category: str,
+    city: str,
+    when: str,
+    amount: str,
+    *,
+    transaction_type: str = "",
 ) -> str:
+    label = merchant_label(language, merchant, category, transaction_type)
     if language == "pt":
+        if (merchant or "").strip():
+            found = f"Encontrei {merchant} ({category}) em {city}, {when}, por {amount}."
+        elif label:
+            found = f"Encontrei um comércio ({label}) em {city}, {when}, por {amount}."
+        else:
+            found = f"Encontrei um cargo em {city}, {when}, por {amount}."
         return (
-            f"Encontrei {merchant} ({category}) em {city}, {when}, por {amount}. "
+            f"{found} "
             "Está no seu histórico. Se agora reconhece o comércio, fechamos o caso. "
             "Se não, uma pessoa revisa. Nenhum dinheiro foi movido."
         )
+    if (merchant or "").strip():
+        found = f"Encontré {merchant} ({category}) en {city}, el {when}, por {amount}."
+    elif label:
+        found = f"Encontré un comercio ({label}) en {city}, el {when}, por {amount}."
+    else:
+        found = f"Encontré un cargo en {city}, el {when}, por {amount}."
     return (
-        f"Encontré {merchant} ({category}) en {city}, el {when}, por {amount}. "
+        f"{found} "
         "Está en su historial. Si ahora reconoce el comercio, cerramos el caso. "
         "Si no, una persona lo revisa. No se movió dinero."
     )
 
 
-def reply_review(language: str, merchant: str, amount: str) -> str:
+def reply_review(
+    language: str,
+    merchant: str,
+    amount: str,
+    *,
+    category: str = "",
+    transaction_type: str = "",
+) -> str:
+    charge = _charge_with_amount(language, merchant, category, transaction_type, amount)
     if language == "pt":
         return (
-            f"A cobrança de {merchant} ({amount}) precisa de uma pessoa. "
+            f"{charge} precisa de uma pessoa. "
             "Não oferecemos bloqueio do cartão neste caso. Nenhum dinheiro foi movido."
         )
     return (
-        f"El cargo de {merchant} ({amount}) necesita una persona. "
+        f"{charge} necesita una persona. "
         "No ofrecemos bloquear la tarjeta en este caso. No se movió dinero."
     )
 
@@ -157,15 +269,31 @@ def reply_duplicate(
     amount: str,
     when: str,
     other_when: str,
+    *,
+    category: str = "",
+    transaction_type: str = "",
 ) -> str:
+    label = merchant_label(language, merchant, category, transaction_type)
     if language == "pt":
+        if not (merchant or "").strip() and (category or "").strip():
+            head = f"Há um possível duplicado SINTÉTICO da categoria {(category or '').strip()} ({amount})"
+        elif label:
+            head = f"Há um possível duplicado SINTÉTICO de {label} ({amount})"
+        else:
+            head = f"Há um possível duplicado SINTÉTICO ({amount})"
         return (
-            f"Há um possível duplicado SINTÉTICO de {merchant} ({amount}): {when} e {other_when}. "
+            f"{head}: {when} e {other_when}. "
             "Este par vem do cenário de teste synthetic_duplicates (is_synthetic=1), não de um duplicado real. "
             "Se reconhece o comércio, fechamos. Se não, uma pessoa revisa. Nenhum dinheiro foi movido."
         )
+    if not (merchant or "").strip() and (category or "").strip():
+        head = f"Hay un posible duplicado SINTÉTICO de la categoría {(category or '').strip()} ({amount})"
+    elif label:
+        head = f"Hay un posible duplicado SINTÉTICO de {label} ({amount})"
+    else:
+        head = f"Hay un posible duplicado SINTÉTICO ({amount})"
     return (
-        f"Hay un posible duplicado SINTÉTICO de {merchant} ({amount}): {when} y {other_when}. "
+        f"{head}: {when} y {other_when}. "
         "Este par sale del escenario de prueba synthetic_duplicates (is_synthetic=1), no de un duplicado real. "
         "Si reconoce el comercio, cerramos. Si no, una persona revisa. No se movió dinero."
     )
