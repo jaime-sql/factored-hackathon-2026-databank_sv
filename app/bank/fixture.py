@@ -15,13 +15,14 @@ from pathlib import Path
 
 from app.paths import project_root
 
-FIXTURE_VERSION = "2026-09-30-tz4-nofeat"
+FIXTURE_VERSION = "2026-09-30-tz5-basic"
 UTC_STAMP = "2026-01-15T18:00:00+00:00"
 
 PERSONAS: tuple[dict[str, str], ...] = (
     {
         "id": "ana",
         "customer_key": "ck_ar_ana",
+        "bank_customer_key": "CUS_bea1a374f5bcbe2b4b20",
         "label": "Ana · Argentina",
         "country": "Argentina",
         "segment": "Basic",
@@ -32,6 +33,7 @@ PERSONAS: tuple[dict[str, str], ...] = (
     {
         "id": "camilo",
         "customer_key": "ck_co_camilo",
+        "bank_customer_key": "CUS_b202620b1dbf4256f447",
         "label": "Camilo · Colombia",
         "country": "Colombia",
         "segment": "Plus",
@@ -42,9 +44,10 @@ PERSONAS: tuple[dict[str, str], ...] = (
     {
         "id": "maria",
         "customer_key": "ck_mx_maria",
+        "bank_customer_key": "CUS_75764d8a8e3d956f3320",
         "label": "María · Ciudad de México",
         "country": "Mexico",
-        "segment": "Premium",
+        "segment": "Basic",
         "accent": "centro",
         "tz": "America/Mexico_City",
         "note": "Synthetic persona",
@@ -52,6 +55,7 @@ PERSONAS: tuple[dict[str, str], ...] = (
     {
         "id": "teo",
         "customer_key": "ck_mx_teo",
+        "bank_customer_key": "CUS_e6543f8446563b61c837",
         "label": "Teo · Tijuana",
         "country": "Mexico",
         "segment": "Student",
@@ -396,7 +400,7 @@ def build_rows() -> tuple[
             "is_fraud": "0",
             "fraud_score": 3,
             "customer_country": "MX",
-            "customer_segment": "Premium",
+            "customer_segment": "Basic",
             "customer_accent": "centro",
         },
         {
@@ -429,7 +433,7 @@ def build_rows() -> tuple[
             "is_fraud": "0",
             "fraud_score": 3,
             "customer_country": "MX",
-            "customer_segment": "Premium",
+            "customer_segment": "Basic",
             "customer_accent": "centro",
         },
     ]

@@ -6,12 +6,24 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.bank.access import TRANSACTION_COLUMNS
+from app.bank.repository import synthetic_pair_sibling
 from app.thresholds_loader import ThresholdSource, preliminary_route
 from app.timeutil import present_time
 from app.triage_model import ScriptedTriage, fallback_score
 from tests.conftest import login
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_sqlite_personas_keep_synthetic_notes(client: TestClient) -> None:
+    body = client.get("/api/personas").json()
+    by_id = {row["id"]: row for row in body["personas"]}
+    assert by_id["maria"]["segment"] == "Basic"
+    assert by_id["maria"]["note"] == "Synthetic persona"
+    assert by_id["teo"]["note"].startswith("Synthetic persona")
+    assert synthetic_pair_sibling("SYN_0238_A") == "SYN_0238_B"
+    assert synthetic_pair_sibling("SYN_0238_B") == "SYN_0238_A"
+    assert synthetic_pair_sibling("tx_maria_dup_b") is None
 
 
 def test_high_rule_runs_before_pending_and_reversed(client: TestClient) -> None:

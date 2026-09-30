@@ -8,6 +8,7 @@ The deterministic engine in `app/cases/engine.py` chooses the outcome. A model, 
 - Postgres: `DATABASE_URL` as role `app_rw`. `app/db.py` sets `statement_timeout=15s` and `search_path=app,public` (no space; libpq splits connection options on spaces), and refuses a superuser or `BYPASSRLS` role. The eval schema is not queried.
 - Health: `GET /health` and `GET /healthz` return the same JSON. Cloud Run probes use `/health` because the run.app front end reserves `/healthz`.
 - `fraud_features` has no `customer_key`. The read joins `transactions` so a feature row is returned only for that customer’s charge.
+- A `SYN_*_A` / `SYN_*_B` charge is not in `transactions` and has no `fraud_features` row. Scoring uses the `fraud_features` row of its `source_transaction_key`. This is a deliberate demo choice: a synthetic duplicate inherits its source's features. Routing stays fraud_score > 30, then Pending, then Reversed, then the model band. The duplicate explanation is only for a LOW band.
 - Operational tables live in the `app` schema (SQLite uses the same names). Audit tables are append-only. A correction inserts a row with `supersedes_audit_id`. KPIs read `audit_current`, the tip of each chain. The Python store rejects `UPDATE` on audit tables and any `DELETE`.
 
 ## Eval

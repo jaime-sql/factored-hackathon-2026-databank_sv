@@ -90,7 +90,8 @@ def auth_config(request: Request) -> dict[str, str]:
 
 
 @router.get("/api/personas")
-def personas() -> dict[str, Any]:
+def personas(request: Request) -> dict[str, Any]:
+    postgres = bool(_settings(request).database_url.strip())
     return {
         "personas": [
             {
@@ -99,7 +100,7 @@ def personas() -> dict[str, Any]:
                 "country": row["country"],
                 "tz": row["tz"],
                 "segment": row["segment"],
-                "note": row["note"],
+                "note": "Challenge data customer" if postgres else row["note"],
             }
             for row in PERSONAS
         ]
@@ -112,9 +113,10 @@ def open_session(body: SessionIn, request: Request) -> JSONResponse:
     if match is None:
         raise APIError(404, "not_found", "Unknown persona")
     settings = _settings(request)
-    token = sign_customer(
-        settings.session_secret, match["customer_key"], settings.session_ttl_hours
+    session_key = (
+        match["bank_customer_key"] if settings.database_url.strip() else match["customer_key"]
     )
+    token = sign_customer(settings.session_secret, session_key, settings.session_ttl_hours)
     response = JSONResponse(
         {
             "persona": match["id"],

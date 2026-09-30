@@ -4,6 +4,7 @@ Routing order, from the vendored thresholds:
 1. fraud_score > 30 is HIGH for every status, including Pending and Reversed.
 2. Otherwise Pending and Reversed get the fixed explanation.
 3. A charge with no fraud_features row is REVIEW, never LOW.
+   A SYN_* pair inherits its source transaction's features before that check.
 4. Otherwise the learned model returns REVIEW or LOW.
 """
 
@@ -15,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.bank.models import Customer, Transaction
-from app.bank.repository import BankRepository
+from app.bank.repository import BankRepository, synthetic_pair_sibling
 from app.config import Settings
 from app.errors import APIError
 from app.guardrails.injection import detect_injection
@@ -208,6 +209,16 @@ class Engine:
         eval_run_id: str | None,
         case_source: str | None,
     ) -> CaseResult:
+        if (
+            features is None
+            and synthetic_pair_sibling(tx.transaction_key)
+            and duplicate is not None
+            and duplicate.source_transaction_key
+        ):
+            # Demo choice: SYN_* is absent from fraud_features, so score the source row.
+            features = self.bank.get_features(
+                customer.customer_key, str(duplicate.source_transaction_key)
+            )
         config = self.thresholds.get()
         route = preliminary_route(tx.fraud_score, tx.transaction_status, config)
         shown = present_time(tx.transaction_ts_utc, customer.tz, customer.customer_country, lang)

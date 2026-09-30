@@ -1,9 +1,9 @@
 """Postgres integration. Skipped unless TEST_DATABASE_URL points at app_rw.
 
-The database is expected to already have migrations/001_app_schema.sql applied
-and a few public rows for persona maria (ck_mx_maria): tx_pg_high (Approved,
-fraud_score 45), tx_pg_pending (Pending), tx_pg_low (Approved, fraud_score 3,
-with a fraud_features row), and tx_pg_dup (Approved, synthetic duplicate).
+The database is expected to already have migrations/001_app_schema.sql applied.
+Persona maria signs CUS_75764d8a8e3d956f3320. That customer has tx_pg_high,
+tx_pg_pending, tx_pg_low (fraud_features), and a SYN_0238_A / SYN_0238_B pair
+whose source TXN_7d7509adf36aac31539d is a real charge outside the pair.
 """
 
 from __future__ import annotations
@@ -25,17 +25,26 @@ pytestmark = pytest.mark.skipif(
     reason="TEST_DATABASE_URL is not set",
 )
 
+MARIA = "CUS_75764d8a8e3d956f3320"
+SOURCE = "TXN_7d7509adf36aac31539d"
+
 _PII_MARKERS = (
     "ck_mx_maria",
     "ck_ar_ana",
     "ck_co_camilo",
     "ck_mx_teo",
+    MARIA,
+    "CUS_bea1a374f5bcbe2b4b20",
+    "CUS_b202620b1dbf4256f447",
+    "CUS_e6543f8446563b61c837",
     "tx_pg_",
+    "SYN_0238",
+    SOURCE,
     "customer_key",
     "transaction_key",
     "merchant_name",
     "Farmacia Norte",
-    "Mercado Central",
+    "Duplicado Demo",
     "@",
 )
 
@@ -64,7 +73,9 @@ def pg_client() -> object:
     )
     app = create_app(settings)
     with TestClient(app, raise_server_exceptions=False) as client:
-        client.app.state.engine.triage = ScriptedTriage({"tx_pg_low": "low", "tx_pg_dup": "low"})
+        client.app.state.engine.triage = ScriptedTriage(
+            {"tx_pg_low": "low", "SYN_0238_A": "low", "SYN_0238_B": "low"}
+        )
         yield client
 
 
@@ -82,9 +93,15 @@ def test_postgres_endpoints_do_not_500(pg_client: TestClient) -> None:
     headers = login(pg_client, "maria")
     agent = {"Authorization": "Bearer demo-agent-local"}
 
+    personas = _assert_ok(pg_client.get("/api/personas"), "personas")
+    maria = next(row for row in personas["personas"] if row["id"] == "maria")  # type: ignore[index]
+    assert maria["segment"] == "Basic"
+    assert maria["note"] == "Challenge data customer"
+
     listed = _assert_ok(pg_client.get("/api/transactions", headers=headers), "transactions")
     keys = {row["transaction_key"] for row in listed["transactions"]}  # type: ignore[index]
-    assert {"tx_pg_high", "tx_pg_pending", "tx_pg_low", "tx_pg_dup"} <= keys
+    assert {"tx_pg_high", "tx_pg_pending", "tx_pg_low", "SYN_0238_A", "SYN_0238_B", SOURCE} <= keys
+    assert "is_fraud" not in json.dumps(listed)
 
     high = _assert_ok(
         pg_client.post(
@@ -139,14 +156,30 @@ def test_postgres_endpoints_do_not_500(pg_client: TestClient) -> None:
         "recognize low",
     )
 
+    pair = pg_client.app.state.bank.get_duplicate(MARIA, "SYN_0238_A")
+    assert pair is not None
+    assert pair.customer_key == MARIA
+    assert pair.source_transaction_key == SOURCE
+    assert pair.other_transaction_key == "SYN_0238_B"
+    other = pg_client.app.state.bank.get_duplicate(MARIA, "SYN_0238_B")
+    assert other is not None
+    assert other.other_transaction_key == "SYN_0238_A"
+    assert other.source_transaction_key == SOURCE
+
     duplicate = _assert_ok(
         pg_client.post(
             "/cases",
             headers=headers,
-            json={"transaction_key": "tx_pg_dup", "message": "No reconozco este cargo"},
+            json={"transaction_key": "SYN_0238_A", "message": "No reconozco este cargo"},
         ),
         "open duplicate case",
     )
+    assert duplicate["case_type"] == "duplicate_synthetic"
+    reply = str(duplicate["reply"])
+    assert "SINTÉTICO" in reply
+    assert "12:00" in reply
+    assert "12:10" in reply
+    assert "09:00" not in reply
     _assert_ok(
         pg_client.post(
             f"/cases/{duplicate['case_id']}/actions",
