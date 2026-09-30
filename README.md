@@ -17,6 +17,8 @@ make dev
 
 Open [http://127.0.0.1:8091](http://127.0.0.1:8091). The other pages are `/agent` and `/metrics`.
 
+`DEMO_AGENT_TOKEN` is the admin console token (export and config). `DEMO_JUDGE_TOKEN` is optional: when set, it can list, open, and resolve the handoff queue only. Leave it unset to disable it. Do not commit either value.
+
 `GET /health` is the health check. `GET /healthz` returns the same JSON. On Cloud Run, probe `/health`: the run.app front end reserves `/healthz` and answers 404 before the container.
 
 `make check` runs ruff, mypy, and pytest.
@@ -42,6 +44,22 @@ The metrics page excludes eval traffic by default. The toggle is labeled “Demo
 1. `fraud_score > 30` is HIGH for every status, including Pending and Reversed. The desk offers a card block and performs it only after an explicit confirmation, then hands off.
 2. Otherwise Pending and Reversed get a fixed explanation and a prominent “Sigo sin reconocer este cargo” / “Continuo sem reconhecer esta cobrança” action (`handoff_reason=customer_contests_rule_answer`).
 3. Otherwise a missing feature row is REVIEW, never LOW.
-4. Otherwise the vendored LightGBM model returns REVIEW or LOW. LOW explains the merchant from history. A synthetic duplicate is labeled synthetic.
+4. Otherwise the vendored LightGBM model returns REVIEW or LOW. LOW explains the merchant from history. A synthetic duplicate is labeled synthetic, and only when that band is LOW.
 
-Times shown to the customer and in the handoff packet are `transaction_ts_utc` converted with `customers.tz` (Buenos Aires, Bogotá, Mexico City, Tijuana). `is_fraud` is never read.
+A `SYN_*` charge is scored with its source transaction's other features. The fraud score used for routing is the SYN row's own `fraud_score`, not the source row's.
+
+Times shown to the customer and in the handoff packet are `transaction_ts_utc` converted with `customers.tz` (Buenos Aires, Bogotá, Mexico City, Tijuana; Querétaro uses Mexico City). `is_fraud` is never read.
+
+## Demo
+
+Lucía is the duplicate-route persona. María stays on her current customer. María's `SYN_0238_A` / `SYN_0238_B` routes to REVIEW by design, so it is not the duplicate demo.
+
+SQLite, from the app home:
+
+1. Choose **Lucía · Querétaro**. The note is "Synthetic persona, duplicate charge".
+2. Dispute `SYN_0112_A`. The fixture source `tx_lucia_source` scores LOW, so the reply is the synthetic-duplicate explanation (the sibling is `SYN_0112_B`).
+
+Postgres, with `DATABASE_URL`:
+
+1. Choose **Lucía · Querétaro**. The session signs `CUS_54f100f5046beb356091` (Mexico, Querétaro, `America/Mexico_City`, Basic). The note is "Challenge data customer, duplicate charge".
+2. Dispute `SYN_0112_A`. Its source `TXN_d52a16ff27c1edb3d978` scores LOW (raw score 0.000226, under `t_low` 0.0002756), so the desk takes the duplicate route.

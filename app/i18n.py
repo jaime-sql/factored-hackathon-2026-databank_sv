@@ -389,6 +389,94 @@ def next_step_review(language: str) -> str:
     return "Revisar el cargo con una persona. No bloquear la tarjeta desde este paquete. No se emitió un crédito."
 
 
+_FALLBACK_MERCHANT_PREFIXES = (
+    "categoría ",
+    "categoria ",
+    "tipo ",
+)
+_FALLBACK_MERCHANT_EXACT = {
+    "comercio no identificado",
+    "comércio não identificado",
+}
+
+
+def mask_merchant(label: str) -> str:
+    """Hide a real merchant name. Category and type fallbacks stay readable."""
+    text = (label or "").strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    if lowered in _FALLBACK_MERCHANT_EXACT or lowered.startswith(_FALLBACK_MERCHANT_PREFIXES):
+        return text
+    masked: list[str] = []
+    for word in text.split():
+        masked.append(word if len(word) <= 1 else word[0] + ("•" * (len(word) - 1)))
+    return " ".join(masked)
+
+
+def handoff_reason_label(
+    language: str,
+    reason: str,
+    *,
+    band: str,
+    case_type: str,
+    synthetic: bool,
+    card_blocked: bool,
+) -> str:
+    """Short queue label. A LOW card is only the customer's request for a person."""
+    pt = language == "pt"
+    if band == "low" and reason == "customer_requested_human":
+        label = (
+            "Cliente pediu uma pessoa (risco baixo)"
+            if pt
+            else "Cliente pidió una persona (riesgo bajo)"
+        )
+        if synthetic:
+            extra = "Possível duplicado" if pt else "Posible duplicado"
+            return f"{label} · {extra}"
+        return label
+    if synthetic and reason == "fraud_model":
+        return "Possível duplicado" if pt else "Posible duplicado"
+    if reason == "customer_contests_rule_answer":
+        if case_type == "reversed":
+            return (
+                "Cliente contestou a explicação (estornada)"
+                if pt
+                else "Cliente impugnó explicación (reversado)"
+            )
+        return (
+            "Cliente contestou a explicação (pendente)"
+            if pt
+            else "Cliente impugnó explicación (pendiente)"
+        )
+    if reason == "fraud_rule" and card_blocked:
+        return "Risco alto: cartão bloqueado" if pt else "Riesgo alto: tarjeta bloqueada"
+    if reason == "fraud_rule":
+        return (
+            "Risco alto: cliente recusou o bloqueio"
+            if pt
+            else "Riesgo alto: cliente rechazó el bloqueo"
+        )
+    if reason == "fraud_model":
+        return "Modelo: revisão" if pt else "Modelo: revisión"
+    if not reason:
+        return "Motivo não registrado" if pt else "Motivo no registrado"
+    return reason
+
+
+def threshold_crossed(
+    band: str, *, fraud_score: float | None, t_low: float, high_value: float
+) -> str:
+    if band == "high":
+        shown = "" if fraud_score is None else f" ({fraud_score:g})"
+        return f"fraud_score > {high_value:g}{shown}"
+    if band == "review":
+        return f"score >= {t_low:.7g}"
+    if band == "low":
+        return f"score < {t_low:.7g}"
+    return "Pending/Reversed"
+
+
 def next_step_contest(language: str) -> str:
     if language == "pt":
         return "O cliente rejeitou a explicação automática. Revisar a cobrança. Nenhum crédito foi emitido."

@@ -27,7 +27,8 @@ async function loadPersonas() {
   box.innerHTML = "";
   for (const persona of payload.personas) {
     const button = document.createElement("button");
-    button.textContent = `${persona.label} · ${persona.tz}`;
+    const note = persona.note ? ` · ${persona.note}` : "";
+    button.textContent = `${persona.label} · ${persona.tz}${note}`;
     button.addEventListener("click", () => signIn(persona.id));
     box.appendChild(button);
   }

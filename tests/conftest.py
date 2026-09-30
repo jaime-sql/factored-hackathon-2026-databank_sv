@@ -32,6 +32,9 @@ def client(tmp_path: object) -> object:
                 "tx_teo_home": "low",
                 "tx_camilo_home": "low",
                 "tx_maria_home": "low",
+                "tx_lucia_source": "low",
+                "SYN_0112_A": "low",
+                "SYN_0112_B": "low",
             }
         )
         yield test_client

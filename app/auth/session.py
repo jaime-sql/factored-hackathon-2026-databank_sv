@@ -37,8 +37,26 @@ def read_customer(secret: str, token: str) -> str | None:
     return customer_key
 
 
-def is_agent(settings: Settings, token: str) -> bool:
-    expected = settings.demo_agent_token.strip()
-    if not expected:
+def _same_token(presented: str, expected: str) -> bool:
+    if not presented or not expected or len(presented) != len(expected):
         return False
-    return hmac.compare_digest(token.strip(), expected)
+    return hmac.compare_digest(presented, expected)
+
+
+def agent_role(settings: Settings, token: str) -> str | None:
+    """admin for DEMO_AGENT_TOKEN, judge for DEMO_JUDGE_TOKEN, or None.
+
+    An empty judge token is disabled. The admin token is checked first.
+    """
+    presented = token.strip()
+    if not presented:
+        return None
+    if _same_token(presented, settings.demo_agent_token.strip()):
+        return "admin"
+    if _same_token(presented, settings.demo_judge_token.strip()):
+        return "judge"
+    return None
+
+
+def is_agent(settings: Settings, token: str) -> bool:
+    return agent_role(settings, token) is not None

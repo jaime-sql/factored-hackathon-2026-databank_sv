@@ -10,11 +10,12 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from app.auth.session import is_agent, read_customer, sign_customer
+from app.auth.session import agent_role, read_customer, sign_customer
 from app.bank.fixture import PERSONAS
 from app.config import Settings
 from app.errors import APIError
 from app.eval_access import accept_eval_fields
+from app.handoff.present import packet_view, queue_card
 from app.metrics.compute import compute_metrics
 from app.timeutil import present_time
 
@@ -38,6 +39,10 @@ class ActionIn(BaseModel):
     action: str = Field(min_length=1, max_length=64)
 
 
+class ResolveIn(BaseModel):
+    note: str = Field(default="", max_length=500)
+
+
 def _settings(request: Request) -> Settings:
     return request.app.state.settings
 
@@ -53,11 +58,20 @@ def _customer(request: Request) -> str:
     return customer_key
 
 
-def _agent(request: Request) -> None:
+def _bearer(request: Request) -> str:
     header = request.headers.get("authorization", "")
-    token = header.removeprefix("Bearer ").strip() if header.lower().startswith("bearer ") else ""
-    if not is_agent(_settings(request), token):
+    if header.lower().startswith("bearer "):
+        return header.removeprefix("Bearer ").strip()
+    return ""
+
+
+def _agent(request: Request, *, admin_only: bool = False) -> str:
+    role = agent_role(_settings(request), _bearer(request))
+    if role is None:
         raise APIError(401, "auth_required", "Agent sign-in required")
+    if admin_only and role != "admin":
+        raise APIError(403, "forbidden", "Admin token required")
+    return role
 
 
 def _health(request: Request) -> dict[str, str]:
@@ -83,6 +97,9 @@ def health(request: Request) -> dict[str, str]:
 @router.get("/api/auth/config")
 def auth_config(request: Request) -> dict[str, str]:
     settings = _settings(request)
+    role = agent_role(settings, _bearer(request))
+    if role == "judge":
+        raise APIError(403, "forbidden", "Admin token required")
     payload = {"agent_auth": "clerk" if settings.clerk_configured else "demo"}
     if settings.environment != "production" and not settings.clerk_configured:
         payload["demo_token"] = settings.demo_agent_token
@@ -100,7 +117,9 @@ def personas(request: Request) -> dict[str, Any]:
                 "country": row["country"],
                 "tz": row["tz"],
                 "segment": row["segment"],
-                "note": "Challenge data customer" if postgres else row["note"],
+                "note": (
+                    (row.get("bank_note") or "Challenge data customer") if postgres else row["note"]
+                ),
             }
             for row in PERSONAS
         ]
@@ -204,22 +223,25 @@ def get_case(case_id: str, request: Request) -> dict[str, Any]:
     }
 
 
+def _audit_for(request: Request, case_id: str) -> dict[str, Any] | None:
+    for row in request.app.state.ops.current_audit_cases():
+        if row.get("case_id") == case_id:
+            return row
+    return None
+
+
+def _thresholds(request: Request) -> tuple[float, float]:
+    config = request.app.state.thresholds.get()
+    return config.t_low, config.high_value
+
+
 @router.get("/api/handoff")
 def handoff_queue(request: Request) -> dict[str, Any]:
     _agent(request)
-    items = []
-    for row in request.app.state.ops.list_handoffs():
-        packet = row["packet"]
-        items.append(
-            {
-                "case_id": row["case_id"],
-                "status": row["status"],
-                "language": packet.get("language"),
-                "band": packet.get("triage", {}).get("band"),
-                "synthetic_duplicate": packet.get("synthetic_duplicate", False),
-                "recommended_next_step": packet.get("recommended_next_step"),
-            }
-        )
+    audits = {row["case_id"]: row for row in request.app.state.ops.current_audit_cases()}
+    items = [
+        queue_card(row, audits.get(row["case_id"])) for row in request.app.state.ops.list_handoffs()
+    ]
     return {"queue": items}
 
 
@@ -239,7 +261,12 @@ def handoff_case(case_id: str, request: Request) -> dict[str, Any]:
         }
         for event in events
     ]
-    return {"handoff": row, "events": safe_events}
+    t_low, high_value = _thresholds(request)
+    return {
+        "handoff": row,
+        "events": safe_events,
+        "view": packet_view(row, _audit_for(request, case_id), t_low=t_low, high_value=high_value),
+    }
 
 
 @router.post("/api/handoff/{case_id}/claim")
@@ -260,6 +287,24 @@ def claim(case_id: str, request: Request) -> dict[str, str]:
     return {"status": "claimed"}
 
 
+@router.post("/api/handoff/{case_id}/resolve")
+def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str, str]:
+    _agent(request)
+    if request.app.state.ops.get_handoff(case_id) is None:
+        raise APIError(404, "not_found", "Handoff not found")
+    from datetime import UTC, datetime
+
+    request.app.state.ops.update_handoff(
+        case_id,
+        {
+            "status": "resolved",
+            "resolution_note": body.note,
+            "updated_at": datetime.now(UTC),
+        },
+    )
+    return {"status": "resolved"}
+
+
 @router.get("/api/metrics")
 def metrics(request: Request, include_eval: bool = False) -> dict[str, Any]:
     # Public on purpose: aggregates only, no per-customer rows or PII.
@@ -275,7 +320,7 @@ def metrics(request: Request, include_eval: bool = False) -> dict[str, Any]:
 
 @router.get("/audit/export")
 def export_audit(request: Request, include_eval: bool = False) -> Response:
-    _agent(request)
+    _agent(request, admin_only=True)
     rows = request.app.state.ops.current_audit_cases()
     if not include_eval:
         rows = [row for row in rows if not row.get("is_eval_case")]

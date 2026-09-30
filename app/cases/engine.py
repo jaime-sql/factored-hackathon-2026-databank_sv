@@ -26,6 +26,7 @@ from app.handoff.packet import (
     HandoffPacket,
     TransactionFacts,
     TriageInfo,
+    packet_is_complete,
 )
 from app.i18n import (
     confirm_block_label,
@@ -216,7 +217,9 @@ class Engine:
             and duplicate is not None
             and duplicate.source_transaction_key
         ):
-            # Demo choice: SYN_* is absent from fraud_features, so score the source row.
+            # Demo choice: SYN_* has no fraud_features row, so the other model
+            # features come from source_transaction_key. The HIGH rule and the
+            # fraud_score copied onto that payload are this SYN row's own value.
             features = self.bank.get_features(
                 customer.customer_key, str(duplicate.source_transaction_key)
             )
@@ -301,33 +304,9 @@ class Engine:
                 "case_source": case_source,
             }
         )
-        self._audit(
-            case_id=case_id,
-            audit_id=audit_id,
-            supersedes=None,
-            case_type=case_type,
-            customer=customer,
-            status=status,
-            created=now,
-            closed=closed,
-            decision=decision,
-            automation=automation,
-            reason=reason,
-            packet_complete=None,
-            lang=lang,
-            version=version,
-            fraud_score=tx.fraud_score,
-            prob=prob,
-            flags=flags,
-            is_eval=is_eval,
-            eval_run_id=eval_run_id,
-            case_source=case_source,
-        )
-        self._event(
-            case_id, "step", "route", {"band": band, "case_type": case_type}, "not_applicable"
-        )
+        packet_complete: bool | None = None
         if decision == "handoff":
-            self._deliver_handoff(
+            packet_complete = self._deliver_handoff(
                 case_id,
                 customer,
                 tx,
@@ -344,6 +323,31 @@ class Engine:
                 reason or "fraud_model",
                 flags,
             )
+        self._audit(
+            case_id=case_id,
+            audit_id=audit_id,
+            supersedes=None,
+            case_type=case_type,
+            customer=customer,
+            status=status,
+            created=now,
+            closed=closed,
+            decision=decision,
+            automation=automation,
+            reason=reason,
+            packet_complete=packet_complete,
+            lang=lang,
+            version=version,
+            fraud_score=tx.fraud_score,
+            prob=prob,
+            flags=flags,
+            is_eval=is_eval,
+            eval_run_id=eval_run_id,
+            case_source=case_source,
+        )
+        self._event(
+            case_id, "step", "route", {"band": band, "case_type": case_type}, "not_applicable"
+        )
         return CaseResult(
             case_id,
             reply,
@@ -699,6 +703,7 @@ class Engine:
             step,
             synthetic,
         )
+        complete = packet_is_complete(packet)
         self._store_handoff(case_id, packet, reason)
         self.ops.update_case(
             case_id,
@@ -716,7 +721,7 @@ class Engine:
             closed=now,
             status=status,
             reason=reason,
-            packet_complete=True,
+            packet_complete=complete,
             flags=flags,
             prob=prob,
             version=version,
@@ -739,7 +744,7 @@ class Engine:
         synthetic: bool,
         reason: str,
         flags: list[str],
-    ) -> None:
+    ) -> bool:
         del flags, reason
         packet = self._packet(
             case_id,
@@ -756,7 +761,9 @@ class Engine:
             step,
             synthetic,
         )
+        complete = packet_is_complete(packet)
         self._store_handoff(case_id, packet, "fraud_model")
+        return complete
 
     def _store_handoff(self, case_id: str, packet: HandoffPacket, reason: str) -> None:
         del reason

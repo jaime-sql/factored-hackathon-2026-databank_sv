@@ -14,6 +14,7 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
+from app.auth.session import read_customer
 from app.config import Settings
 from app.db import connect_app
 from app.main import create_app
@@ -37,6 +38,9 @@ _PII_MARKERS = (
     "CUS_bea1a374f5bcbe2b4b20",
     "CUS_b202620b1dbf4256f447",
     "CUS_e6543f8446563b61c837",
+    "CUS_54f100f5046beb356091",
+    "ck_mx_lucia",
+    "SYN_0112",
     "tx_pg_",
     "SYN_0238",
     SOURCE,
@@ -97,6 +101,15 @@ def test_postgres_endpoints_do_not_500(pg_client: TestClient) -> None:
     maria = next(row for row in personas["personas"] if row["id"] == "maria")  # type: ignore[index]
     assert maria["segment"] == "Basic"
     assert maria["note"] == "Challenge data customer"
+    lucia = next(row for row in personas["personas"] if row["id"] == "lucia")  # type: ignore[index]
+    assert lucia["segment"] == "Basic"
+    assert lucia["tz"] == "America/Mexico_City"
+    assert lucia["country"] == "Mexico"
+    assert lucia["note"] == "Challenge data customer, duplicate charge"
+    lucia_session = pg_client.post("/api/session", json={"persona": "lucia"})
+    assert lucia_session.status_code == 200
+    signed = read_customer("test-session-secret-value", lucia_session.json()["token"])
+    assert signed == "CUS_54f100f5046beb356091"
 
     listed = _assert_ok(pg_client.get("/api/transactions", headers=headers), "transactions")
     keys = {row["transaction_key"] for row in listed["transactions"]}  # type: ignore[index]

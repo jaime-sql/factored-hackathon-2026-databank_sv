@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     clerk_publishable_key: str = ""
     demo_agent_token: str = DEV_AGENT_TOKEN
     demo_agent_email: str = "agent@harbor-bank.example"
+    demo_judge_token: str = ""
     eval_runner_token: str = ""
     prompt_version: str = PROMPT_VERSION
 
