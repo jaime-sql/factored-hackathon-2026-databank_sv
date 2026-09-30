@@ -260,6 +260,7 @@ def claim(case_id: str, request: Request) -> dict[str, str]:
 
 @router.get("/api/metrics")
 def metrics(request: Request, include_eval: bool = False) -> dict[str, Any]:
+    # Public on purpose: aggregates only, no per-customer rows or PII.
     ops = request.app.state.ops
     return compute_metrics(
         ops.current_audit_cases(),

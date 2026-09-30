@@ -27,7 +27,6 @@ def connect_app(dsn: str) -> Any:
         connect_timeout=5,
         options=f"-c statement_timeout={STATEMENT_TIMEOUT} -c search_path={SEARCH_PATH}",
     )
-    conn.execute("SET statement_timeout = %s", (STATEMENT_TIMEOUT,))
     conn.execute("SET search_path TO app, public")
     fingerprint = str(id(dsn))
     if fingerprint not in _role_ok:
