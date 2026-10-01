@@ -9,11 +9,16 @@ has no roles.
 from __future__ import annotations
 
 import json
+import logging
+import re
 import sqlite3
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from app.ops.guard import assert_statement_allowed
+
+logger = logging.getLogger(__name__)
 
 _PRICES = (
     ("gpt-4o-mini", 0.15, 0.60, "2026-09-29", "https://openai.com/api/pricing/"),
@@ -58,6 +63,8 @@ class OpsStore:
         self.readback_tamper: Any = None
         if backend == "sqlite":
             self._init_sqlite()
+        else:
+            self._ensure_postgres_is_test()
 
     def _q(self, sql: str) -> str:
         if self.backend == "postgres":
@@ -133,7 +140,8 @@ class OpsStore:
                   latest_audit_id TEXT,
                   is_eval_case INTEGER NOT NULL DEFAULT 0,
                   eval_run_id TEXT,
-                  case_source TEXT
+                  case_source TEXT,
+                  is_test INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS audit_case (
                   audit_id TEXT PRIMARY KEY,
@@ -159,7 +167,8 @@ class OpsStore:
                   guardrail_flags TEXT NOT NULL,
                   is_eval_case INTEGER NOT NULL DEFAULT 0,
                   eval_run_id TEXT,
-                  case_source TEXT
+                  case_source TEXT,
+                  is_test INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS audit_llm_call (
                   audit_id TEXT PRIMARY KEY,
@@ -178,7 +187,8 @@ class OpsStore:
                   retry_attempt INTEGER NOT NULL,
                   prompt_version TEXT,
                   is_eval_case INTEGER NOT NULL,
-                  eval_run_id TEXT
+                  eval_run_id TEXT,
+                  is_test INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS audit_event (
                   audit_id TEXT PRIMARY KEY,
@@ -256,13 +266,51 @@ class OpsStore:
                     "INSERT OR IGNORE INTO analytics_assumption VALUES (?, ?, ?)",
                     assumption,
                 )
+            _add_sqlite_is_test(conn)
+            conn.executescript(_SQLITE_AUDIT_VIEWS)
+
+    def _ensure_postgres_is_test(self) -> None:
+        """Apply migrations/002 when this role can. A refusal leaves startup up."""
+        try:
+            from app.db import connect_app
+            from app.paths import project_root
+
+            path = project_root() / "migrations" / "002_is_test.sql"
+            statements = _sql_statements(path)
+            with connect_app(self.dsn) as conn:
+                present = conn.execute(
+                    "SELECT 1 AS ok FROM information_schema.columns "
+                    "WHERE table_schema = 'app' AND table_name = 'audit_case' "
+                    "AND column_name = 'is_test'"
+                ).fetchone()
+                view = conn.execute(
+                    "SELECT 1 AS ok FROM information_schema.columns "
+                    "WHERE table_schema = 'app' AND table_name = 'audit_current' "
+                    "AND column_name = 'is_test'"
+                ).fetchone()
+                if present and view:
+                    return
+                for statement in statements:
+                    try:
+                        conn.execute(statement)
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+                        logger.warning(
+                            "is_test migration was not applied; "
+                            "run migrations/002_is_test.sql as the database owner"
+                        )
+                        return
+        except Exception as exc:
+            logger.warning("is_test migration skipped (%s)", type(exc).__name__)
 
     def insert_case(self, row: dict[str, Any]) -> None:
         sql = (
             f"INSERT INTO {self._table('cases')} ("
             "case_id, customer_key, transaction_key, state, language, case_type, "
             "created_at, updated_at, closed_at, latest_audit_id, is_eval_case, "
-            "eval_run_id, case_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "eval_run_id, case_source, is_test) VALUES ("
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         self._write(
             sql,
@@ -280,8 +328,20 @@ class OpsStore:
                 bool(row.get("is_eval_case")),
                 row.get("eval_run_id"),
                 row.get("case_source"),
+                bool(row.get("is_test")),
             ),
         )
+
+    def mark_case_test(self, case_id: str) -> None:
+        """Set is_test on one case. Does not delete the row."""
+        self._write(
+            f"UPDATE {self._table('cases')} SET is_test = ? WHERE case_id = ?",
+            (True, case_id),
+        )
+
+    def list_cases(self) -> list[dict[str, Any]]:
+        rows = self.execute(f"SELECT * FROM {self._table('cases')}")
+        return [_normalize_case(row) for row in rows]
 
     def update_case(self, case_id: str, fields: dict[str, Any]) -> None:
         allowed = {
@@ -324,8 +384,8 @@ class OpsStore:
             "decision, automation_attempted, handoff_reason, handoff_packet_complete, "
             "language, country, accent_group, rule_or_model_version, prompt_version, "
             "fraud_score, model_risk_score, guardrail_flags, is_eval_case, eval_run_id, "
-            "case_source) VALUES ("
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "case_source, is_test) VALUES ("
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         self._write(
             sql,
@@ -354,13 +414,20 @@ class OpsStore:
                 bool(row.get("is_eval_case")),
                 row.get("eval_run_id"),
                 row.get("case_source"),
+                bool(row.get("is_test")),
             ),
         )
         return str(row["audit_id"])
 
     def current_audit_cases(self) -> list[dict[str, Any]]:
-        rows = self.execute(f"SELECT * FROM {self._table('audit_current')}")
-        return [_normalize_audit(row) for row in rows]
+        raw = self.execute(f"SELECT * FROM {self._table('audit_current')}")
+        rows = [_normalize_audit(row) for row in raw]
+        if not raw or "is_test" in raw[0]:
+            return rows
+        flags = {str(row["case_id"]): bool(row.get("is_test")) for row in self.list_cases()}
+        for row in rows:
+            row["is_test"] = flags.get(str(row.get("case_id")), False)
+        return rows
 
     def audit_chain(self, case_id: str) -> list[dict[str, Any]]:
         """Tip from audit_current, then each superseded parent. Read-only."""
@@ -428,8 +495,8 @@ class OpsStore:
             f"INSERT INTO {self._table('audit_llm_call')} ("
             "audit_id, llm_call_id, case_id, supersedes_audit_id, recorded_at, case_type, "
             "model, input_tokens, output_tokens, latency_ms, call_started_at, call_purpose, "
-            "call_status, retry_attempt, prompt_version, is_eval_case, eval_run_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "call_status, retry_attempt, prompt_version, is_eval_case, eval_run_id, is_test) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 row["audit_id"],
                 row["llm_call_id"],
@@ -448,6 +515,7 @@ class OpsStore:
                 row.get("prompt_version"),
                 bool(row.get("is_eval_case")),
                 row.get("eval_run_id"),
+                bool(row.get("is_test")),
             ),
         )
 
@@ -546,6 +614,38 @@ class OpsStore:
         return {str(row["key"]): float(row["value"]) for row in rows}
 
 
+_SQLITE_AUDIT_VIEWS = """
+DROP VIEW IF EXISTS audit_current;
+CREATE VIEW audit_current AS
+SELECT * FROM audit_case AS a
+WHERE NOT EXISTS (
+  SELECT 1 FROM audit_case AS newer
+  WHERE newer.supersedes_audit_id = a.audit_id
+);
+DROP VIEW IF EXISTS audit_llm_call_current;
+CREATE VIEW audit_llm_call_current AS
+SELECT * FROM audit_llm_call AS a
+WHERE NOT EXISTS (
+  SELECT 1 FROM audit_llm_call AS newer
+  WHERE newer.supersedes_audit_id = a.audit_id
+);
+"""
+
+_SQL_COMMENT = re.compile(r"--.*?$", re.MULTILINE)
+
+
+def _add_sqlite_is_test(conn: sqlite3.Connection) -> None:
+    for table in ("cases", "audit_case", "audit_llm_call"):
+        columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+        if "is_test" not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0")
+
+
+def _sql_statements(path: Path) -> list[str]:
+    cleaned = _SQL_COMMENT.sub("", path.read_text(encoding="utf-8"))
+    return [part.strip() for part in cleaned.split(";") if part.strip()]
+
+
 def _as_bool(value: object) -> bool:
     if isinstance(value, bool):
         return value
@@ -562,11 +662,13 @@ def _as_optional_bool(value: object) -> bool | None:
 
 def _normalize_case(row: dict[str, Any]) -> dict[str, Any]:
     row["is_eval_case"] = _as_bool(row.get("is_eval_case"))
+    row["is_test"] = _as_bool(row.get("is_test"))
     return row
 
 
 def _normalize_audit(row: dict[str, Any]) -> dict[str, Any]:
     row["is_eval_case"] = _as_bool(row.get("is_eval_case"))
+    row["is_test"] = _as_bool(row.get("is_test"))
     row["automation_attempted"] = _as_bool(row.get("automation_attempted"))
     row["handoff_packet_complete"] = _as_optional_bool(row.get("handoff_packet_complete"))
     row["guardrail_flags"] = _flags_out(row.get("guardrail_flags"))

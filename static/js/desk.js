@@ -1,4 +1,11 @@
-const state = { language: "es", token: "", caseId: null, catalog: null, personas: [] };
+const state = {
+  language: "es",
+  token: "",
+  caseId: null,
+  catalog: null,
+  personas: [],
+  testMode: false,
+};
 
 function text() {
   return state.catalog && state.catalog[state.language === "pt" ? "pt" : "es"];
@@ -33,6 +40,7 @@ function applyLanguage() {
   if (why) why.textContent = copy.why;
   const heading = document.querySelector("#charges h2");
   if (heading) heading.textContent = copy.charges_title;
+  showTestBadge(state.testMode);
   for (const button of document.querySelectorAll('#charges [data-action="select-charge"]')) {
     button.textContent = copy.dispute;
   }
@@ -105,7 +113,49 @@ async function signIn(persona) {
   });
   const body = await response.json();
   state.token = body.token;
+  if (body.is_test) state.testMode = true;
+  showTestBadge(state.testMode);
   await refreshCharges();
+}
+
+function showTestBadge(on) {
+  const badge = document.getElementById("test-badge");
+  if (!badge) return;
+  const copy = text();
+  badge.textContent = (copy && copy.test_badge) || (state.language === "pt" ? "MODO TESTE" : "MODO PRUEBA");
+  badge.hidden = !on;
+}
+
+function pageSearch() {
+  try {
+    if (typeof location === "undefined" || !location || !location.search) return "";
+    return String(location.search);
+  } catch {
+    return "";
+  }
+}
+
+async function armTestQuery() {
+  const params = new URLSearchParams(pageSearch());
+  const token = params.get("test");
+  if (token) {
+    await fetch("/api/test-mode", {
+      method: "POST",
+      headers: { "X-Test-Token": token },
+    });
+    params.delete("test");
+    if (typeof history !== "undefined" && history.replaceState) {
+      const next = params.toString();
+      history.replaceState(null, "", next ? `/?${next}` : "/");
+    }
+  }
+  try {
+    const status = await fetch("/api/test-mode").then((res) => res.json());
+    state.testMode = Boolean(status && status.is_test);
+  } catch {
+    state.testMode = false;
+  }
+  showTestBadge(state.testMode);
 }
 
 async function openCase(transactionKey, message) {
@@ -218,6 +268,7 @@ async function bootstrap() {
   } catch {
     state.catalog = null;
   }
+  await armTestQuery();
   applyLanguage();
   await loadPersonas();
 }

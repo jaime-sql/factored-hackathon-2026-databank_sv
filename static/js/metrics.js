@@ -2,6 +2,7 @@ const box = document.getElementById("include-eval");
 const label = document.getElementById("eval-label");
 let catalog = null;
 let language = "es";
+let adminToken = "";
 
 function pack() {
   return catalog && catalog[language === "pt" ? "pt" : "es"];
@@ -29,6 +30,8 @@ function applyMetricsLanguage() {
   const tour = document.getElementById("tour");
   if (tour) tour.textContent = text.tour_open;
   if (label && !label.dataset.loaded) label.textContent = text.eval_toggle;
+  const badge = document.getElementById("test-badge");
+  if (badge && text.test_badge) badge.textContent = text.test_badge;
 }
 
 function tile(name, caption, value) {
@@ -44,10 +47,21 @@ function tile(name, caption, value) {
   return article;
 }
 
+function showTestBadge(on) {
+  const badge = document.getElementById("test-badge");
+  if (!badge) return;
+  const text = pack();
+  badge.textContent = (text && text.test_badge) || "MODO PRUEBA";
+  badge.hidden = !on;
+}
+
 async function load() {
   const text = pack();
+  const headers = {};
+  if (adminToken) headers.authorization = `Bearer ${adminToken}`;
   const response = await fetch(
-    `/api/metrics?include_eval=${box.checked ? "true" : "false"}&language=${language}`,
+    `/api/metrics?include_eval=${box.checked ? "1" : "0"}&language=${language}`,
+    { headers },
   );
   const body = await response.json();
   label.dataset.loaded = "1";
@@ -65,7 +79,13 @@ async function load() {
   handoff.setAttribute("data-metric", "handoff");
   containment.setAttribute("data-metric", "containment");
   evalTile.setAttribute("data-metric", "eval");
-  tiles.replaceChildren(cases, handoff, containment, evalTile);
+  const testTile = tile(
+    "test",
+    text ? text.tile_test : "Prueba excluida",
+    body.excluded_test_cases == null ? 0 : body.excluded_test_cases,
+  );
+  testTile.setAttribute("data-metric", "test");
+  tiles.replaceChildren(cases, handoff, containment, evalTile, testTile);
   document.getElementById("raw").textContent = JSON.stringify(body, null, 2);
 }
 
@@ -84,6 +104,17 @@ fetch("/api/i18n")
   .then((body) => {
     catalog = body;
     applyMetricsLanguage();
+  })
+  .catch(() => {})
+  .then(() => fetch("/api/auth/config").then((res) => (res.ok ? res.json() : {})).catch(() => ({})))
+  .then((config) => {
+    adminToken = (config && config.demo_token) || "";
+    return fetch("/api/test-mode")
+      .then((res) => (res.ok ? res.json() : {}))
+      .catch(() => ({}));
+  })
+  .then((status) => {
+    showTestBadge(Boolean(status && status.is_test));
     return load();
   })
   .catch(() => load());

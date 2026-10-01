@@ -544,6 +544,8 @@ _UI = {
         "send": "Enviar",
         "why": "¿Por qué?",
         "protected": "Protegido",
+        "test_badge": "MODO PRUEBA",
+        "test_chip": "Prueba",
         "agent_title": "Consola del agente",
         "agent_lede": "Cola de casos con el paquete verificado. No hay texto crudo del cliente.",
         "token_placeholder": "Token del agente",
@@ -560,13 +562,14 @@ _UI = {
         "no_actions": "ninguna",
         "metrics_title": "Métricas",
         "metrics_lede": (
-            "El tablero deja fuera el tráfico de evaluación. Las tasas de seguridad "
-            "que necesitan etiquetas viven en el informe offline."
+            "El tablero deja fuera el tráfico de evaluación y el de prueba. Las tasas "
+            "de seguridad que necesitan etiquetas viven en el informe offline."
         ),
         "tile_cases": "Casos",
         "tile_handoff": "Handoff",
         "tile_containment": "Contención",
         "tile_eval": "Eval excluido",
+        "tile_test": "Prueba excluida",
         "eval_toggle": (
             "Muestra de demostración (enriquecida en fraude, tasa HIGH cerca de "
             "11 veces la de los datos completos)"
@@ -589,6 +592,8 @@ _UI = {
         "send": "Enviar",
         "why": "Por quê?",
         "protected": "Protegido",
+        "test_badge": "MODO TESTE",
+        "test_chip": "Teste",
         "agent_title": "Consola do agente",
         "agent_lede": "Fila de casos com o pacote verificado. Não há texto cru do cliente.",
         "token_placeholder": "Token do agente",
@@ -605,13 +610,14 @@ _UI = {
         "no_actions": "nenhuma",
         "metrics_title": "Métricas",
         "metrics_lede": (
-            "O painel deixa de fora o tráfego de avaliação. As taxas de segurança "
-            "que precisam de rótulos ficam no relatório offline."
+            "O painel deixa de fora o tráfego de avaliação e o de teste. As taxas de "
+            "segurança que precisam de rótulos ficam no relatório offline."
         ),
         "tile_cases": "Casos",
         "tile_handoff": "Repasse",
         "tile_containment": "Contenção",
         "tile_eval": "Avaliação excluída",
+        "tile_test": "Teste excluído",
         "eval_toggle": (
             "Amostra de demonstração (enriquecida em fraude, taxa HIGH cerca de "
             "11 vezes a dos dados completos)"

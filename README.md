@@ -29,7 +29,7 @@ SQLite uses the synthetic fixture in `app/bank/fixture.py`. With `DATABASE_URL` 
 
 `DATABASE_URL` is read from the environment only. Leave it empty for SQLite. Never commit a real URL.
 
-The app connects as the `app_rw` role: read public data tables, no writes to them, no access to `eval`, statement timeout 15 seconds. Apply `migrations/001_app_schema.sql` yourself as the owner. The app does not run that file. On Cloud Run the URL belongs in Secret Manager; `deploy/cloudrun.sh` uploads the environment value into a secret and passes the secret name, not the URL, to the service.
+The app connects as the `app_rw` role: read public data tables, no writes to them, no access to `eval`, statement timeout 15 seconds. Apply `migrations/001_app_schema.sql` yourself as the owner. The app does not run that file. `migrations/002_is_test.sql` adds `is_test` and is applied on startup when the role can alter the tables; otherwise the owner runs it too. On Cloud Run the URL belongs in Secret Manager; `deploy/cloudrun.sh` uploads the environment value into a secret and passes the secret name, not the URL, to the service.
 
 Model features are read from `public.fraud_features` joined to the customer’s transaction. Pending and Reversed charges have no feature row. If any other status has no feature row, the desk routes it to REVIEW and never LOW.
 
@@ -37,7 +37,24 @@ Model features are read from `public.fraud_features` joined to the customer’s 
 
 `POST /cases` accepts optional `eval_run_id` and `case_source` (`sample`, `synthetic_dup`, `red_team`, `ood_sv_text`, `pt_translated`) only when the `EVAL_RUNNER_TOKEN` header matches the environment value. Without that header the fields are stored as null. Case ids are server-generated text UUIDs. Both fields are on the case, on each audit row, and on `app.audit_current`, which the runner joins to its labels.
 
-The metrics page excludes eval traffic by default. The toggle label comes from the language catalog (Spanish by default on the page; the unscoped API still returns the English demo-sample warning).
+The metrics page excludes eval traffic by default. The toggle label comes from the language catalog (Spanish by default on the page; the unscoped API still returns the English demo-sample warning). `include_eval=1` changes the totals only when the request presents the admin token. A missing or wrong token leaves the rows out and still returns 200.
+
+## QA test traffic
+
+`QA_TEST_TOKEN` is optional. Leave it empty to disable the flag. Do not commit the value.
+
+A browser session started at `/?test=<token>`, or any request with header `X-Test-Token`, stores new cases with `is_test=true` when the value matches. The flag is kept in the session cookie, so the rest of that browser session counts as test traffic. The header shows **MODO PRUEBA** (Portuguese: **MODO TESTE**). Agent cards and the packet show a **Prueba** chip. A wrong token does not set the flag and does not return an error. The token is never written back in a response.
+
+Eval runs are unchanged and never set `is_test`, even if the test header is also present.
+
+`/api/metrics` and `GET /audit/export` leave out both test rows and eval rows unless the admin token is present with `include_test=1` or `include_eval=1`. The export adds an `is_test` column. A judge token cannot bring those rows back.
+
+To mark older demo rows after the fact, without deleting anything and without running it on startup:
+
+```bash
+uv run python scripts/mark_demo_cases_test.py --before 2026-10-01T00:00:00Z
+uv run python scripts/mark_demo_cases_test.py <case-id>
+```
 
 ## Routing
 

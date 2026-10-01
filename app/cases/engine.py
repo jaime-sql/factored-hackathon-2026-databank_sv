@@ -159,16 +159,21 @@ class Engine:
         language: str | None,
         eval_run_id: str | None,
         case_source: str | None,
+        is_test: bool = False,
     ) -> CaseResult:
+        if eval_run_id or case_source:
+            is_test = False
         lang = detect_language(message or "", language)
         flags: list[str] = []
         redacted, changed = _redact(message or "")
         if changed:
             flags.append("pii_masked")
         if detect_injection(redacted).blocked:
-            return self._injection(customer_key, lang, flags, eval_run_id, case_source, redacted)
+            return self._injection(
+                customer_key, lang, flags, eval_run_id, case_source, redacted, is_test
+            )
         if not transaction_key:
-            return self._clarify(customer_key, lang, flags, eval_run_id, case_source)
+            return self._clarify(customer_key, lang, flags, eval_run_id, case_source, is_test)
         customer = self.bank.get_customer(customer_key)
         if customer is None:
             raise APIError(404, "not_found", "Customer not found")
@@ -177,7 +182,9 @@ class Engine:
             raise APIError(404, "not_found", "Charge not found")
         features = self.bank.get_features(customer_key, transaction_key)
         duplicate = self.bank.get_duplicate(customer_key, transaction_key)
-        return self._route(customer, tx, features, duplicate, lang, flags, eval_run_id, case_source)
+        return self._route(
+            customer, tx, features, duplicate, lang, flags, eval_run_id, case_source, is_test
+        )
 
     def act(self, customer_key: str, case_id: str, action: str) -> CaseResult:
         case = self._own_case(customer_key, case_id)
@@ -211,6 +218,7 @@ class Engine:
         flags: list[str],
         eval_run_id: str | None,
         case_source: str | None,
+        is_test: bool = False,
     ) -> CaseResult:
         if (
             features is None
@@ -303,6 +311,7 @@ class Engine:
                 "is_eval_case": is_eval,
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
+                "is_test": is_test and not is_eval,
             }
         )
         packet_complete: bool | None = None
@@ -345,6 +354,7 @@ class Engine:
             is_eval=is_eval,
             eval_run_id=eval_run_id,
             case_source=case_source,
+            is_test=is_test and not is_eval,
         )
         self._event(
             case_id, "step", "route", {"band": band, "case_type": case_type}, "not_applicable"
@@ -897,6 +907,7 @@ class Engine:
             is_eval=bool(case.get("is_eval_case")),
             eval_run_id=case.get("eval_run_id"),
             case_source=case.get("case_source"),
+            is_test=bool(case.get("is_test")) and not bool(case.get("is_eval_case")),
         )
         now = datetime.now(UTC)
         self.ops.update_case(str(case["case_id"]), {"latest_audit_id": audit_id, "updated_at": now})
@@ -924,6 +935,7 @@ class Engine:
         is_eval: bool,
         eval_run_id: str | None,
         case_source: str | None,
+        is_test: bool = False,
     ) -> None:
         self.ops.append_audit_case(
             {
@@ -951,6 +963,7 @@ class Engine:
                 "is_eval_case": is_eval,
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
+                "is_test": bool(is_test) and not is_eval,
             }
         )
 
@@ -962,6 +975,7 @@ class Engine:
         eval_run_id: str | None,
         case_source: str | None,
         redacted_message: str,
+        is_test: bool = False,
     ) -> CaseResult:
         flags.append("prompt_injection")
         customer = self.bank.get_customer(customer_key)
@@ -986,6 +1000,7 @@ class Engine:
                 "is_eval_case": is_eval,
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
+                "is_test": is_test and not is_eval,
             }
         )
         self._audit(
@@ -1009,6 +1024,7 @@ class Engine:
             is_eval=is_eval,
             eval_run_id=eval_run_id,
             case_source=case_source,
+            is_test=is_test and not is_eval,
         )
         self._event(
             case_id,
@@ -1038,6 +1054,7 @@ class Engine:
         flags: list[str],
         eval_run_id: str | None,
         case_source: str | None,
+        is_test: bool = False,
     ) -> CaseResult:
         customer = self.bank.get_customer(customer_key)
         if customer is None:
@@ -1061,6 +1078,7 @@ class Engine:
                 "is_eval_case": is_eval,
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
+                "is_test": is_test and not is_eval,
             }
         )
         self._audit(
@@ -1084,6 +1102,7 @@ class Engine:
             is_eval=is_eval,
             eval_run_id=eval_run_id,
             case_source=case_source,
+            is_test=is_test and not is_eval,
         )
         return CaseResult(
             case_id,

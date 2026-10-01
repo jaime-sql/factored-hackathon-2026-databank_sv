@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     demo_agent_email: str = "agent@harbor-bank.example"
     demo_judge_token: str = ""
     eval_runner_token: str = ""
+    qa_test_token: str = ""
     prompt_version: str = PROMPT_VERSION
 
     @property

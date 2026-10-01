@@ -117,6 +117,7 @@ def queue_card(
             card_blocked=blocked,
         ),
         "synthetic_duplicate": synthetic,
+        "is_test": bool(audit_row.get("is_test")),
         "recommended_next_step": display_next_step(
             language, reason, card_blocked=blocked, stored=stored_step
         ),
@@ -160,5 +161,6 @@ def packet_view(
         "actions_taken": actions,
         "reason": card["reason"],
         "reason_label": card["reason_label"],
+        "is_test": card["is_test"],
         "recommended_next_step": card["recommended_next_step"] or "",
     }

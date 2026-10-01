@@ -91,6 +91,7 @@ function renderPacket(panel, view, trail) {
     view.recommended_next_step,
   );
   if (view.band_evidence) lines.push(view.band_evidence);
+  if (view.is_test) lines.unshift(ui("test_chip", "Prueba"));
   for (const step of (trail && trail.steps) || []) {
     if (step.kind === "action") {
       const action = `${step.action || ""} ${step.verification || ""}`.trim();
@@ -115,9 +116,23 @@ function renderPacket(panel, view, trail) {
   panel.hidden = false;
 }
 
+function showTestBadge(on) {
+  const badge = document.getElementById("test-badge");
+  if (!badge) return;
+  const pack = textPack();
+  badge.textContent = (pack && pack.test_badge) || "MODO PRUEBA";
+  badge.hidden = !on;
+}
+
 async function boot() {
   const config = await fetch("/api/auth/config").then((res) => res.json());
   if (config.demo_token && tokenInput) tokenInput.value = config.demo_token;
+  try {
+    const status = await fetch("/api/test-mode").then((res) => res.json());
+    showTestBadge(Boolean(status && status.is_test));
+  } catch {
+    showTestBadge(false);
+  }
 }
 
 function fillCard(card, item) {
@@ -131,6 +146,13 @@ function fillCard(card, item) {
   chip.className = "chip";
   chip.textContent = item.band || "";
   meta.append(chip, document.createTextNode(` ${item.amount || ""}`));
+  if (item.is_test) {
+    const testChip = document.createElement("span");
+    testChip.className = "chip";
+    testChip.setAttribute("data-chip", "test");
+    testChip.textContent = ui("test_chip", "Prueba");
+    meta.append(document.createTextNode(" "), testChip);
+  }
   const merchant = document.createElement("div");
   merchant.textContent = item.merchant || "";
   const when = document.createElement("div");
@@ -260,6 +282,11 @@ function applyConsoleLanguage() {
   for (const resolve of document.querySelectorAll('[data-action="resolve"]')) {
     resolve.textContent = pack.resolve;
   }
+  for (const chip of document.querySelectorAll('[data-chip="test"]')) {
+    chip.textContent = pack.test_chip || "Prueba";
+  }
+  const badge = document.getElementById("test-badge");
+  if (badge) badge.textContent = pack.test_badge || "MODO PRUEBA";
 }
 
 if (typeof document !== "undefined" && document.getElementById("load")) {

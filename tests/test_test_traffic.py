@@ -1,0 +1,401 @@
+"""QA test-traffic flag: session, metrics, and the one-off backfill."""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import re
+import sqlite3
+import subprocess
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.auth.session import accepts_qa_test_token, read_session, sign_customer
+from app.config import Settings
+from app.ids import new_case_id
+from app.main import create_app
+from app.ops.store import OpsStore
+from scripts.mark_demo_cases_test import mark_cases_test
+from tests.conftest import login
+
+ROOT = Path(__file__).resolve().parents[1]
+QA_TOKEN = "qa-local-test-token"
+ADMIN = {"Authorization": "Bearer demo-agent-local"}
+JUDGE = {"Authorization": "Bearer judge-local-token"}
+
+
+@pytest.fixture
+def qa_client(tmp_path: Path) -> object:
+    settings = Settings(
+        environment="local",
+        bank_db_path=str(tmp_path / "bank.sqlite"),
+        ops_db_path=str(tmp_path / "ops.sqlite"),
+        database_url="",
+        eval_runner_token="runner-secret",
+        session_secret="test-session-secret-value",
+        demo_agent_token="demo-agent-local",
+        demo_judge_token="judge-local-token",
+        qa_test_token=QA_TOKEN,
+    )
+    app = create_app(settings)
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def _open(
+    client: TestClient, headers: dict[str, str], key: str = "tx_maria_pending"
+) -> dict[str, object]:
+    response = client.post(
+        "/cases",
+        headers=headers,
+        json={"transaction_key": key, "message": "No reconozco este cargo"},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _stored(client: TestClient, headers: dict[str, str], case_id: str) -> dict[str, object]:
+    response = client.get(f"/cases/{case_id}", headers=headers)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_token_compare_is_exact_and_empty_disables() -> None:
+    assert accepts_qa_test_token("", "anything") is False
+    assert accepts_qa_test_token(QA_TOKEN, "") is False
+    assert accepts_qa_test_token(QA_TOKEN, "nope") is False
+    assert accepts_qa_test_token(QA_TOKEN, "x" * 80) is False
+    assert accepts_qa_test_token(QA_TOKEN, QA_TOKEN) is True
+    legacy = sign_customer("test-session-secret-value", "ck_mx_maria", 1)
+    # A freshly signed cookie carries the flag. Rebuild a four-part legacy cookie.
+    parts = legacy.split(".")
+    assert len(parts) == 5
+    body = f"{parts[1]}.{parts[2]}"
+    digest = hmac.new(b"test-session-secret-value", body.encode(), hashlib.sha256).hexdigest()
+    old = f"cust.{body}.{digest}"
+    assert read_session("test-session-secret-value", old) == ("ck_mx_maria", False)
+    flagged = sign_customer("test-session-secret-value", "ck_mx_maria", 1, is_test=True)
+    assert read_session("test-session-secret-value", flagged) == ("ck_mx_maria", True)
+
+
+def test_flag_set_unset_and_wrong_token(qa_client: TestClient, client: TestClient) -> None:
+    headers = login(qa_client, "maria")
+    plain = _open(qa_client, headers, "tx_maria_pending")
+    assert _stored(qa_client, headers, str(plain["case_id"]))["is_test"] is False
+
+    wrong = qa_client.post(
+        "/api/test-mode",
+        headers={"X-Test-Token": "not-the-token"},
+    )
+    assert wrong.status_code == 200
+    assert wrong.json() == {"is_test": False}
+    assert "error" not in wrong.json()
+    assert QA_TOKEN not in wrong.text
+    assert "not-the-token" not in wrong.text
+    assert qa_client.cookies.get("hd_test") is None
+    still = _open(qa_client, headers, "tx_maria_reversed")
+    assert _stored(qa_client, headers, str(still["case_id"]))["is_test"] is False
+
+    armed = qa_client.post("/api/test-mode", headers={"X-Test-Token": QA_TOKEN})
+    assert armed.status_code == 200
+    assert armed.json() == {"is_test": True}
+    assert QA_TOKEN not in armed.text
+    assert qa_client.cookies.get("hd_test")
+    session = qa_client.post("/api/session", json={"persona": "maria"})
+    assert session.status_code == 200
+    assert session.json()["is_test"] is True
+    assert QA_TOKEN not in session.text
+    signed = read_session("test-session-secret-value", session.json()["token"])
+    assert signed is not None and signed[1] is True
+    headers = {"Authorization": f"Bearer {session.json()['token']}"}
+    flagged = _open(qa_client, headers, "tx_maria_home")
+    stored = _stored(qa_client, headers, str(flagged["case_id"]))
+    assert stored["is_test"] is True
+    assert stored["is_eval_case"] in (False, 0)
+    audit = [
+        row
+        for row in qa_client.app.state.ops.current_audit_cases()
+        if row["case_id"] == flagged["case_id"]
+    ]
+    assert audit[0]["is_test"] is True
+
+    disabled = login(client, "maria")
+    leaked = client.post(
+        "/cases",
+        headers={**disabled, "X-Test-Token": QA_TOKEN},
+        json={"transaction_key": "tx_maria_pending", "message": "No reconozco este cargo"},
+    )
+    assert leaked.status_code == 200
+    assert _stored(client, disabled, leaked.json()["case_id"])["is_test"] is False
+
+
+def test_header_persists_for_the_rest_of_the_session(qa_client: TestClient) -> None:
+    headers = login(qa_client, "maria")
+    first = qa_client.post(
+        "/cases",
+        headers={**headers, "X-Test-Token": QA_TOKEN},
+        json={"transaction_key": "tx_maria_pending", "message": "No reconozco este cargo"},
+    )
+    assert first.status_code == 200, first.text
+    assert QA_TOKEN not in first.text
+    assert _stored(qa_client, headers, first.json()["case_id"])["is_test"] is True
+    second = _open(qa_client, headers, "tx_maria_reversed")
+    assert _stored(qa_client, headers, str(second["case_id"]))["is_test"] is True
+
+
+def test_eval_run_never_sets_is_test(qa_client: TestClient) -> None:
+    headers = login(qa_client, "maria")
+    accepted = qa_client.post(
+        "/cases",
+        headers={**headers, "X-Test-Token": QA_TOKEN, "EVAL_RUNNER_TOKEN": "runner-secret"},
+        json={
+            "transaction_key": "tx_maria_pending_30",
+            "message": "No reconozco este cargo",
+            "eval_run_id": "run-1",
+            "case_source": "sample",
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    saved = accepted.json()
+    assert saved["eval_run_id"] == "run-1"
+    assert saved["case_source"] == "sample"
+    stored = _stored(qa_client, headers, str(saved["case_id"]))
+    assert stored["is_eval_case"] is True
+    assert stored["is_test"] is False
+    audit = [
+        row
+        for row in qa_client.app.state.ops.current_audit_cases()
+        if row["case_id"] == saved["case_id"]
+    ]
+    assert audit[0]["is_eval_case"] is True
+    assert audit[0]["is_test"] is False
+
+
+def test_metrics_and_export_exclude_test_unless_admin(qa_client: TestClient) -> None:
+    headers = login(qa_client, "maria")
+    _open(qa_client, headers, "tx_maria_pending")
+    qa_client.post(
+        "/cases",
+        headers={**headers, "X-Test-Token": QA_TOKEN},
+        json={"transaction_key": "tx_maria_reversed", "message": "No reconozco este cargo"},
+    )
+    qa_client.post(
+        "/cases",
+        headers={**headers, "EVAL_RUNNER_TOKEN": "runner-secret"},
+        json={
+            "transaction_key": "tx_maria_home",
+            "message": "No reconozco este cargo",
+            "eval_run_id": "run-demo",
+            "case_source": "sample",
+        },
+    )
+    quiet = qa_client.get("/api/metrics").json()
+    assert quiet["k1_volume"]["total"] == 1
+    assert quiet["excluded_test_cases"] == 1
+    assert quiet["excluded_eval_cases"] == 1
+    assert quiet["include_test"] is False
+    assert quiet["include_eval"] is False
+
+    asked = qa_client.get("/api/metrics?include_test=1&include_eval=1").json()
+    assert asked["k1_volume"]["total"] == 1
+    assert asked["include_test"] is False
+    assert asked["include_eval"] is False
+
+    judge = qa_client.get("/api/metrics?include_test=1&include_eval=1", headers=JUDGE).json()
+    assert judge["k1_volume"]["total"] == 1
+    assert judge["include_test"] is False
+
+    test_only = qa_client.get("/api/metrics?include_test=1", headers=ADMIN).json()
+    assert test_only["include_test"] is True
+    assert test_only["include_eval"] is False
+    assert test_only["k1_volume"]["total"] == 2
+    assert test_only["excluded_eval_cases"] == 1
+    assert test_only["excluded_test_cases"] == 0
+
+    both = qa_client.get("/api/metrics?include_test=1&include_eval=1", headers=ADMIN).json()
+    assert both["k1_volume"]["total"] == 3
+    assert both["excluded_test_cases"] == 0
+    assert both["excluded_eval_cases"] == 0
+
+    denied = qa_client.get("/audit/export")
+    assert denied.status_code == 401
+    judge_export = qa_client.get("/audit/export?include_test=1", headers=JUDGE)
+    assert judge_export.status_code == 403
+
+    quiet_csv = qa_client.get("/audit/export", headers=ADMIN)
+    assert quiet_csv.status_code == 200
+    assert "is_test" in quiet_csv.text.splitlines()[0]
+    assert quiet_csv.text.count("\n") == 2
+    included_csv = qa_client.get("/audit/export?include_test=1&include_eval=1", headers=ADMIN)
+    assert included_csv.text.count("\n") == 4
+    assert "True" in included_csv.text or "true" in included_csv.text
+
+
+def test_agent_packet_shows_the_flag(qa_client: TestClient) -> None:
+    headers = login(qa_client, "maria")
+    opened = qa_client.post(
+        "/cases",
+        headers={**headers, "X-Test-Token": QA_TOKEN},
+        json={"transaction_key": "tx_maria_pending", "message": "No reconozco este cargo"},
+    ).json()
+    contested = qa_client.post(
+        f"/cases/{opened['case_id']}/actions",
+        headers=headers,
+        json={"action": "contest"},
+    )
+    assert contested.status_code == 200, contested.text
+    queue = qa_client.get("/api/handoff", headers=ADMIN).json()
+    card = next(item for item in queue["queue"] if item["case_id"] == opened["case_id"])
+    assert card["is_test"] is True
+    detail = qa_client.get(f"/api/handoff/{opened['case_id']}", headers=ADMIN).json()
+    assert detail["view"]["is_test"] is True
+
+
+def test_sqlite_migration_adds_is_test_to_an_existing_file(tmp_path: Path) -> None:
+    path = tmp_path / "old.sqlite"
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE cases (
+              case_id TEXT PRIMARY KEY,
+              customer_key TEXT NOT NULL,
+              transaction_key TEXT,
+              state TEXT NOT NULL,
+              language TEXT NOT NULL,
+              case_type TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              closed_at TEXT,
+              latest_audit_id TEXT,
+              is_eval_case INTEGER NOT NULL DEFAULT 0,
+              eval_run_id TEXT,
+              case_source TEXT
+            )
+            """
+        )
+    ops = OpsStore("sqlite", path=str(path))
+    OpsStore("sqlite", path=str(path))
+    with sqlite3.connect(path) as conn:
+        for table in ("cases", "audit_case", "audit_llm_call"):
+            columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            assert "is_test" in columns, table
+    now = datetime.now(UTC)
+    case_id = new_case_id()
+    ops.insert_case(
+        {
+            "case_id": case_id,
+            "customer_key": "ck_mx_maria",
+            "transaction_key": None,
+            "state": "closed",
+            "language": "es",
+            "case_type": "other",
+            "created_at": now,
+            "updated_at": now,
+            "closed_at": now,
+            "latest_audit_id": None,
+            "is_eval_case": False,
+            "eval_run_id": None,
+            "case_source": None,
+            "is_test": False,
+        }
+    )
+    assert ops.get_case(case_id)["is_test"] is False
+    sql = (ROOT / "migrations" / "002_is_test.sql").read_text(encoding="utf-8")
+    assert "ADD COLUMN IF NOT EXISTS is_test boolean NOT NULL DEFAULT false" in sql
+    assert re.search(r"(?i)\bdelete\s+from\b", sql) is None
+
+
+def test_backfill_marks_ids_or_a_cutoff_and_deletes_nothing(tmp_path: Path) -> None:
+    ops = OpsStore("sqlite", path=str(tmp_path / "ops.sqlite"))
+    older = datetime.now(UTC) - timedelta(days=2)
+    newer = datetime.now(UTC)
+    old_id = new_case_id()
+    new_id = new_case_id()
+    audit_old = new_case_id()
+    audit_new = new_case_id()
+
+    def seed(case_id: str, audit_id: str, created: datetime) -> None:
+        ops.insert_case(
+            {
+                "case_id": case_id,
+                "customer_key": "ck_mx_maria",
+                "transaction_key": None,
+                "state": "closed",
+                "language": "es",
+                "case_type": "other",
+                "created_at": created,
+                "updated_at": created,
+                "closed_at": created,
+                "latest_audit_id": audit_id,
+                "is_eval_case": False,
+                "eval_run_id": None,
+                "case_source": None,
+                "is_test": False,
+            }
+        )
+        ops.append_audit_case(
+            {
+                "audit_id": audit_id,
+                "case_id": case_id,
+                "supersedes_audit_id": None,
+                "recorded_at": created,
+                "case_type": "other",
+                "customer_segment": "Basic",
+                "final_resolution_status": "closed",
+                "case_created_at": created,
+                "case_closed_at": created,
+                "decision": "abandoned",
+                "automation_attempted": False,
+                "handoff_reason": None,
+                "handoff_packet_complete": None,
+                "language": "es",
+                "country": "MX",
+                "accent_group": None,
+                "rule_or_model_version": "rule",
+                "prompt_version": "prompt_v1",
+                "fraud_score": None,
+                "model_risk_score": None,
+                "guardrail_flags": [],
+                "is_eval_case": False,
+                "eval_run_id": None,
+                "case_source": None,
+                "is_test": False,
+            }
+        )
+
+    seed(old_id, audit_old, older)
+    seed(new_id, audit_new, newer)
+    before_count = ops.audit_case_count(old_id) + ops.audit_case_count(new_id)
+    marked = mark_cases_test(ops, case_ids=[old_id, "missing-id"])
+    assert marked == [old_id]
+    assert ops.get_case(old_id)["is_test"] is True
+    assert ops.get_case(new_id)["is_test"] is False
+    assert ops.audit_case_count(old_id) == 2
+    tip = next(row for row in ops.current_audit_cases() if row["case_id"] == old_id)
+    assert tip["is_test"] is True
+    assert tip["supersedes_audit_id"] == audit_old
+    again = mark_cases_test(ops, case_ids=[old_id])
+    assert again == [old_id]
+    assert ops.audit_case_count(old_id) == 2
+    cutoff = newer - timedelta(hours=1)
+    marked_before = mark_cases_test(ops, before=cutoff)
+    assert old_id in marked_before
+    assert new_id not in marked_before
+    assert ops.audit_case_count(old_id) + ops.audit_case_count(new_id) >= before_count
+    source = (ROOT / "scripts" / "mark_demo_cases_test.py").read_text(encoding="utf-8")
+    assert re.search(r"(?i)\bdelete\s+from\b", source) is None
+    assert "mark_cases_test(" in source
+
+
+def test_customer_page_sends_the_query_token_without_keeping_it() -> None:
+    completed = subprocess.run(
+        ["node", "tests/test_test_mode.js"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr

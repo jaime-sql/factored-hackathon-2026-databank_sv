@@ -44,6 +44,29 @@ for (const part of [
   assert.ok(panel.textContent.includes(part), part);
 }
 assert.equal(panel.textContent.includes("fraud rate"), false);
+assert.equal(panel.textContent.includes("Prueba"), false);
+
+const testPacket = { textContent: "", hidden: true, dataset: {} };
+context.renderPacket(
+  testPacket,
+  {
+    band: "review",
+    model_version: "lgbm:v",
+    model_risk_score: null,
+    threshold_crossed: "score >= 0.0002756",
+    amount: "10.00 MXN",
+    merchant: "U•••",
+    local_time: "15 ene 2026, 12:00 CST",
+    utc: "2026-01-15T18:00:00+00:00",
+    customer_tz: "America/Mexico_City",
+    actions_taken: [],
+    reason_label: "Modelo: revisión",
+    recommended_next_step: "Revisar",
+    is_test: true,
+  },
+  { steps: [] },
+);
+assert.ok(testPacket.textContent.includes("Prueba"));
 
 const withTrail = { textContent: "", hidden: true, dataset: {} };
 context.renderPacket(
@@ -161,6 +184,64 @@ async function checkLoadQueue() {
   await context.loadQueue();
   assert.ok(box.kids.some((node) => node.textContent === "Não foi possível ler a fila."));
   context.consoleState.language = "es";
+
+  function node() {
+    return {
+      className: "",
+      textContent: "",
+      hidden: false,
+      dataset: {},
+      children: [],
+      append(...items) {
+        this.children.push(...items);
+      },
+      addEventListener() {},
+      setAttribute() {},
+      replaceChildren() {
+        this.children = [];
+      },
+    };
+  }
+  context.document = {
+    createElement: () => node(),
+    createTextNode: (value) => ({ textContent: String(value), children: [] }),
+    getElementById: () => null,
+    querySelectorAll: () => [],
+  };
+  const flagged = node();
+  context.fillCard(flagged, {
+    case_id: "c1",
+    band: "review",
+    amount: "10 MXN",
+    is_test: true,
+    merchant: "M",
+    local_time: "t",
+    reason_label: "r",
+  });
+  const texts = [];
+  function walk(el) {
+    if (el.textContent && !(el.children && el.children.length)) texts.push(el.textContent);
+    for (const child of el.children || []) walk(child);
+  }
+  walk(flagged);
+  assert.ok(texts.includes("Prueba"));
+  const plain = node();
+  context.fillCard(plain, {
+    case_id: "c2",
+    band: "low",
+    amount: "1",
+    is_test: false,
+    merchant: "M",
+    local_time: "t",
+    reason_label: "r",
+  });
+  const plainTexts = [];
+  function walkPlain(el) {
+    if (el.textContent && !(el.children && el.children.length)) plainTexts.push(el.textContent);
+    for (const child of el.children || []) walkPlain(child);
+  }
+  walkPlain(plain);
+  assert.equal(plainTexts.includes("Prueba"), false);
 }
 
 checkLoadQueue()

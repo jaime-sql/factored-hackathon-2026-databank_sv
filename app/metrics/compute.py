@@ -1,8 +1,8 @@
 """Operational KPIs from audit_current.
 
-Eval rows are excluded unless include_eval is true. The toggle label is the
-demo-sample warning. Safe-automation and unsafe rates need eval.case_labels,
-which this process does not read.
+Eval rows and test-traffic rows are excluded unless the matching include flag
+is true. The toggle label is the demo-sample warning. Safe-automation and
+unsafe rates need eval.case_labels, which this process does not read.
 """
 
 from __future__ import annotations
@@ -14,6 +14,26 @@ from typing import Any
 from app.eval_access import DEMO_SAMPLE_LABEL
 
 
+def select_cases(
+    cases: list[dict[str, Any]],
+    *,
+    include_eval: bool,
+    include_test: bool,
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Drop eval and test rows unless the caller asked to keep them."""
+    chosen: list[dict[str, Any]] = []
+    for row in cases:
+        if row.get("is_eval_case") and not include_eval:
+            continue
+        if row.get("is_test") and not include_test:
+            continue
+        chosen.append(row)
+    kept = {id(row) for row in chosen}
+    excluded_eval = sum(1 for row in cases if row.get("is_eval_case") and id(row) not in kept)
+    excluded_test = sum(1 for row in cases if row.get("is_test") and id(row) not in kept)
+    return chosen, excluded_eval, excluded_test
+
+
 def compute_metrics(
     cases: list[dict[str, Any]],
     calls: list[dict[str, Any]],
@@ -21,9 +41,11 @@ def compute_metrics(
     assumptions: dict[str, float],
     *,
     include_eval: bool,
+    include_test: bool = False,
 ) -> dict[str, Any]:
-    eval_rows = [row for row in cases if row.get("is_eval_case")]
-    chosen = list(cases) if include_eval else [row for row in cases if not row.get("is_eval_case")]
+    chosen, excluded_eval, excluded_test = select_cases(
+        cases, include_eval=include_eval, include_test=include_test
+    )
     chosen_ids = {row["case_id"] for row in chosen}
     chosen_calls = [row for row in calls if row.get("case_id") in chosen_ids]
     closed = [row for row in chosen if row.get("decision")]
@@ -48,8 +70,10 @@ def compute_metrics(
     mean_cost = sum(costs) / len(costs) if costs else None
     return {
         "include_eval": include_eval,
+        "include_test": include_test,
         "eval_toggle_label": DEMO_SAMPLE_LABEL,
-        "excluded_eval_cases": 0 if include_eval else len(eval_rows),
+        "excluded_eval_cases": excluded_eval,
+        "excluded_test_cases": excluded_test,
         "still_open": len(open_cases),
         "k1_volume": {
             "total": total,

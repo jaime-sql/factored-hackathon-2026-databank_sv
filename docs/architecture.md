@@ -13,7 +13,9 @@ The deterministic engine in `app/cases/engine.py` chooses the outcome. A model, 
 
 ## Eval
 
-`eval_run_id` and `case_source` are stored only when `EVAL_RUNNER_TOKEN` matches. `is_eval_case` is true when either value is stored. Metrics exclude those rows unless `include_eval=true`.
+`eval_run_id` and `case_source` are stored only when `EVAL_RUNNER_TOKEN` matches. `is_eval_case` is true when either value is stored. An eval run never sets `is_test`.
+
+`QA_TEST_TOKEN` is optional. A matching `X-Test-Token` header, or a customer session started at `/?test=<token>`, stores `is_test=true` on the case and on each audit row and keeps the flag in the signed session cookie. A wrong token is a silent miss. Metrics and the audit export drop `is_test` rows and eval rows unless the admin token is sent with `include_test=1` or `include_eval=1`. SQLite adds the column on startup. Postgres uses `migrations/002_is_test.sql` (applied on startup when the role can alter the tables; otherwise the owner runs it). `scripts/mark_demo_cases_test.py` can mark existing case ids, or rows created before a timestamp. It does not delete rows and it is not run on startup.
 
 ## Time
 

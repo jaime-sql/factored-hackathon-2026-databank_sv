@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS app.cases (
   is_eval_case boolean NOT NULL DEFAULT false,
   eval_run_id text,
   case_source text,
+  is_test boolean NOT NULL DEFAULT false,
   CONSTRAINT cases_case_source_known CHECK (
     case_source IS NULL OR case_source IN (
       'sample', 'synthetic_dup', 'red_team', 'ood_sv_text', 'pt_translated'
@@ -92,6 +93,7 @@ CREATE TABLE IF NOT EXISTS app.audit_case (
   is_eval_case boolean NOT NULL DEFAULT false,
   eval_run_id text,
   case_source text,
+  is_test boolean NOT NULL DEFAULT false,
   CONSTRAINT audit_case_source_known CHECK (
     case_source IS NULL OR case_source IN (
       'sample', 'synthetic_dup', 'red_team', 'ood_sv_text', 'pt_translated'
@@ -119,7 +121,8 @@ CREATE TABLE IF NOT EXISTS app.audit_llm_call (
   retry_attempt smallint NOT NULL DEFAULT 0,
   prompt_version text,
   is_eval_case boolean NOT NULL DEFAULT false,
-  eval_run_id text
+  eval_run_id text,
+  is_test boolean NOT NULL DEFAULT false
 );
 
 CREATE INDEX IF NOT EXISTS audit_llm_call_case_id_idx ON app.audit_llm_call (case_id);

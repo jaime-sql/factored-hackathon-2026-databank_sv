@@ -10,7 +10,15 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from app.auth.session import agent_role, read_customer, sign_customer
+from app.auth.session import (
+    accepts_qa_test_token,
+    agent_role,
+    read_customer,
+    read_session,
+    read_test_marker,
+    sign_customer,
+    sign_test_marker,
+)
 from app.bank.fixture import PERSONAS
 from app.cases.trail import build_steps
 from app.config import Settings
@@ -26,7 +34,7 @@ from app.i18n import (
     ui_catalog,
     ui_copy,
 )
-from app.metrics.compute import compute_metrics
+from app.metrics.compute import compute_metrics, select_cases
 from app.timeutil import present_time
 
 router = APIRouter()
@@ -57,15 +65,47 @@ def _settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
-def _customer(request: Request) -> str:
+def _session_token(request: Request) -> str:
     header = request.headers.get("authorization", "")
     token = header.removeprefix("Bearer ").strip() if header.lower().startswith("bearer ") else ""
     if not token:
         token = request.cookies.get("hd_session", "")
-    customer_key = read_customer(_settings(request).session_secret, token)
+    return token
+
+
+def _customer(request: Request) -> str:
+    customer_key = read_customer(_settings(request).session_secret, _session_token(request))
     if customer_key is None:
         raise APIError(401, "auth_required", "Sign in again")
     return customer_key
+
+
+def _traffic_is_test(request: Request) -> bool:
+    settings = _settings(request)
+    if accepts_qa_test_token(settings.qa_test_token, request.headers.get("x-test-token", "")):
+        return True
+    if read_test_marker(settings.session_secret, request.cookies.get("hd_test", "")):
+        return True
+    session = read_session(settings.session_secret, _session_token(request))
+    return bool(session and session[1])
+
+
+def _arm_test_cookie(response: JSONResponse, request: Request) -> None:
+    settings = _settings(request)
+    response.set_cookie(
+        "hd_test",
+        sign_test_marker(settings.session_secret, settings.session_ttl_hours),
+        httponly=True,
+        samesite="lax",
+        max_age=settings.session_ttl_hours * 3600,
+        path="/",
+    )
+
+
+def _admin_include(request: Request, requested: bool) -> bool:
+    if not requested:
+        return False
+    return agent_role(_settings(request), _bearer(request)) == "admin"
 
 
 def _bearer(request: Request) -> str:
@@ -160,16 +200,41 @@ def open_session(body: SessionIn, request: Request) -> JSONResponse:
     session_key = (
         match["bank_customer_key"] if settings.database_url.strip() else match["customer_key"]
     )
-    token = sign_customer(settings.session_secret, session_key, settings.session_ttl_hours)
+    is_test = _traffic_is_test(request)
+    token = sign_customer(
+        settings.session_secret, session_key, settings.session_ttl_hours, is_test=is_test
+    )
     response = JSONResponse(
         {
             "persona": match["id"],
             "label": match["label"],
             "tz": match["tz"],
             "token": token,
+            "is_test": is_test,
         }
     )
-    response.set_cookie("hd_session", token, httponly=True, samesite="lax")
+    response.set_cookie(
+        "hd_session",
+        token,
+        httponly=True,
+        samesite="lax",
+        max_age=settings.session_ttl_hours * 3600,
+        path="/",
+    )
+    if is_test:
+        _arm_test_cookie(response, request)
+    return response
+
+
+@router.api_route("/api/test-mode", methods=["GET", "POST"])
+def test_mode(request: Request) -> JSONResponse:
+    """Arm test traffic. A wrong token is the same 200 with the flag left off."""
+    matched = accepts_qa_test_token(
+        _settings(request).qa_test_token, request.headers.get("x-test-token", "")
+    )
+    response = JSONResponse({"is_test": _traffic_is_test(request)})
+    if matched:
+        _arm_test_cookie(response, request)
     return response
 
 
@@ -211,13 +276,17 @@ def open_case(
     body: CaseIn,
     request: Request,
     eval_runner_token: str | None = Header(default=None, alias="EVAL_RUNNER_TOKEN"),
-) -> dict[str, Any]:
+) -> JSONResponse:
     customer_key = _customer(request)
     eval_run_id, case_source = accept_eval_fields(
         eval_runner_token,
         _settings(request).eval_runner_token,
         body.eval_run_id,
         body.case_source,
+    )
+    is_eval = bool(eval_run_id or case_source)
+    header_match = accepts_qa_test_token(
+        _settings(request).qa_test_token, request.headers.get("x-test-token", "")
     )
     result = request.app.state.engine.open_case(
         customer_key,
@@ -226,8 +295,12 @@ def open_case(
         body.language,
         eval_run_id,
         case_source,
+        is_test=False if is_eval else _traffic_is_test(request),
     )
-    return result.as_dict()
+    response = JSONResponse(result.as_dict())
+    if header_match and not is_eval:
+        _arm_test_cookie(response, request)
+    return response
 
 
 @router.post("/cases/{case_id}/actions")
@@ -250,6 +323,7 @@ def get_case(case_id: str, request: Request) -> dict[str, Any]:
         "eval_run_id": case.get("eval_run_id"),
         "case_source": case.get("case_source"),
         "is_eval_case": case.get("is_eval_case"),
+        "is_test": case.get("is_test"),
     }
 
 
@@ -382,8 +456,16 @@ def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str
 
 
 @router.get("/api/metrics")
-def metrics(request: Request, include_eval: bool = False, language: str = "") -> dict[str, Any]:
+def metrics(
+    request: Request,
+    include_eval: bool = False,
+    include_test: bool = False,
+    language: str = "",
+) -> dict[str, Any]:
     # Public on purpose: aggregates only, no per-customer rows or PII.
+    # include_eval and include_test are ignored unless the admin token is present.
+    include_eval = _admin_include(request, include_eval)
+    include_test = _admin_include(request, include_test)
     ops = request.app.state.ops
     payload = compute_metrics(
         ops.current_audit_cases(),
@@ -391,6 +473,7 @@ def metrics(request: Request, include_eval: bool = False, language: str = "") ->
         ops.prices(),
         ops.assumptions(),
         include_eval=include_eval,
+        include_test=include_test,
     )
     if language in {"es", "pt"}:
         payload = localize_metrics(payload, language)
@@ -399,11 +482,17 @@ def metrics(request: Request, include_eval: bool = False, language: str = "") ->
 
 
 @router.get("/audit/export")
-def export_audit(request: Request, include_eval: bool = False) -> Response:
+def export_audit(
+    request: Request, include_eval: bool = False, include_test: bool = False
+) -> Response:
     _agent(request, admin_only=True)
-    rows = request.app.state.ops.current_audit_cases()
-    if not include_eval:
-        rows = [row for row in rows if not row.get("is_eval_case")]
+    include_eval = _admin_include(request, include_eval)
+    include_test = _admin_include(request, include_test)
+    rows, _, _ = select_cases(
+        request.app.state.ops.current_audit_cases(),
+        include_eval=include_eval,
+        include_test=include_test,
+    )
     buffer = io.StringIO()
     fieldnames = [
         "audit_id",
@@ -416,6 +505,7 @@ def export_audit(request: Request, include_eval: bool = False) -> Response:
         "language",
         "country",
         "is_eval_case",
+        "is_test",
         "eval_run_id",
         "case_source",
         "rule_or_model_version",

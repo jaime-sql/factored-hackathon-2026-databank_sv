@@ -19,6 +19,7 @@ def client(tmp_path: object) -> object:
         eval_runner_token="runner-secret",
         session_secret="test-session-secret-value",
         demo_agent_token="demo-agent-local",
+        qa_test_token="",
     )
     app = create_app(settings)
     with TestClient(app) as test_client:

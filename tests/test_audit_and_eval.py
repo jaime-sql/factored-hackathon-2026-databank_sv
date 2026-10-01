@@ -108,7 +108,15 @@ def test_metrics_exclude_eval_until_the_demo_sample_toggle(client: TestClient) -
     assert quiet["eval_toggle_label"] == DEMO_SAMPLE_LABEL
     assert quiet["k1_volume"]["total"] == 1
     assert quiet["excluded_eval_cases"] == 1
-    included = client.get("/api/metrics?include_eval=true").json()
+    anonymous = client.get("/api/metrics?include_eval=1").json()
+    assert anonymous["include_eval"] is False
+    assert anonymous["k1_volume"]["total"] == 1
+    assert anonymous["excluded_eval_cases"] == 1
+    included = client.get(
+        "/api/metrics?include_eval=1",
+        headers={"Authorization": "Bearer demo-agent-local"},
+    ).json()
+    assert included["include_eval"] is True
     assert included["k1_volume"]["total"] == 2
     assert included["excluded_eval_cases"] == 0
     page = client.get("/metrics")
