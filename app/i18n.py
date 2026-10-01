@@ -514,3 +514,254 @@ def next_step_contest(language: str) -> str:
     return (
         "El cliente rechazó la explicación automática. Revisar el cargo. No se emitió un crédito."
     )
+
+
+MONTHS = {
+    "es": ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"),
+    "pt": ("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"),
+}
+
+_STATUS = {
+    "es": {"Approved": "Aprobado", "Pending": "Pendiente", "Reversed": "Reversado"},
+    "pt": {"Approved": "Aprovado", "Pending": "Pendente", "Reversed": "Estornado"},
+}
+
+_UI = {
+    "es": {
+        "nav_client": "Cliente",
+        "nav_agent": "Consola",
+        "nav_metrics": "Métricas",
+        "lang_name": "Español",
+        "tour_open": "¿Cómo funciona?",
+        "client_title": "Harbor Desk",
+        "client_lede": (
+            "Un cargo a la vez. El asistente no mueve dinero: explica, bloquea la tarjeta "
+            "solo si usted lo confirma, o pasa el caso a una persona."
+        ),
+        "charges_title": "Sus cargos, en su hora local",
+        "dispute": "No reconozco este cargo",
+        "message_placeholder": "Mensaje",
+        "send": "Enviar",
+        "why": "¿Por qué?",
+        "protected": "Protegido",
+        "agent_title": "Consola del agente",
+        "agent_lede": "Cola de casos con el paquete verificado. No hay texto crudo del cliente.",
+        "token_placeholder": "Token del agente",
+        "load_queue": "Ver cola",
+        "queue_empty": "No hay casos en la cola. Abre un caso desde la vista Cliente.",
+        "queue_invalid": "Token inválido",
+        "queue_failed": "No se pudo leer la cola.",
+        "queue_loading": "Cargando la cola…",
+        "open_packet": "Abrir paquete",
+        "resolve": "Resolver",
+        "packet_error": "No se pudo abrir el paquete",
+        "resolved": "Resuelto",
+        "resolve_error": "No se pudo resolver",
+        "no_actions": "ninguna",
+        "metrics_title": "Métricas",
+        "metrics_lede": (
+            "El tablero deja fuera el tráfico de evaluación. Las tasas de seguridad "
+            "que necesitan etiquetas viven en el informe offline."
+        ),
+        "tile_cases": "Casos",
+        "tile_handoff": "Handoff",
+        "tile_containment": "Contención",
+        "tile_eval": "Eval excluido",
+        "eval_toggle": (
+            "Muestra de demostración (enriquecida en fraude, tasa HIGH cerca de "
+            "11 veces la de los datos completos)"
+        ),
+    },
+    "pt": {
+        "nav_client": "Cliente",
+        "nav_agent": "Consola",
+        "nav_metrics": "Métricas",
+        "lang_name": "Português",
+        "tour_open": "Como funciona?",
+        "client_title": "Harbor Desk",
+        "client_lede": (
+            "Uma cobrança de cada vez. O assistente não move dinheiro: explica, bloqueia o cartão "
+            "só se você confirmar, ou passa o caso a uma pessoa."
+        ),
+        "charges_title": "Suas cobranças, no seu horário local",
+        "dispute": "Não reconheço esta cobrança",
+        "message_placeholder": "Mensagem",
+        "send": "Enviar",
+        "why": "Por quê?",
+        "protected": "Protegido",
+        "agent_title": "Consola do agente",
+        "agent_lede": "Fila de casos com o pacote verificado. Não há texto cru do cliente.",
+        "token_placeholder": "Token do agente",
+        "load_queue": "Ver fila",
+        "queue_empty": "Não há casos na fila. Abra um caso na vista Cliente.",
+        "queue_invalid": "Token inválido",
+        "queue_failed": "Não foi possível ler a fila.",
+        "queue_loading": "Carregando a fila…",
+        "open_packet": "Abrir pacote",
+        "resolve": "Resolver",
+        "packet_error": "Não foi possível abrir o pacote",
+        "resolved": "Resolvido",
+        "resolve_error": "Não foi possível resolver",
+        "no_actions": "nenhuma",
+        "metrics_title": "Métricas",
+        "metrics_lede": (
+            "O painel deixa de fora o tráfego de avaliação. As taxas de segurança "
+            "que precisam de rótulos ficam no relatório offline."
+        ),
+        "tile_cases": "Casos",
+        "tile_handoff": "Repasse",
+        "tile_containment": "Contenção",
+        "tile_eval": "Avaliação excluída",
+        "eval_toggle": (
+            "Amostra de demonstração (enriquecida em fraude, taxa HIGH cerca de "
+            "11 vezes a dos dados completos)"
+        ),
+    },
+}
+
+
+def _lang(language: str) -> str:
+    return "pt" if language == "pt" else "es"
+
+
+def months(language: str) -> tuple[str, ...]:
+    return MONTHS[_lang(language)]
+
+
+def transaction_status_label(language: str, status: str) -> str:
+    return _STATUS[_lang(language)].get(status, status)
+
+
+def persona_note(language: str, persona_id: str, *, postgres: bool) -> str:
+    """Chip text. English source notes are not shown."""
+    lang = _lang(language)
+    if postgres:
+        if persona_id == "lucia":
+            return (
+                "Cliente dos dados do desafio, cobrança duplicada"
+                if lang == "pt"
+                else "Cliente de los datos del desafío, cargo duplicado"
+            )
+        return (
+            "Cliente dos dados do desafio" if lang == "pt" else "Cliente de los datos del desafío"
+        )
+    if persona_id == "teo":
+        return (
+            "Pessoa sintética. MX não é a Cidade do México."
+            if lang == "pt"
+            else "Persona sintética. MX no es Ciudad de México."
+        )
+    if persona_id == "lucia":
+        return (
+            "Pessoa sintética, cobrança duplicada"
+            if lang == "pt"
+            else "Persona sintética, cargo duplicado"
+        )
+    return "Pessoa sintética" if lang == "pt" else "Persona sintética"
+
+
+def persona_label(language: str, persona_id: str, fallback: str) -> str:
+    labels = {
+        "camilo": {"es": "Camilo · Colombia", "pt": "Camilo · Colômbia"},
+        "maria": {"es": "María · Ciudad de México", "pt": "María · Cidade do México"},
+    }
+    row = labels.get(persona_id)
+    if row is None:
+        return fallback
+    return row[_lang(language)]
+
+
+def localize_stored_merchant(language: str, stored: str) -> str:
+    """Rewrite a packet fallback that was saved in the other language."""
+    text = (stored or "").strip()
+    lang = _lang(language)
+    blanks = {"es": "Comercio no identificado", "pt": "Comércio não identificado"}
+    if text in blanks.values():
+        return blanks[lang]
+    lowered = text.lower()
+    for prefix in ("categoría ", "categoria "):
+        if lowered.startswith(prefix):
+            return merchant_label(lang, "", text[len(prefix) :], "")
+    if lowered.startswith("tipo "):
+        return merchant_label(lang, "", "", text[5:])
+    return text
+
+
+def display_next_step(language: str, reason: str, *, card_blocked: bool, stored: str) -> str:
+    if reason == "fraud_rule" and card_blocked:
+        return next_step_block(language)
+    if reason == "customer_contests_rule_answer":
+        return next_step_contest(language)
+    if reason in {"fraud_model", "fraud_rule", "customer_requested_human"}:
+        return next_step_review(language)
+    return stored
+
+
+def ui_copy(language: str) -> dict[str, object]:
+    lang = _lang(language)
+    payload: dict[str, object] = dict(_UI[lang])
+    payload["status"] = dict(_STATUS[lang])
+    payload["months"] = list(MONTHS[lang])
+    return payload
+
+
+def ui_catalog() -> dict[str, dict[str, object]]:
+    return {"es": ui_copy("es"), "pt": ui_copy("pt")}
+
+
+_METRICS_TEXT = {
+    "es": {
+        "not defined": "no definido",
+        "offline": "fuera de línea",
+        "Requires eval.case_labels. This console role cannot read the eval schema.": (
+            "Requiere las etiquetas de evaluación. Este rol no puede leer ese esquema."
+        ),
+        "Rates use closed cases. Open cases are counted as still_open and are not mixed in.": (
+            "Las tasas usan casos cerrados. Los casos abiertos se cuentan aparte y no se mezclan."
+        ),
+        "n < 30 is not reliable": "n < 30 no es confiable",
+        "PROJECTION": "PROYECCIÓN",
+        "PROJECTION: wage rates assumed. The safe-automated numerator is offline.": (
+            "PROYECCIÓN: salarios supuestos. El numerador de automatización segura está fuera de línea."
+        ),
+        "Portuguese rows are machine-translated test cases, not production traffic.": (
+            "Las filas en portugués son casos de prueba traducidos, no tráfico real."
+        ),
+    },
+    "pt": {
+        "not defined": "não definido",
+        "offline": "fora de linha",
+        "Requires eval.case_labels. This console role cannot read the eval schema.": (
+            "Requer os rótulos de avaliação. Este papel não pode ler esse esquema."
+        ),
+        "Rates use closed cases. Open cases are counted as still_open and are not mixed in.": (
+            "As taxas usam casos fechados. Os casos abertos são contados à parte e não se misturam."
+        ),
+        "n < 30 is not reliable": "n < 30 não é confiável",
+        "PROJECTION": "PROJEÇÃO",
+        "PROJECTION: wage rates assumed. The safe-automated numerator is offline.": (
+            "PROJEÇÃO: salários supostos. O numerador de automação segura está fora de linha."
+        ),
+        "Portuguese rows are machine-translated test cases, not production traffic.": (
+            "As linhas em português são casos de teste traduzidos, não tráfego real."
+        ),
+    },
+}
+
+
+def localize_metrics(payload: dict[str, object], language: str) -> dict[str, object]:
+    """Translate the sentences in a metrics document. Keys stay stable."""
+    table = _METRICS_TEXT[_lang(language)]
+
+    def walk(value: object) -> object:
+        if isinstance(value, dict):
+            return {key: walk(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        if isinstance(value, str) and value in table:
+            return table[value]
+        return value
+
+    walked = walk(payload)
+    assert isinstance(walked, dict)
+    return walked

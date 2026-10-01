@@ -37,7 +37,7 @@ Model features are read from `public.fraud_features` joined to the customer’s 
 
 `POST /cases` accepts optional `eval_run_id` and `case_source` (`sample`, `synthetic_dup`, `red_team`, `ood_sv_text`, `pt_translated`) only when the `EVAL_RUNNER_TOKEN` header matches the environment value. Without that header the fields are stored as null. Case ids are server-generated text UUIDs. Both fields are on the case, on each audit row, and on `app.audit_current`, which the runner joins to its labels.
 
-The metrics page excludes eval traffic by default. The toggle is labeled “Demo sample (fraud-enriched, ~11x HIGH rate vs full data)”.
+The metrics page excludes eval traffic by default. The toggle label comes from the language catalog (Spanish by default on the page; the unscoped API still returns the English demo-sample warning).
 
 ## Routing
 
@@ -56,7 +56,7 @@ Lucía is the duplicate-route persona. María stays on her current customer. Mar
 
 SQLite, from the app home:
 
-1. Choose **Lucía · Querétaro**. The note is "Synthetic persona, duplicate charge".
+1. Choose **Lucía · Querétaro**. The note is "Persona sintética, cargo duplicado".
 2. Dispute `SYN_0112_A`. The fixture source `tx_lucia_source` scores LOW, so the reply is the synthetic-duplicate explanation (the sibling is `SYN_0112_B`).
 
 Guardrail, from the message box under the charges (SQLite or Postgres):
@@ -67,5 +67,5 @@ Guardrail, from the message box under the charges (SQLite or Postgres):
 
 Postgres, with `DATABASE_URL`:
 
-1. Choose **Lucía · Querétaro**. The session signs `CUS_54f100f5046beb356091` (Mexico, Querétaro, `America/Mexico_City`, Basic). The note is "Challenge data customer, duplicate charge".
+1. Choose **Lucía · Querétaro**. The session signs `CUS_54f100f5046beb356091` (Mexico, Querétaro, `America/Mexico_City`, Basic). The note is "Cliente de los datos del desafío, cargo duplicado".
 2. Dispute `SYN_0112_A`. Its source `TXN_d52a16ff27c1edb3d978` scores LOW (raw score 0.000226, under `t_low` 0.0002756), so the desk takes the duplicate route.

@@ -19,12 +19,16 @@ def test_sqlite_personas_keep_synthetic_notes(client: TestClient) -> None:
     body = client.get("/api/personas").json()
     by_id = {row["id"]: row for row in body["personas"]}
     assert by_id["maria"]["segment"] == "Basic"
-    assert by_id["maria"]["note"] == "Synthetic persona"
-    assert by_id["teo"]["note"].startswith("Synthetic persona")
+    assert by_id["maria"]["note"] == "Persona sintética"
+    assert by_id["maria"]["notes"]["pt"] == "Pessoa sintética"
+    assert by_id["teo"]["note"].startswith("Persona sintética")
+    assert "Mexico City" not in by_id["teo"]["note"]
     assert by_id["lucia"]["label"] == "Lucía · Querétaro"
+    assert by_id["lucia"]["labels"]["pt"] == "Lucía · Querétaro"
     assert by_id["lucia"]["segment"] == "Basic"
     assert by_id["lucia"]["tz"] == "America/Mexico_City"
-    assert by_id["lucia"]["note"] == "Synthetic persona, duplicate charge"
+    assert by_id["lucia"]["note"] == "Persona sintética, cargo duplicado"
+    assert by_id["maria"]["labels"]["pt"] == "María · Cidade do México"
     assert synthetic_pair_sibling("SYN_0238_A") == "SYN_0238_B"
     assert synthetic_pair_sibling("SYN_0238_B") == "SYN_0238_A"
     assert synthetic_pair_sibling("tx_maria_dup_b") is None

@@ -9,6 +9,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from app.i18n import months
+
 COUNTRY_TZ_FALLBACK = {
     "AR": "America/Argentina/Buenos_Aires",
     "CO": "America/Bogota",
@@ -16,11 +18,6 @@ COUNTRY_TZ_FALLBACK = {
     "ARGENTINA": "America/Argentina/Buenos_Aires",
     "COLOMBIA": "America/Bogota",
     "MEXICO": "America/Mexico_City",
-}
-
-_MONTHS = {
-    "es": ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"),
-    "pt": ("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"),
 }
 
 
@@ -73,10 +70,8 @@ def present_time(
     zone_name = resolve_tz(tz, country)
     local = utc.astimezone(_zone(zone_name))
     abbrev = abbreviation(local)
-    months = _MONTHS["pt" if language == "pt" else "es"]
-    label = (
-        f"{local.day} {months[local.month - 1]} {local.year}, {local.strftime('%H:%M')} {abbrev}"
-    )
+    names = months(language)
+    label = f"{local.day} {names[local.month - 1]} {local.year}, {local.strftime('%H:%M')} {abbrev}"
     return {
         "utc": utc.isoformat(),
         "tz": zone_name,

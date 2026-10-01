@@ -73,7 +73,10 @@ assert.match(agent, /data-action", "packet"/);
 assert.match(agent, /data-action", "resolve"/);
 const metrics = fs.readFileSync("static/js/metrics.js", "utf8");
 for (const name of ["cases", "handoff", "containment", "eval"]) {
-  assert.ok(metrics.includes(`data-metric="${name}"`), name);
+  assert.ok(
+    metrics.includes(`data-metric="${name}"`) || metrics.includes(`"data-metric", "${name}"`),
+    name,
+  );
 }
 
 assert.equal(path.basename("static/js/tour.js"), "tour.js");

@@ -17,6 +17,15 @@ from app.config import Settings
 from app.errors import APIError
 from app.eval_access import accept_eval_fields
 from app.handoff.present import packet_view, queue_card
+from app.i18n import (
+    localize_metrics,
+    merchant_label,
+    persona_label,
+    persona_note,
+    transaction_status_label,
+    ui_catalog,
+    ui_copy,
+)
 from app.metrics.compute import compute_metrics
 from app.timeutil import present_time
 
@@ -107,6 +116,15 @@ def auth_config(request: Request) -> dict[str, str]:
     return payload
 
 
+def _ui_lang(language: str | None) -> str:
+    return "pt" if language == "pt" else "es"
+
+
+@router.get("/api/i18n")
+def i18n_catalog() -> dict[str, dict[str, object]]:
+    return ui_catalog()
+
+
 @router.get("/api/personas")
 def personas(request: Request) -> dict[str, Any]:
     postgres = bool(_settings(request).database_url.strip())
@@ -114,13 +132,19 @@ def personas(request: Request) -> dict[str, Any]:
         "personas": [
             {
                 "id": row["id"],
-                "label": row["label"],
+                "label": persona_label("es", row["id"], row["label"]),
+                "labels": {
+                    "es": persona_label("es", row["id"], row["label"]),
+                    "pt": persona_label("pt", row["id"], row["label"]),
+                },
                 "country": row["country"],
                 "tz": row["tz"],
                 "segment": row["segment"],
-                "note": (
-                    (row.get("bank_note") or "Challenge data customer") if postgres else row["note"]
-                ),
+                "note": persona_note("es", row["id"], postgres=postgres),
+                "notes": {
+                    "es": persona_note("es", row["id"], postgres=postgres),
+                    "pt": persona_note("pt", row["id"], postgres=postgres),
+                },
             }
             for row in PERSONAS
         ]
@@ -150,24 +174,29 @@ def open_session(body: SessionIn, request: Request) -> JSONResponse:
 
 
 @router.get("/api/transactions")
-def transactions(request: Request) -> dict[str, Any]:
+def transactions(request: Request, language: str = "es") -> dict[str, Any]:
     customer_key = _customer(request)
     customer = request.app.state.bank.get_customer(customer_key)
     if customer is None:
         raise APIError(404, "not_found", "Customer not found")
+    lang = _ui_lang(language)
     rows = []
     for tx in request.app.state.bank.get_transactions(customer_key):
-        shown = present_time(tx.transaction_ts_utc, customer.tz, customer.customer_country, "es")
+        shown = present_time(tx.transaction_ts_utc, customer.tz, customer.customer_country, lang)
         rows.append(
             {
                 "transaction_key": tx.transaction_key,
                 "merchant_name": tx.merchant_name,
+                "merchant_label": merchant_label(
+                    lang, tx.merchant_name, tx.merchant_category, tx.transaction_type
+                ),
                 "merchant_category": tx.merchant_category,
                 "amount": tx.amount,
                 "currency": tx.currency,
                 "transaction_city": tx.transaction_city,
                 "transaction_country": tx.transaction_country,
                 "transaction_status": tx.transaction_status,
+                "status_label": transaction_status_label(lang, tx.transaction_status),
                 "customer_tz": shown["tz"],
                 "local_time": shown["label"],
                 "utc": shown["utc"],
@@ -225,7 +254,7 @@ def get_case(case_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.get("/api/cases/{case_id}/trail")
-def case_trail(case_id: str, request: Request) -> dict[str, Any]:
+def case_trail(case_id: str, request: Request, language: str | None = None) -> dict[str, Any]:
     settings = _settings(request)
     role = agent_role(settings, _bearer(request))
     customer_key = ""
@@ -237,14 +266,16 @@ def case_trail(case_id: str, request: Request) -> dict[str, Any]:
     customer = request.app.state.bank.get_customer(str(case["customer_key"]))
     tz = customer.tz if customer is not None else None
     country = customer.customer_country if customer is not None else case.get("country")
-    language = str(case.get("language") or "es")
+    shown_language = str(case.get("language") or "es")
+    if role is not None and language in {"es", "pt"}:
+        shown_language = _ui_lang(language)
     t_low, high_value = _thresholds(request)
     steps = build_steps(
         request.app.state.ops.audit_chain(case_id),
         request.app.state.ops.list_events(case_id),
         tz=tz,
         country=None if country is None else str(country),
-        language=language,
+        language=shown_language,
         t_low=t_low,
         high_value=high_value,
         safe=role is None,
@@ -269,17 +300,19 @@ def _thresholds(request: Request) -> tuple[float, float]:
 
 
 @router.get("/api/handoff")
-def handoff_queue(request: Request) -> dict[str, Any]:
+def handoff_queue(request: Request, language: str | None = None) -> dict[str, Any]:
     _agent(request)
+    lang = language if language in {"es", "pt"} else None
     audits = {row["case_id"]: row for row in request.app.state.ops.current_audit_cases()}
     items = [
-        queue_card(row, audits.get(row["case_id"])) for row in request.app.state.ops.list_handoffs()
+        queue_card(row, audits.get(row["case_id"]), display_language=lang)
+        for row in request.app.state.ops.list_handoffs()
     ]
     return {"queue": items}
 
 
 @router.get("/api/handoff/{case_id}")
-def handoff_case(case_id: str, request: Request) -> dict[str, Any]:
+def handoff_case(case_id: str, request: Request, language: str | None = None) -> dict[str, Any]:
     _agent(request)
     row = request.app.state.ops.get_handoff(case_id)
     if row is None:
@@ -295,7 +328,13 @@ def handoff_case(case_id: str, request: Request) -> dict[str, Any]:
         for event in events
     ]
     t_low, high_value = _thresholds(request)
-    view = packet_view(row, _audit_for(request, case_id), t_low=t_low, high_value=high_value)
+    view = packet_view(
+        row,
+        _audit_for(request, case_id),
+        t_low=t_low,
+        high_value=high_value,
+        display_language=language if language in {"es", "pt"} else None,
+    )
     evidence = request.app.state.band_evidence.line(str(view.get("band") or ""))
     if evidence:
         view["band_evidence"] = evidence
@@ -343,16 +382,20 @@ def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str
 
 
 @router.get("/api/metrics")
-def metrics(request: Request, include_eval: bool = False) -> dict[str, Any]:
+def metrics(request: Request, include_eval: bool = False, language: str = "") -> dict[str, Any]:
     # Public on purpose: aggregates only, no per-customer rows or PII.
     ops = request.app.state.ops
-    return compute_metrics(
+    payload = compute_metrics(
         ops.current_audit_cases(),
         ops.current_llm_calls(),
         ops.prices(),
         ops.assumptions(),
         include_eval=include_eval,
     )
+    if language in {"es", "pt"}:
+        payload = localize_metrics(payload, language)
+        payload["eval_toggle_label"] = str(ui_copy(language)["eval_toggle"])
+    return payload
 
 
 @router.get("/audit/export")

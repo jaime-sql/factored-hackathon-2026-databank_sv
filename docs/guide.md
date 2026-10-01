@@ -211,19 +211,25 @@ Esta pantalla es el tablero de conteos.
 
 PT: Esta tela é o painel de contagens.
 
-### 4. `#tour`
+### 4. `#lang`
+
+Este botón cambia el idioma entre español y portugués.
+
+PT: Este botão muda o idioma entre espanhol e português.
+
+### 5. `#tour`
 
 Este botón abre la guía y también la cierra.
 
 PT: Este botão abre o guia e também o fecha.
 
-### 5. `#include-eval`
+### 6. `#include-eval`
 
 Este interruptor incluye o deja fuera los casos de evaluación.
 
 PT: Este interruptor inclui ou deixa de fora os casos de avaliação.
 
-### 6. `[data-metric="cases"]`
+### 7. `[data-metric="cases"]`
 
 Esta ficha cuenta los casos que entran en el tablero.
 
@@ -231,7 +237,7 @@ PT: Este cartão conta os casos que entram no painel.
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 7. `[data-metric="handoff"]`
+### 8. `[data-metric="handoff"]`
 
 Esta ficha mide la proporción de casos cerrados que pasaron a una persona.
 
@@ -239,7 +245,7 @@ PT: Este cartão mede a proporção de casos fechados que passaram a uma pessoa.
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 8. `[data-metric="containment"]`
+### 9. `[data-metric="containment"]`
 
 Esta ficha mide la proporción de casos cerrados que no pasaron a una persona.
 
@@ -247,7 +253,7 @@ PT: Este cartão mede a proporção de casos fechados que não passaram a uma pe
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 9. `[data-metric="eval"]`
+### 10. `[data-metric="eval"]`
 
 Esta ficha cuenta los casos de evaluación que quedaron fuera de estas cifras.
 
@@ -255,7 +261,7 @@ PT: Este cartão conta os casos de avaliação que ficaram fora destas cifras.
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 10. `#raw`
+### 11. `#raw`
 
 Este bloque es el mismo cálculo en JSON, para leer el detalle.
 

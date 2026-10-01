@@ -9,20 +9,21 @@
 <body data-tour-page="metrics">
   <header>
     <div>
-      <h1>Métricas</h1>
-      <p class="lede">El tablero deja fuera el tráfico de evaluación. Las tasas de seguridad que necesitan etiquetas viven en el informe offline.</p>
+      <h1 id="page-title">Métricas</h1>
+      <p class="lede" id="lede">El tablero deja fuera el tráfico de evaluación. Las tasas de seguridad que necesitan etiquetas viven en el informe offline.</p>
     </div>
     <nav>
       <a href="/">Cliente</a>
       <a href="/agent">Consola</a>
       <a href="/metrics">Métricas</a>
+      <button type="button" id="lang">Español</button>
       <button type="button" id="tour">¿Cómo funciona?</button>
     </nav>
   </header>
   <main>
     <label class="toggle">
       <input id="include-eval" type="checkbox" />
-      <span id="eval-label">Demo sample (fraud-enriched, ~11x HIGH rate vs full data)</span>
+      <span id="eval-label">Muestra de demostración (enriquecida en fraude, tasa HIGH cerca de 11 veces la de los datos completos)</span>
     </label>
     <div id="tiles" class="grid"></div>
     <pre id="raw"></pre>

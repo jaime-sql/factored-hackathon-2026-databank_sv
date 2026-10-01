@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.eval_access import DEMO_SAMPLE_LABEL
+from app.i18n import ui_copy
 from app.ops.guard import AuditImmutable
 from tests.conftest import login
 
@@ -112,7 +113,8 @@ def test_metrics_exclude_eval_until_the_demo_sample_toggle(client: TestClient) -
     assert included["excluded_eval_cases"] == 0
     page = client.get("/metrics")
     assert page.status_code == 200
-    assert DEMO_SAMPLE_LABEL in page.text
+    assert ui_copy("es")["eval_toggle"] in page.text
+    assert DEMO_SAMPLE_LABEL not in page.text
 
 
 def test_audit_rows_are_append_only(client: TestClient) -> None:

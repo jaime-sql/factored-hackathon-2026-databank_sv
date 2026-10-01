@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.i18n import handoff_reason_label, mask_merchant, money, threshold_crossed
+from app.i18n import (
+    display_next_step,
+    handoff_reason_label,
+    localize_stored_merchant,
+    mask_merchant,
+    money,
+    threshold_crossed,
+)
+from app.timeutil import present_time
 
 
 def _packet(row: dict[str, Any]) -> dict[str, Any]:
@@ -50,15 +58,46 @@ def _amount(transaction: dict[str, Any]) -> str:
     return money(amount, currency)
 
 
-def queue_card(row: dict[str, Any], audit: dict[str, Any] | None) -> dict[str, Any]:
+def _display_language(packet: dict[str, Any], display_language: str | None) -> str:
+    if display_language in {"es", "pt"}:
+        return display_language
+    stored = str(packet.get("language") or "es")
+    return stored if stored in {"es", "pt"} else "es"
+
+
+def _local_label(transaction: dict[str, Any], language: str) -> str:
+    fallback = str(transaction.get("transaction_ts_customer_local") or "")
+    utc = transaction.get("transaction_ts_utc")
+    if not utc:
+        return fallback
+    try:
+        return present_time(
+            utc,
+            str(transaction.get("customer_tz") or "") or None,
+            str(transaction.get("transaction_country") or "") or None,
+            language,
+        )["label"]
+    except (TypeError, ValueError):
+        return fallback
+
+
+def queue_card(
+    row: dict[str, Any],
+    audit: dict[str, Any] | None,
+    *,
+    display_language: str | None = None,
+) -> dict[str, Any]:
     packet = _packet(row)
     transaction = _transaction(packet)
     triage = _triage(packet)
     audit_row = audit or {}
-    language = str(packet.get("language") or "es")
+    language = _display_language(packet, display_language)
     band = str(triage.get("band") or "")
     reason = str(audit_row.get("handoff_reason") or "")
     synthetic = bool(packet.get("synthetic_duplicate"))
+    blocked = _card_blocked(packet)
+    merchant = localize_stored_merchant(language, str(transaction.get("merchant_name") or ""))
+    stored_step = str(packet.get("recommended_next_step") or "")
     return {
         "case_id": row["case_id"],
         "status": row["status"],
@@ -66,8 +105,8 @@ def queue_card(row: dict[str, Any], audit: dict[str, Any] | None) -> dict[str, A
         "band": band,
         "amount": _amount(transaction),
         "currency": str(transaction.get("currency") or ""),
-        "merchant": mask_merchant(str(transaction.get("merchant_name") or "")),
-        "local_time": str(transaction.get("transaction_ts_customer_local") or ""),
+        "merchant": mask_merchant(merchant),
+        "local_time": _local_label(transaction, language),
         "reason": reason,
         "reason_label": handoff_reason_label(
             language,
@@ -75,10 +114,12 @@ def queue_card(row: dict[str, Any], audit: dict[str, Any] | None) -> dict[str, A
             band=band,
             case_type=str(audit_row.get("case_type") or ""),
             synthetic=synthetic,
-            card_blocked=_card_blocked(packet),
+            card_blocked=blocked,
         ),
         "synthetic_duplicate": synthetic,
-        "recommended_next_step": packet.get("recommended_next_step"),
+        "recommended_next_step": display_next_step(
+            language, reason, card_blocked=blocked, stored=stored_step
+        ),
     }
 
 
@@ -88,8 +129,9 @@ def packet_view(
     *,
     t_low: float,
     high_value: float,
+    display_language: str | None = None,
 ) -> dict[str, Any]:
-    card = queue_card(row, audit)
+    card = queue_card(row, audit, display_language=display_language)
     packet = _packet(row)
     transaction = _transaction(packet)
     triage = _triage(packet)

@@ -18,6 +18,39 @@ const queueCopy = {
 };
 
 const consoleState = { language: "es" };
+let catalog = null;
+let queueSeen = false;
+
+function textPack() {
+  return catalog && catalog[consoleState.language === "pt" ? "pt" : "es"];
+}
+
+function ui(key, fallback) {
+  const pack = textPack();
+  return (pack && pack[key]) || fallback;
+}
+
+function adoptCatalog(payload) {
+  catalog = payload;
+  if (!payload) return;
+  for (const lang of ["es", "pt"]) {
+    const text = payload[lang];
+    if (!text) continue;
+    queueCopy[lang].lang = text.lang_name;
+    queueCopy[lang].empty = text.queue_empty;
+    queueCopy[lang].invalid = text.queue_invalid;
+    queueCopy[lang].failed = text.queue_failed;
+    queueCopy[lang].loading = text.queue_loading;
+  }
+}
+
+function applyNav(copy) {
+  const links = { "/": copy.nav_client, "/agent": copy.nav_agent, "/metrics": copy.nav_metrics };
+  for (const anchor of document.querySelectorAll("a")) {
+    const href = anchor.getAttribute("href");
+    if (links[href]) anchor.textContent = links[href];
+  }
+}
 
 function queueNotice(status, body, language) {
   const copy = queueCopy[language === "pt" ? "pt" : "es"];
@@ -53,7 +86,7 @@ function renderPacket(panel, view, trail) {
     view.local_time,
     view.utc,
     view.customer_tz,
-    actions || "ninguna",
+    actions || ui("no_actions", "ninguna"),
     view.reason_label,
     view.recommended_next_step,
   );
@@ -111,12 +144,12 @@ function fillCard(card, item) {
   const button = document.createElement("button");
   button.type = "button";
   button.setAttribute("data-action", "packet");
-  button.textContent = "Abrir paquete";
+  button.textContent = ui("open_packet", "Abrir paquete");
   button.addEventListener("click", () => togglePacket(panel, item.case_id));
   const resolve = document.createElement("button");
   resolve.type = "button";
   resolve.setAttribute("data-action", "resolve");
-  resolve.textContent = "Resolver";
+  resolve.textContent = ui("resolve", "Resolver");
   resolve.addEventListener("click", () => resolveCase(item.case_id, panel));
   card.append(title, meta, merchant, when, reason, button, resolve, panel);
 }
@@ -127,6 +160,7 @@ function agentToken() {
 }
 
 async function loadQueue() {
+  queueSeen = true;
   const box = document.getElementById("queue");
   const copy = queueCopy[consoleState.language === "pt" ? "pt" : "es"];
   showQueueStatus(box, "loading", copy.loading);
@@ -134,7 +168,7 @@ async function loadQueue() {
   let status = 0;
   let body = null;
   try {
-    const response = await fetch("/api/handoff", {
+    const response = await fetch(`/api/handoff?language=${consoleState.language}`, {
       headers: { authorization: `Bearer ${agentToken()}` },
     });
     status = response.status;
@@ -168,14 +202,20 @@ async function togglePacket(panel, caseId) {
   }
   panel.hidden = false;
   const headers = { authorization: `Bearer ${tokenInput.value}` };
-  const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}`, { headers });
+  const response = await fetch(
+    `/api/handoff/${encodeURIComponent(caseId)}?language=${consoleState.language}`,
+    { headers },
+  );
   if (!response.ok) {
-    panel.textContent = "No se pudo abrir el paquete";
+    panel.textContent = ui("packet_error", "No se pudo abrir el paquete");
     return;
   }
   const body = await response.json();
   let trail = { steps: [] };
-  const trailResponse = await fetch(`/api/cases/${encodeURIComponent(caseId)}/trail`, { headers });
+  const trailResponse = await fetch(
+    `/api/cases/${encodeURIComponent(caseId)}/trail?language=${consoleState.language}`,
+    { headers },
+  );
   if (trailResponse.ok) trail = await trailResponse.json();
   renderPacket(panel, body.view || {}, trail);
   panel.dataset.loaded = "1";
@@ -191,7 +231,9 @@ async function resolveCase(caseId, panel) {
     body: "{}",
   });
   panel.hidden = false;
-  panel.textContent = response.ok ? "Resuelto" : "No se pudo resolver";
+  panel.textContent = response.ok
+    ? ui("resolved", "Resuelto")
+    : ui("resolve_error", "No se pudo resolver");
 }
 
 function applyConsoleLanguage() {
@@ -199,6 +241,25 @@ function applyConsoleLanguage() {
   document.documentElement.lang = consoleState.language === "pt" ? "pt" : "es";
   const button = document.getElementById("lang");
   if (button) button.textContent = copy.lang;
+  const pack = textPack();
+  if (!pack) return;
+  const title = document.getElementById("page-title");
+  if (title) title.textContent = pack.agent_title;
+  const lede = document.getElementById("lede");
+  if (lede) lede.textContent = pack.agent_lede;
+  applyNav(pack);
+  const tour = document.getElementById("tour");
+  if (tour) tour.textContent = pack.tour_open;
+  const token = document.getElementById("token");
+  if (token) token.placeholder = pack.token_placeholder;
+  const load = document.getElementById("load");
+  if (load) load.textContent = pack.load_queue;
+  for (const packet of document.querySelectorAll('[data-action="packet"]')) {
+    packet.textContent = pack.open_packet;
+  }
+  for (const resolve of document.querySelectorAll('[data-action="resolve"]')) {
+    resolve.textContent = pack.resolve;
+  }
 }
 
 if (typeof document !== "undefined" && document.getElementById("load")) {
@@ -207,10 +268,18 @@ if (typeof document !== "undefined" && document.getElementById("load")) {
     langButton.addEventListener("click", () => {
       consoleState.language = consoleState.language === "es" ? "pt" : "es";
       applyConsoleLanguage();
+      if (queueSeen) loadQueue();
     });
     applyConsoleLanguage();
   }
   document.getElementById("load").addEventListener("click", loadQueue);
+  fetch("/api/i18n")
+    .then((res) => res.json())
+    .then((payload) => {
+      adoptCatalog(payload);
+      applyConsoleLanguage();
+    })
+    .catch(() => {});
   boot();
 }
 

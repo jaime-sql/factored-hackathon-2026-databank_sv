@@ -1,52 +1,100 @@
-const state = { language: "es", token: "", caseId: null };
+const state = { language: "es", token: "", caseId: null, catalog: null, personas: [] };
 
-const copy = {
-  es: {
-    lang: "Español",
-    pick: "Elija una persona sintética",
-    charges: "Sus cargos, en su hora local",
-    dispute: "No reconozco este cargo",
-    message: "Mensaje",
-    send: "Enviar",
-    why: "¿Por qué?",
-  },
-  pt: {
-    lang: "Português",
-    pick: "Escolha uma pessoa sintética",
-    charges: "Suas cobranças, no seu horário local",
-    dispute: "Não reconheço esta cobrança",
-    message: "Mensagem",
-    send: "Enviar",
-    why: "Por quê?",
-  },
-};
+function text() {
+  return state.catalog && state.catalog[state.language === "pt" ? "pt" : "es"];
+}
+
+function applyNav(copy) {
+  const links = { "/": copy.nav_client, "/agent": copy.nav_agent, "/metrics": copy.nav_metrics };
+  for (const anchor of document.querySelectorAll("a")) {
+    const href = anchor.getAttribute("href");
+    if (links[href]) anchor.textContent = links[href];
+  }
+}
 
 function applyLanguage() {
   document.documentElement.lang = state.language === "pt" ? "pt" : "es";
-  document.getElementById("lang").textContent = copy[state.language].lang;
+  const copy = text();
+  if (!copy) return;
+  const lang = document.getElementById("lang");
+  if (lang) lang.textContent = copy.lang_name;
+  const lede = document.getElementById("lede");
+  if (lede) lede.textContent = copy.client_lede;
+  const title = document.getElementById("page-title");
+  if (title) title.textContent = copy.client_title;
+  applyNav(copy);
+  const tour = document.getElementById("tour");
+  if (tour) tour.textContent = copy.tour_open;
   const message = document.getElementById("message");
-  if (message) message.placeholder = copy[state.language].message;
+  if (message) message.placeholder = copy.message_placeholder;
   const send = document.getElementById("send");
-  if (send) send.textContent = copy[state.language].send;
+  if (send) send.textContent = copy.send;
+  const why = document.querySelector("details.why summary");
+  if (why) why.textContent = copy.why;
+  const heading = document.querySelector("#charges h2");
+  if (heading) heading.textContent = copy.charges_title;
+  for (const button of document.querySelectorAll('#charges [data-action="select-charge"]')) {
+    button.textContent = copy.dispute;
+  }
+  renderPersonas();
 }
 
-document.getElementById("lang").addEventListener("click", () => {
-  state.language = state.language === "es" ? "pt" : "es";
-  applyLanguage();
-});
-
-async function loadPersonas() {
-  const payload = await fetch("/api/personas").then((res) => res.json());
+function renderPersonas() {
   const box = document.getElementById("personas");
-  box.innerHTML = "";
-  for (const persona of payload.personas) {
+  if (!box) return;
+  box.replaceChildren();
+  for (const persona of state.personas) {
     const button = document.createElement("button");
     button.setAttribute("data-action", "persona");
-    const note = persona.note ? ` · ${persona.note}` : "";
-    button.textContent = `${persona.label} · ${persona.tz}${note}`;
+    const notes = persona.notes || {};
+    const note = notes[state.language] || persona.note || "";
+    const labels = persona.labels || {};
+    const label = labels[state.language] || persona.label || "";
+    const suffix = note ? ` · ${note}` : "";
+    button.textContent = `${label} · ${persona.tz}${suffix}`;
     button.addEventListener("click", () => signIn(persona.id));
     box.appendChild(button);
   }
+}
+
+async function loadPersonas() {
+  const payload = await fetch("/api/personas").then((res) => res.json());
+  state.personas = payload.personas || [];
+  renderPersonas();
+}
+
+function renderCharges(charges) {
+  const copy = text();
+  const box = document.getElementById("charges");
+  box.replaceChildren();
+  const heading = document.createElement("h2");
+  heading.textContent = copy ? copy.charges_title : "";
+  box.appendChild(heading);
+  for (const tx of charges.transactions || []) {
+    const card = document.createElement("article");
+    card.className = "card";
+    const strong = document.createElement("strong");
+    strong.textContent = tx.merchant_label || tx.merchant_name || "";
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const status = tx.status_label || (copy && copy.status && copy.status[tx.transaction_status]) || tx.transaction_status || "";
+    meta.textContent = `${tx.local_time} · ${tx.transaction_city} · ${tx.amount} ${tx.currency} · ${status}`;
+    const button = document.createElement("button");
+    button.className = "primary";
+    button.setAttribute("data-action", "select-charge");
+    button.textContent = copy ? copy.dispute : "";
+    button.addEventListener("click", () => openCase(tx.transaction_key, button.textContent));
+    card.append(strong, meta, button);
+    box.appendChild(card);
+  }
+}
+
+async function refreshCharges() {
+  if (!state.token) return;
+  const charges = await fetch(`/api/transactions?language=${state.language}`, {
+    headers: { authorization: `Bearer ${state.token}` },
+  }).then((res) => res.json());
+  renderCharges(charges);
 }
 
 async function signIn(persona) {
@@ -57,24 +105,7 @@ async function signIn(persona) {
   });
   const body = await response.json();
   state.token = body.token;
-  const charges = await fetch("/api/transactions", {
-    headers: { authorization: `Bearer ${state.token}` },
-  }).then((res) => res.json());
-  const box = document.getElementById("charges");
-  box.innerHTML = `<h2>${copy[state.language].charges}</h2>`;
-  for (const tx of charges.transactions) {
-    const card = document.createElement("article");
-    card.className = "card";
-    card.innerHTML = `<strong>${tx.merchant_name}</strong>
-      <div class="meta">${tx.local_time} · ${tx.transaction_city} · ${tx.amount} ${tx.currency} · ${tx.transaction_status}</div>`;
-    const button = document.createElement("button");
-    button.className = "primary";
-    button.setAttribute("data-action", "select-charge");
-    button.textContent = copy[state.language].dispute;
-    button.addEventListener("click", () => openCase(tx.transaction_key, button.textContent));
-    card.appendChild(button);
-    box.appendChild(card);
-  }
+  await refreshCharges();
 }
 
 async function openCase(transactionKey, message) {
@@ -108,20 +139,21 @@ async function sendAction(action) {
 function render(body) {
   state.caseId = body.case_id;
   const box = document.getElementById("thread");
-  box.innerHTML = "";
+  box.replaceChildren();
   const card = document.createElement("article");
   card.className = "card";
   if (body.band) card.setAttribute("data-band", body.band);
   if (body.protected) {
     const notice = document.createElement("p");
     notice.className = "protected";
-    notice.textContent = "Protegido";
+    const copy = text();
+    notice.textContent = copy ? copy.protected : "Protegido";
     card.appendChild(notice);
   }
-  const text = document.createElement("p");
-  text.className = "reply";
-  text.textContent = body.reply || body.message || "";
-  card.appendChild(text);
+  const reply = document.createElement("p");
+  reply.className = "reply";
+  reply.textContent = body.reply || body.message || "";
+  card.appendChild(reply);
   for (const action of body.actions || []) {
     const button = document.createElement("button");
     button.setAttribute("data-action", action.id);
@@ -143,7 +175,8 @@ async function attachWhy(card, caseId) {
   const details = document.createElement("details");
   details.className = "why";
   const summary = document.createElement("summary");
-  summary.textContent = copy[state.language].why;
+  const copy = text();
+  summary.textContent = copy ? copy.why : "¿Por qué?";
   details.appendChild(summary);
   const list = document.createElement("ol");
   for (const step of body.steps || []) {
@@ -173,5 +206,20 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
   render(await response.json());
 });
 
-applyLanguage();
-loadPersonas();
+document.getElementById("lang").addEventListener("click", () => {
+  state.language = state.language === "es" ? "pt" : "es";
+  applyLanguage();
+  refreshCharges();
+});
+
+async function bootstrap() {
+  try {
+    state.catalog = await fetch("/api/i18n").then((res) => res.json());
+  } catch {
+    state.catalog = null;
+  }
+  applyLanguage();
+  await loadPersonas();
+}
+
+bootstrap();

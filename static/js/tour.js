@@ -181,6 +181,11 @@ const GUIDE = {
         pt: "Esta tela é o painel de contagens.",
       },
       {
+        selector: "#lang",
+        es: "Este botón cambia el idioma entre español y portugués.",
+        pt: "Este botão muda o idioma entre espanhol e português.",
+      },
+      {
         selector: "#tour",
         es: "Este botón abre la guía y también la cierra.",
         pt: "Este botão abre o guia e também o fecha.",

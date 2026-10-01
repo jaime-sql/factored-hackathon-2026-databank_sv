@@ -100,12 +100,14 @@ def test_postgres_endpoints_do_not_500(pg_client: TestClient) -> None:
     personas = _assert_ok(pg_client.get("/api/personas"), "personas")
     maria = next(row for row in personas["personas"] if row["id"] == "maria")  # type: ignore[index]
     assert maria["segment"] == "Basic"
-    assert maria["note"] == "Challenge data customer"
+    assert maria["note"] == "Cliente de los datos del desafío"
+    assert maria["notes"]["pt"] == "Cliente dos dados do desafio"
     lucia = next(row for row in personas["personas"] if row["id"] == "lucia")  # type: ignore[index]
     assert lucia["segment"] == "Basic"
     assert lucia["tz"] == "America/Mexico_City"
     assert lucia["country"] == "Mexico"
-    assert lucia["note"] == "Challenge data customer, duplicate charge"
+    assert lucia["note"] == "Cliente de los datos del desafío, cargo duplicado"
+    assert lucia["notes"]["pt"] == "Cliente dos dados do desafio, cobrança duplicada"
     lucia_session = pg_client.post("/api/session", json={"persona": "lucia"})
     assert lucia_session.status_code == 200
     signed = read_customer("test-session-secret-value", lucia_session.json()["token"])
