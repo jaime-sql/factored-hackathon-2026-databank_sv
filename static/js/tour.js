@@ -27,7 +27,7 @@ const GUIDE = {
       {
         selector: 'a[href="/agent"]',
         es: "Consola abre la cola de la persona que revisa los casos.",
-        pt: "Consola abre a fila da pessoa que revisa os casos.",
+        pt: "Console abre a fila da pessoa que revisa os casos.",
       },
       {
         selector: 'a[href="/metrics"]',
@@ -118,7 +118,7 @@ const GUIDE = {
       {
         selector: 'a[href="/agent"]',
         es: "Esta pantalla es la consola: la cola de casos para una persona.",
-        pt: "Esta tela é a consola: a fila de casos para uma pessoa.",
+        pt: "Esta tela é a console: a fila de casos para uma pessoa.",
       },
       {
         selector: 'a[href="/metrics"]',
@@ -143,7 +143,8 @@ const GUIDE = {
       {
         selector: "#load",
         es: "Ver cola pide los casos que esperan a una persona.",
-        pt: "Ver cola pede os casos que esperam uma pessoa.",
+        pt: "Ver fila pede os casos que esperam uma pessoa.",
+        label: { es: "Ver cola", pt: "Ver fila" },
       },
       {
         selector: "#queue article.card",
@@ -154,7 +155,8 @@ const GUIDE = {
       {
         selector: '#queue [data-action="packet"]',
         es: "Abrir paquete muestra el caso verificado, sin el texto crudo del cliente.",
-        pt: "Abrir paquete mostra o caso verificado, sem o texto cru do cliente.",
+        pt: "Abrir pacote mostra o caso verificado, sem o texto cru do cliente.",
+        label: { es: "Abrir paquete", pt: "Abrir pacote" },
         dynamic: true,
       },
       {
@@ -173,7 +175,7 @@ const GUIDE = {
       {
         selector: 'a[href="/agent"]',
         es: "Consola abre la cola de la persona que revisa los casos.",
-        pt: "Consola abre a fila da pessoa que revisa os casos.",
+        pt: "Console abre a fila da pessoa que revisa os casos.",
       },
       {
         selector: 'a[href="/metrics"]',
@@ -301,6 +303,16 @@ function installTour() {
     return document.documentElement.lang === "pt" ? "pt" : "es";
   }
 
+  function stepSentence(step, lang) {
+    const sentence = step[lang];
+    if (!step.label) return sentence;
+    const source = document.querySelector(step.selector);
+    const live = source && String(source.textContent || "").trim();
+    const baked = step.label[lang];
+    if (!live || !baked || !sentence.startsWith(baked)) return sentence;
+    return `${live}${sentence.slice(baked.length)}`;
+  }
+
   function clearTarget() {
     if (target) target.classList.remove("tour-target");
     target = null;
@@ -334,7 +346,7 @@ function installTour() {
     clearTarget();
     const el = document.querySelector(step.selector);
     opener.textContent = chrome.open;
-    text.textContent = step[lang];
+    text.textContent = stepSentence(step, lang);
     if (el) {
       target = el;
       el.classList.add("tour-target");
@@ -389,13 +401,14 @@ function installTour() {
   window.addEventListener("resize", () => {
     if (open) place(target);
   });
-  const langButton = document.getElementById("lang");
-  if (langButton) {
-    langButton.addEventListener("click", () => {
-      if (open) render();
-      else opener.textContent = GUIDE.chrome[language()].open;
-    });
+  function onLanguage() {
+    if (open) render();
+    else opener.textContent = GUIDE.chrome[language()].open;
   }
+
+  const langButton = document.getElementById("lang");
+  if (langButton) langButton.addEventListener("click", onLanguage);
+  document.addEventListener("hd-lang", onLanguage);
   opener.textContent = GUIDE.chrome[language()].open;
 }
 

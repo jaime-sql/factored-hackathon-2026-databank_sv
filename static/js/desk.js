@@ -1,11 +1,57 @@
+function storedLanguage() {
+  try {
+    return localStorage.getItem("hd_lang") === "pt" ? "pt" : "es";
+  } catch {
+    return "es";
+  }
+}
+
+function persistLanguage(language) {
+  try {
+    localStorage.setItem("hd_lang", language === "pt" ? "pt" : "es");
+  } catch {
+    /* ignore */
+  }
+}
+
+function notifyLanguage() {
+  if (typeof document.dispatchEvent !== "function" || typeof Event !== "function") return;
+  document.dispatchEvent(new Event("hd-lang"));
+}
+
+function formatMoney(amount, currency, language) {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return "";
+  const locale = language === "pt" ? "pt-BR" : "es-AR";
+  const code = String(currency || "").trim().toUpperCase();
+  try {
+    if (!code) {
+      return new Intl.NumberFormat(locale, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value);
+    }
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${value.toFixed(2)} ${code}`.trim();
+  }
+}
+
 const state = {
-  language: "es",
+  language: storedLanguage(),
   token: "",
   caseId: null,
   catalog: null,
   personas: [],
   testMode: false,
+  testToken: "",
 };
+document.documentElement.lang = state.language;
 
 function text() {
   return state.catalog && state.catalog[state.language === "pt" ? "pt" : "es"];
@@ -45,6 +91,11 @@ function applyLanguage() {
   if (testLink && copy.test_arm) testLink.textContent = copy.test_arm;
   const testSend = document.getElementById("test-mode-send");
   if (testSend && copy.test_arm_send) testSend.textContent = copy.test_arm_send;
+  const testToken = document.getElementById("test-token");
+  if (testToken && copy.test_token) testToken.placeholder = copy.test_token;
+  const testTokenLabel = document.getElementById("test-token-label");
+  if (testTokenLabel && copy.test_token) testTokenLabel.textContent = copy.test_token;
+  notifyLanguage();
   for (const button of document.querySelectorAll('#charges [data-action="select-charge"]')) {
     button.textContent = copy.dispute;
   }
@@ -86,11 +137,17 @@ function renderCharges(charges) {
     const card = document.createElement("article");
     card.className = "card";
     const strong = document.createElement("strong");
-    strong.textContent = tx.merchant_label || tx.merchant_name || "";
+    const typeLabel = copy && copy.types && tx.transaction_type ? copy.types[tx.transaction_type] : "";
+    strong.textContent = tx.merchant_label || tx.merchant_name || typeLabel || "";
     const meta = document.createElement("div");
     meta.className = "meta";
-    const status = tx.status_label || (copy && copy.status && copy.status[tx.transaction_status]) || tx.transaction_status || "";
-    meta.textContent = `${tx.local_time} · ${tx.transaction_city} · ${tx.amount} ${tx.currency} · ${status}`;
+    const status = tx.status_label || (copy && copy.status && copy.status[tx.transaction_status]) || "";
+    const amount = tx.amount_label || formatMoney(tx.amount, tx.currency, state.language);
+    const place = String(tx.place || tx.transaction_city || "").trim();
+    meta.textContent = [tx.local_time, place, amount, status]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean)
+      .join(" · ");
     const button = document.createElement("button");
     button.className = "primary";
     button.setAttribute("data-action", "select-charge");
@@ -110,9 +167,11 @@ async function refreshCharges() {
 }
 
 async function signIn(persona) {
+  const headers = { "content-type": "application/json" };
+  if (state.testMode && state.testToken) headers["X-Test-Token"] = state.testToken;
   const response = await fetch("/api/session", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify({ persona }),
   });
   const body = await response.json();
@@ -158,11 +217,13 @@ function bindTestArm() {
     const token = input ? String(input.value || "") : "";
     if (input) input.value = "";
     if (!token) return;
+    state.testToken = token;
     await fetch("/api/test-mode", {
       method: "POST",
       headers: { "X-Test-Token": token },
     });
     await refreshTestMode();
+    if (!state.testMode) state.testToken = "";
   });
 }
 
@@ -266,6 +327,7 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
 
 document.getElementById("lang").addEventListener("click", () => {
   state.language = state.language === "es" ? "pt" : "es";
+  persistLanguage(state.language);
   applyLanguage();
   refreshCharges();
 });

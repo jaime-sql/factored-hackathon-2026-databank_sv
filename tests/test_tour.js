@@ -79,5 +79,9 @@ for (const name of ["cases", "handoff", "containment", "eval"]) {
   );
 }
 
+const css = fs.readFileSync("static/css/app.css", "utf8");
+assert.match(css, /#lang,\s*\n#tour\s*\{[^}]*z-index:\s*31/);
+assert.match(css, /#lang,\s*\n#tour\s*\{[^}]*pointer-events:\s*auto/);
+assert.match(css, /\.tour-shade\s*\{[^}]*z-index:\s*30/);
 assert.equal(path.basename("static/js/tour.js"), "tour.js");
 console.log("tour ok");

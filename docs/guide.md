@@ -19,7 +19,7 @@ PT: Esta é a tela do cliente: aqui se escolhe uma cobrança e se abre o caso.
 
 Consola abre la cola de la persona que revisa los casos.
 
-PT: Consola abre a fila da pessoa que revisa os casos.
+PT: Console abre a fila da pessoa que revisa os casos.
 
 ### 3. `a[href="/metrics"]`
 
@@ -135,7 +135,7 @@ PT: Cliente volta à tela onde se abre um caso.
 
 Esta pantalla es la consola: la cola de casos para una persona.
 
-PT: Esta tela é a consola: a fila de casos para uma pessoa.
+PT: Esta tela é a console: a fila de casos para uma pessoa.
 
 ### 3. `a[href="/metrics"]`
 
@@ -165,7 +165,7 @@ PT: Escreva o token do agente para ler a fila.
 
 Ver cola pide los casos que esperan a una persona.
 
-PT: Ver cola pede os casos que esperam uma pessoa.
+PT: Ver fila pede os casos que esperam uma pessoa.
 
 ### 8. `#queue article.card`
 
@@ -179,7 +179,7 @@ Dinámico. Si no está en pantalla: aparece cuando hay casos
 
 Abrir paquete muestra el caso verificado, sin el texto crudo del cliente.
 
-PT: Abrir paquete mostra o caso verificado, sem o texto cru do cliente.
+PT: Abrir pacote mostra o caso verificado, sem o texto cru do cliente.
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
@@ -203,7 +203,7 @@ PT: Cliente abre a tela onde se escolhe uma cobrança.
 
 Consola abre la cola de la persona que revisa los casos.
 
-PT: Consola abre a fila da pessoa que revisa os casos.
+PT: Console abre a fila da pessoa que revisa os casos.
 
 ### 3. `a[href="/metrics"]`
 

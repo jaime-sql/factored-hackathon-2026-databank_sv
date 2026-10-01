@@ -7,6 +7,8 @@ customers in this slice are in MX, CO, and AR.
 
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
+
 PT_MARKERS = (
     "não",
     "nao",
@@ -32,8 +34,132 @@ def detect_language(text: str, override: str | None = None) -> str:
     return "es"
 
 
-def money(amount: float, currency: str) -> str:
-    return f"{amount:,.2f} {currency}"
+_NBSP = "\u00a0"
+_CURRENCY_LABEL = {
+    "es": {
+        "USD": "US$",
+        "MXN": "MXN",
+        "ARS": "$",
+        "COP": "COP",
+        "BRL": "BRL",
+        "EUR": "EUR",
+    },
+    "pt": {
+        "USD": "US$",
+        "MXN": "MX$",
+        "ARS": "ARS",
+        "COP": "COP",
+        "BRL": "R$",
+        "EUR": "€",
+    },
+}
+_TRANSACTION_TYPES = {
+    "es": {
+        "Adjustment": "Ajuste",
+        "Deposit": "Depósito",
+        "Payment": "Pago",
+        "Purchase": "Compra",
+        "Transfer": "Transferencia",
+        "Withdrawal": "Retiro",
+    },
+    "pt": {
+        "Adjustment": "Ajuste",
+        "Deposit": "Depósito",
+        "Payment": "Pagamento",
+        "Purchase": "Compra",
+        "Transfer": "Transferência",
+        "Withdrawal": "Saque",
+    },
+}
+_REGION_CODES = {
+    "ar": "AR",
+    "argentina": "AR",
+    "br": "BR",
+    "brazil": "BR",
+    "brasil": "BR",
+    "co": "CO",
+    "colombia": "CO",
+    "colômbia": "CO",
+    "mx": "MX",
+    "mexico": "MX",
+    "méxico": "MX",
+    "es": "ES",
+    "spain": "ES",
+    "españa": "ES",
+    "espanha": "ES",
+    "us": "US",
+    "usa": "US",
+    "u.s.a.": "US",
+    "united states": "US",
+    "estados unidos": "US",
+}
+_COUNTRY_NAMES = {
+    "es": {
+        "AR": "Argentina",
+        "BR": "Brasil",
+        "CO": "Colombia",
+        "MX": "México",
+        "ES": "España",
+        "US": "Estados Unidos",
+    },
+    "pt": {
+        "AR": "Argentina",
+        "BR": "Brasil",
+        "CO": "Colômbia",
+        "MX": "México",
+        "ES": "Espanha",
+        "US": "Estados Unidos",
+    },
+}
+
+
+def _ui_language(language: str) -> str:
+    return "pt" if language == "pt" else "es"
+
+
+def money(amount: float, currency: str, language: str = "es") -> str:
+    """Two decimals, thousands '.', decimal ','. Matches es-AR / pt-BR currency format."""
+    try:
+        quant = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except (ArithmeticError, ValueError):
+        return (currency or "").strip()
+    sign = "-" if quant < 0 else ""
+    whole, frac = f"{abs(quant):.2f}".split(".")
+    groups: list[str] = []
+    digits = whole
+    while digits:
+        groups.append(digits[-3:])
+        digits = digits[:-3]
+    number = f"{sign}{'.'.join(reversed(groups))},{frac}"
+    code = (currency or "").strip().upper()
+    if not code:
+        return number
+    label = _CURRENCY_LABEL[_ui_language(language)].get(code, code)
+    return f"{label}{_NBSP}{number}"
+
+
+def transaction_type_label(language: str, transaction_type: str) -> str:
+    cleaned = (transaction_type or "").strip()
+    if not cleaned:
+        return ""
+    return _TRANSACTION_TYPES[_ui_language(language)].get(cleaned, cleaned)
+
+
+def _region_code(value: str) -> str:
+    return _REGION_CODES.get((value or "").strip().lower(), "")
+
+
+def place_label(city: str, country: str, home: str, language: str) -> str:
+    """City, and the localized country when the charge is outside the customer's country.
+
+    A missing country leaves the city. Empty pieces are dropped before joining.
+    """
+    city_text = (city or "").strip()
+    code = _region_code(country)
+    if not code or code == _region_code(home):
+        return city_text
+    name = _COUNTRY_NAMES[_ui_language(language)].get(code, "")
+    return ", ".join(part for part in (city_text, name) if part)
 
 
 def merchant_label(language: str, name: str, category: str, transaction_type: str) -> str:
@@ -46,11 +172,9 @@ def merchant_label(language: str, name: str, category: str, transaction_type: st
         if language == "pt":
             return f"categoria {cleaned_category}"
         return f"categoría {cleaned_category}"
-    cleaned_type = (transaction_type or "").strip()
-    if cleaned_type:
-        if language == "pt":
-            return f"tipo {cleaned_type}"
-        return f"tipo {cleaned_type}"
+    label = transaction_type_label(language, transaction_type)
+    if label:
+        return f"tipo {label}"
     return ""
 
 
@@ -71,23 +195,17 @@ def _charge_with_amount(
     if language == "pt":
         if not (name or "").strip() and (category or "").strip():
             return f"A cobrança da categoria {(category or '').strip()} ({amount})"
-        if (
-            not (name or "").strip()
-            and not (category or "").strip()
-            and (transaction_type or "").strip()
-        ):
-            return f"A cobrança do tipo {(transaction_type or '').strip()} ({amount})"
+        typed = transaction_type_label(language, transaction_type)
+        if not (name or "").strip() and not (category or "").strip() and typed:
+            return f"A cobrança do tipo {typed} ({amount})"
         if label:
             return f"A cobrança de {label} ({amount})"
         return f"A cobrança ({amount})"
     if not (name or "").strip() and (category or "").strip():
         return f"El cargo de la categoría {(category or '').strip()} ({amount})"
-    if (
-        not (name or "").strip()
-        and not (category or "").strip()
-        and (transaction_type or "").strip()
-    ):
-        return f"El cargo de tipo {(transaction_type or '').strip()} ({amount})"
+    typed = transaction_type_label(language, transaction_type)
+    if not (name or "").strip() and not (category or "").strip() and typed:
+        return f"El cargo de tipo {typed} ({amount})"
     if label:
         return f"El cargo de {label} ({amount})"
     return f"El cargo ({amount})"
@@ -283,7 +401,7 @@ def reply_duplicate(
             head = f"Há um possível duplicado SINTÉTICO ({amount})"
         return (
             f"{head}: {when} e {other_when}. "
-            "Este par vem do cenário de teste synthetic_duplicates (is_synthetic=1), não de um duplicado real. "
+            "Este par vem do cenário de teste de duplicados sintéticos, não de um duplicado real. "
             "Se reconhece o comércio, fechamos. Se não, uma pessoa revisa. Nenhum dinheiro foi movido."
         )
     if not (merchant or "").strip() and (category or "").strip():
@@ -294,7 +412,7 @@ def reply_duplicate(
         head = f"Hay un posible duplicado SINTÉTICO ({amount})"
     return (
         f"{head}: {when} y {other_when}. "
-        "Este par sale del escenario de prueba synthetic_duplicates (is_synthetic=1), no de un duplicado real. "
+        "Este par sale del escenario de prueba de duplicados sintéticos, no de un duplicado real. "
         "Si reconoce el comercio, cerramos. Si no, una persona revisa. No se movió dinero."
     )
 
@@ -522,8 +640,18 @@ MONTHS = {
 }
 
 _STATUS = {
-    "es": {"Approved": "Aprobado", "Pending": "Pendiente", "Reversed": "Reversado"},
-    "pt": {"Approved": "Aprovado", "Pending": "Pendente", "Reversed": "Estornado"},
+    "es": {
+        "Approved": "Aprobado",
+        "Pending": "Pendiente",
+        "Reversed": "Reversado",
+        "Declined": "Rechazado",
+    },
+    "pt": {
+        "Approved": "Aprovado",
+        "Pending": "Pendente",
+        "Reversed": "Estornado",
+        "Declined": "Recusado",
+    },
 }
 
 _UI = {
@@ -548,6 +676,7 @@ _UI = {
         "test_chip": "Prueba",
         "test_arm": "Modo de prueba",
         "test_arm_send": "Activar",
+        "test_token": "Token de prueba",
         "agent_title": "Consola del agente",
         "agent_lede": "Cola de casos con el paquete verificado. No hay texto crudo del cliente.",
         "token_placeholder": "Token del agente",
@@ -565,21 +694,22 @@ _UI = {
         "metrics_title": "Métricas",
         "metrics_lede": (
             "El tablero deja fuera el tráfico de evaluación y el de prueba. Las tasas "
-            "de seguridad que necesitan etiquetas viven en el informe offline."
+            "de seguridad que necesitan etiquetas viven en el informe fuera de línea."
         ),
+        "metrics_loading": "Cargando las métricas…",
         "tile_cases": "Casos",
-        "tile_handoff": "Handoff",
+        "tile_handoff": "Traspaso a persona",
         "tile_containment": "Contención",
-        "tile_eval": "Eval excluido",
+        "tile_eval": "Evaluación excluida",
         "tile_test": "Prueba excluida",
         "eval_toggle": (
-            "Muestra de demostración (enriquecida en fraude, tasa HIGH cerca de "
+            "Muestra de demostración (enriquecida en fraude, tasa de riesgo alto cerca de "
             "11 veces la de los datos completos)"
         ),
     },
     "pt": {
         "nav_client": "Cliente",
-        "nav_agent": "Consola",
+        "nav_agent": "Console",
         "nav_metrics": "Métricas",
         "lang_name": "Português",
         "tour_open": "Como funciona?",
@@ -598,7 +728,8 @@ _UI = {
         "test_chip": "Teste",
         "test_arm": "Modo de teste",
         "test_arm_send": "Ativar",
-        "agent_title": "Consola do agente",
+        "test_token": "Token de teste",
+        "agent_title": "Console do agente",
         "agent_lede": "Fila de casos com o pacote verificado. Não há texto cru do cliente.",
         "token_placeholder": "Token do agente",
         "load_queue": "Ver fila",
@@ -615,15 +746,16 @@ _UI = {
         "metrics_title": "Métricas",
         "metrics_lede": (
             "O painel deixa de fora o tráfego de avaliação e o de teste. As taxas de "
-            "segurança que precisam de rótulos ficam no relatório offline."
+            "segurança que precisam de rótulos ficam no relatório fora de linha."
         ),
+        "metrics_loading": "Carregando as métricas…",
         "tile_cases": "Casos",
-        "tile_handoff": "Repasse",
+        "tile_handoff": "Repasse a uma pessoa",
         "tile_containment": "Contenção",
         "tile_eval": "Avaliação excluída",
         "tile_test": "Teste excluído",
         "eval_toggle": (
-            "Amostra de demonstração (enriquecida em fraude, taxa HIGH cerca de "
+            "Amostra de demonstração (enriquecida em fraude, taxa de risco alto cerca de "
             "11 vezes a dos dados completos)"
         ),
     },
@@ -711,6 +843,7 @@ def ui_copy(language: str) -> dict[str, object]:
     lang = _lang(language)
     payload: dict[str, object] = dict(_UI[lang])
     payload["status"] = dict(_STATUS[lang])
+    payload["types"] = dict(_TRANSACTION_TYPES[lang])
     payload["months"] = list(MONTHS[lang])
     return payload
 

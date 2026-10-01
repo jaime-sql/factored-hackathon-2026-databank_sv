@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.i18n import ui_copy
+from app.bank.fixture import build_rows
+from app.i18n import money, place_label, transaction_status_label, transaction_type_label, ui_copy
 from app.timeutil import present_time
 from tests.conftest import login
 
@@ -21,8 +23,18 @@ def test_catalog_statuses_and_months(client: TestClient) -> None:
     pt = catalog["pt"]
     assert es["client_lede"].startswith("Un cargo a la vez")
     assert pt["client_lede"].startswith("Uma cobrança de cada vez")
-    assert es["status"] == {"Approved": "Aprobado", "Pending": "Pendiente", "Reversed": "Reversado"}
-    assert pt["status"] == {"Approved": "Aprovado", "Pending": "Pendente", "Reversed": "Estornado"}
+    assert es["status"] == {
+        "Approved": "Aprobado",
+        "Pending": "Pendiente",
+        "Reversed": "Reversado",
+        "Declined": "Rechazado",
+    }
+    assert pt["status"] == {
+        "Approved": "Aprovado",
+        "Pending": "Pendente",
+        "Reversed": "Estornado",
+        "Declined": "Recusado",
+    }
     assert es["months"][0] == "ene"
     assert pt["months"][0] == "jan"
     assert es["months"][4] == "may"
@@ -65,6 +77,66 @@ def test_catalog_statuses_and_months(client: TestClient) -> None:
     assert portuguese_metrics["k5_handoff"]["display"] == "não definido"
     assert "Demo sample" not in spanish_metrics["eval_toggle_label"]
     assert "not defined" not in str(spanish_metrics)
+    assert "offline" not in spanish_metrics["eval_toggle_label"].lower()
+    assert "HIGH" not in spanish_metrics["eval_toggle_label"]
+
+
+def test_statuses_types_amounts_and_foreign_country(client: TestClient) -> None:
+    mapping = json.loads(
+        (ROOT / "triage/artifacts/category_mappings.json").read_text(encoding="utf-8")
+    )
+    fixture_statuses = {str(row["transaction_status"]) for row in build_rows()[0]}
+    required = fixture_statuses | {"Declined"}
+    for status in required:
+        spanish = transaction_status_label("es", status)
+        portuguese = transaction_status_label("pt", status)
+        assert spanish != status
+        assert portuguese != status
+        assert status not in spanish
+        assert status not in portuguese
+    assert transaction_status_label("es", "Declined") == "Rechazado"
+    assert transaction_status_label("pt", "Declined") == "Recusado"
+    for kind in mapping["transaction_type"]:
+        assert transaction_type_label("es", kind) != kind
+        assert transaction_type_label("pt", kind) != kind
+    assert money(1645.6, "USD", "es") == "US$\u00a01.645,60"
+    assert money(1645.6, "USD", "pt") == "US$\u00a01.645,60"
+    assert money(220, "MXN", "es") == "MXN\u00a0220,00"
+    assert money(220, "MXN", "pt") == "MX$\u00a0220,00"
+    assert place_label("Valencia", "Spain", "Mexico", "es") == "Valencia, España"
+    assert place_label("Valencia", "Spain", "Mexico", "pt") == "Valencia, Espanha"
+    assert place_label("Valencia", "", "Mexico", "es") == "Valencia"
+    assert place_label("Valencia", "Spain", "Spain", "es") == "Valencia"
+    assert place_label("", "Spain", "Mexico", "pt") == "Espanha"
+    assert place_label("", "", "Mexico", "es") == ""
+
+    headers = login(client, "camilo")
+    spanish = client.get("/api/transactions?language=es", headers=headers).json()
+    portuguese = client.get("/api/transactions?language=pt", headers=headers).json()
+    abroad = next(
+        row for row in spanish["transactions"] if row["transaction_key"] == "tx_camilo_abroad"
+    )
+    home = next(
+        row for row in spanish["transactions"] if row["transaction_key"] == "tx_camilo_home"
+    )
+    abroad_pt = next(
+        row for row in portuguese["transactions"] if row["transaction_key"] == "tx_camilo_abroad"
+    )
+    assert abroad["transaction_country"] == "USA"
+    assert abroad["place"] == "Houston, Estados Unidos"
+    assert home["place"] == "Bogotá"
+    assert "," not in home["place"]
+    assert abroad_pt["place"] == "Houston, Estados Unidos"
+    assert "US$" in abroad["amount_label"]
+    assert abroad["amount_label"].endswith("28,00")
+    parts = (
+        abroad["local_time"],
+        abroad["place"],
+        abroad["amount_label"],
+        abroad["status_label"],
+    )
+    joined = " · ".join(part for part in parts if str(part or "").strip())
+    assert "· ·" not in joined
 
 
 def test_locale_toggle_on_each_page() -> None:

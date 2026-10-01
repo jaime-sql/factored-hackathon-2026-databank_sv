@@ -28,8 +28,10 @@ from app.handoff.present import packet_view, queue_card
 from app.i18n import (
     localize_metrics,
     merchant_label,
+    money,
     persona_label,
     persona_note,
+    place_label,
     transaction_status_label,
     ui_catalog,
     ui_copy,
@@ -250,6 +252,7 @@ def transactions(request: Request, language: str = "es") -> dict[str, Any]:
     rows = []
     for tx in request.app.state.bank.get_transactions(customer_key):
         shown = present_time(tx.transaction_ts_utc, customer.tz, customer.customer_country, lang)
+        home = tx.customer_country or customer.customer_country
         rows.append(
             {
                 "transaction_key": tx.transaction_key,
@@ -258,10 +261,14 @@ def transactions(request: Request, language: str = "es") -> dict[str, Any]:
                     lang, tx.merchant_name, tx.merchant_category, tx.transaction_type
                 ),
                 "merchant_category": tx.merchant_category,
+                "transaction_type": tx.transaction_type,
                 "amount": tx.amount,
+                "amount_label": money(tx.amount, tx.currency, lang),
                 "currency": tx.currency,
                 "transaction_city": tx.transaction_city,
                 "transaction_country": tx.transaction_country,
+                "customer_country": home,
+                "place": place_label(tx.transaction_city, tx.transaction_country, home, lang),
                 "transaction_status": tx.transaction_status,
                 "status_label": transaction_status_label(lang, tx.transaction_status),
                 "customer_tz": shown["tz"],

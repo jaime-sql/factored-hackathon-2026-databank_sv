@@ -97,6 +97,12 @@ pre { overflow: auto; background: #241f1a; color: #f6f1e7; padding: 1rem; border
   background: rgba(28, 25, 21, 0.55);
   z-index: 30;
 }
+#lang,
+#tour {
+  position: relative;
+  z-index: 31;
+  pointer-events: auto;
+}
 .tour-target {
   position: relative;
   z-index: 31;
@@ -141,7 +147,8 @@ button.linkish {
   font-size: 0.75rem;
   text-decoration: underline;
 }
-.test-arm-form { display: flex; gap: 0.4rem; margin-top: 0.4rem; max-width: 24rem; }
+.test-arm-form { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; max-width: 24rem; align-items: center; }
+.test-arm-form label { flex: 1 0 100%; font-family: "Segoe UI", sans-serif; font-size: 0.75rem; }
 .test-arm-form[hidden] { display: none; }
 @media (max-width: 700px) {
   header { flex-direction: column; align-items: start; }

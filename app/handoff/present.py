@@ -44,7 +44,7 @@ def _card_blocked(packet: dict[str, Any]) -> bool:
     )
 
 
-def _amount(transaction: dict[str, Any]) -> str:
+def _amount(transaction: dict[str, Any], language: str) -> str:
     raw = transaction.get("amount")
     currency = str(transaction.get("currency") or "")
     if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
@@ -53,9 +53,7 @@ def _amount(transaction: dict[str, Any]) -> str:
         amount = float(raw)
     except ValueError:
         return currency
-    if not currency:
-        return f"{amount:,.2f}"
-    return money(amount, currency)
+    return money(amount, currency, language)
 
 
 def _display_language(packet: dict[str, Any], display_language: str | None) -> str:
@@ -103,7 +101,7 @@ def queue_card(
         "status": row["status"],
         "language": language,
         "band": band,
-        "amount": _amount(transaction),
+        "amount": _amount(transaction, language),
         "currency": str(transaction.get("currency") or ""),
         "merchant": mask_merchant(merchant),
         "local_time": _local_label(transaction, language),

@@ -704,6 +704,39 @@ def test_missing_test_schema_keeps_serving(
     assert opened.json()["case_id"] in exported.text
 
 
+def test_test_session_excludes_abandoned_from_live_metrics(qa_client: TestClient) -> None:
+    ops = qa_client.app.state.ops
+    before = len(ops.current_audit_cases())
+    session = qa_client.post(
+        "/api/session",
+        json={"persona": "maria"},
+        headers={"X-Test-Token": QA_TOKEN},
+    )
+    assert session.status_code == 200, session.text
+    body = session.json()
+    assert body["is_test"] is True
+    assert QA_TOKEN not in session.text
+    signed = read_session("test-session-secret-value", body["token"])
+    assert signed is not None and signed[1] is True
+    assert len(ops.current_audit_cases()) == before
+
+    opened = qa_client.post(
+        "/cases",
+        headers={"Authorization": f"Bearer {body['token']}"},
+        json={"message": "hola"},
+    )
+    assert opened.status_code == 200, opened.text
+    case_id = opened.json()["case_id"]
+    tips = [row for row in ops.current_audit_cases() if row["case_id"] == case_id]
+    assert len(tips) == 1
+    assert tips[0]["decision"] == "abandoned"
+    assert tips[0]["is_test"] is True
+    assert all(row["case_id"] != case_id for row in ops.live_audit_cases())
+    quiet = qa_client.get("/api/metrics").json()
+    assert quiet["k1_volume"]["total"] == 0
+    assert quiet["excluded_test_cases"] == 1
+
+
 def test_customer_page_sends_the_token_from_the_field_not_the_url() -> None:
     source = (ROOT / "static" / "js" / "desk.js").read_text(encoding="utf-8")
     assert 'get("test")' not in source

@@ -18,7 +18,7 @@ def test_blank_merchant_uses_category_then_type_then_rewrites() -> None:
     typed = reply_high(
         "pt", "  ", "10.00 BRL", "15 jan 2026, 12:00 BRT", transaction_type="Purchase"
     )
-    assert "A cobrança do tipo Purchase (10.00 BRL)" in typed
+    assert "A cobrança do tipo Compra (10.00 BRL)" in typed
     assert "de  (" not in typed
 
     bare = reply_review("es", "", "159.62 USD")
@@ -37,6 +37,8 @@ def test_named_merchant_stays_in_the_sentence() -> None:
 def test_packet_merchant_uses_the_same_fallback() -> None:
     assert packet_merchant("es", "Farmacia Norte", "Food", "Purchase") == "Farmacia Norte"
     assert packet_merchant("es", "", "Food", "Purchase") == "categoría Food"
-    assert packet_merchant("pt", "", "", "Purchase") == "tipo Purchase"
+    assert packet_merchant("pt", "", "", "Purchase") == "tipo Compra"
+    assert packet_merchant("es", "", "", "Payment") == "tipo Pago"
+    assert packet_merchant("pt", "", "", "Withdrawal") == "tipo Saque"
     assert packet_merchant("es", "", "", "") == "Comercio no identificado"
     assert packet_merchant("pt", "", "", "") == "Comércio não identificado"

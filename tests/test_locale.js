@@ -46,6 +46,25 @@ class El {
     this.dataset = {};
     this.style = {};
     this.listeners = {};
+    this.classList = {
+      add: (name) => {
+        const names = new Set(String(this.className || "").split(/\s+/).filter(Boolean));
+        names.add(name);
+        this.className = [...names].join(" ");
+      },
+      remove: (name) => {
+        this.className = String(this.className || "")
+          .split(/\s+/)
+          .filter((item) => item && item !== name)
+          .join(" ");
+      },
+    };
+  }
+
+  scrollIntoView() {}
+
+  getBoundingClientRect() {
+    return { top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0 };
   }
 
   set textContent(value) {
@@ -80,6 +99,11 @@ class El {
   addEventListener(type, fn) {
     this.listeners[type] = this.listeners[type] || [];
     this.listeners[type].push(fn);
+  }
+
+  dispatchEvent(event) {
+    const type = event && event.type;
+    for (const fn of this.listeners[type] || []) fn(event);
   }
 
   appendChild(child) {
@@ -201,6 +225,7 @@ function blob(root) {
   function walk(el) {
     const classes = String(el.className || "").split(/\s+/);
     if (classes.includes("reply")) return;
+    if (classes.includes("tour-tip") || classes.includes("tour-shade")) return;
     if (el.tagName === "LI") return;
     if (el.id === "raw") return;
     if (el.placeholder) parts.push(el.placeholder);
@@ -218,6 +243,22 @@ async function flush() {
   }
 }
 
+const memoryStore = new Map();
+const localStorage = {
+  getItem(key) {
+    return memoryStore.has(key) ? memoryStore.get(key) : null;
+  },
+  setItem(key, value) {
+    memoryStore.set(key, String(value));
+  },
+};
+
+class DomEvent {
+  constructor(type) {
+    this.type = type;
+  }
+}
+
 function run(filename, document, fetchImpl) {
   const context = {
     console,
@@ -227,6 +268,10 @@ function run(filename, document, fetchImpl) {
     clearTimeout,
     URL,
     URLSearchParams,
+    localStorage,
+    Event: DomEvent,
+    innerHeight: 800,
+    innerWidth: 1200,
   };
   context.window = context;
   context.globalThis = context;
@@ -314,21 +359,85 @@ function assertAbsent(text, words, label) {
   }
 }
 
+const ENGLISH = [
+  "Handoff",
+  "offline",
+  "excluded",
+  "Approved",
+  "Pending",
+  "Reversed",
+  "Declined",
+  "Payment",
+  "Deposit",
+  "Withdrawal",
+  "Transfer",
+  "Purchase",
+  "Adjustment",
+  "HIGH",
+  "Eval",
+];
+
+function collectStrings(value, out) {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, out));
+  else if (value && typeof value === "object") {
+    for (const item of Object.values(value)) collectStrings(item, out);
+  }
+}
+
+function assertNoEnglish(text, label, extra = []) {
+  for (const word of [...ENGLISH, ...extra]) {
+    const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${word}(?![\\p{L}\\p{N}_])`, "u");
+    assert.equal(pattern.test(text), false, `${label} still shows ${word}`);
+  }
+}
+
+function catalogText(lang) {
+  const out = [];
+  collectStrings(catalog[lang], out);
+  return out.join("\n");
+}
+
+assertNoEnglish(catalogText("es"), "es catalog", ["Console"]);
+assertNoEnglish(catalogText("pt"), "pt catalog", ["Consola", "Ver cola", "Abrir paquete"]);
+assert.ok(catalogText("pt").includes("Console"));
+assert.ok(catalogText("pt").includes("Ver fila"));
+assert.ok(catalogText("pt").includes("Abrir pacote"));
+
+const { GUIDE } = require("../static/js/tour.js");
+function tourCopy(lang) {
+  return Object.values(GUIDE.pages)
+    .flat()
+    .map((step) => step[lang])
+    .join("\n");
+}
+assertNoEnglish(tourCopy("es"), "tour es", ["Console"]);
+assertNoEnglish(tourCopy("pt"), "tour pt", ["Consola", "Ver cola", "Abrir paquete"]);
+assert.ok(GUIDE.pages.agent[6].pt.startsWith("Ver fila"));
+assert.ok(GUIDE.pages.agent[8].pt.startsWith("Abrir pacote"));
+for (const file of ["static/index.html", "static/agent.html", "static/metrics.html"]) {
+  assertNoEnglish(fs.readFileSync(file, "utf8"), file, ["Console"]);
+}
+
 function charges(lang) {
   const status = catalog[lang].status;
   const month = lang === "pt" ? "mai" : "may";
   const jan = lang === "pt" ? "jan" : "ene";
   return [
-    ["a", "Uber", status.Approved, `19 ${month} 2026, 12:00 CST`],
-    ["b", "Farmacia", status.Pending, `15 ${jan} 2026, 12:00 CST`],
-    ["c", "Tienda", status.Reversed, "25 abr 2026, 12:00 CST"],
-  ].map(([key, merchant, statusLabel, local]) => ({
+    ["a", "Uber", status.Approved, `19 ${month} 2026, 12:00 CST`, "Ciudad", 10, "MXN", ""],
+    ["b", "Farmacia", status.Pending, `15 ${jan} 2026, 12:00 CST`, "Ciudad", 10, "MXN", ""],
+    ["c", "Tienda", status.Reversed, "25 abr 2026, 12:00 CST", "Ciudad", 10, "MXN", ""],
+    ["d", "Kiosco", status.Declined, `1 ${month} 2026, 12:00 CST`, "", 1645.6, "USD", ""],
+    ["e", "", status.Approved, `2 ${month} 2026, 12:00 CST`, "", 10, "MXN", "Payment"],
+  ].map(([key, merchant, statusLabel, local, city, amount, currency, type]) => ({
     transaction_key: key,
     merchant_name: merchant,
     merchant_label: merchant,
-    transaction_city: "Ciudad",
-    amount: 10,
-    currency: "MXN",
+    transaction_type: type,
+    transaction_city: city,
+    place: city,
+    amount,
+    currency,
     transaction_status: "Approved",
     status_label: statusLabel,
     local_time: local,
@@ -392,6 +501,25 @@ async function testClient() {
   assert.ok(text.includes(" ene "), text);
   assert.ok(text.includes(catalog.es.status.Approved), text);
   assertAbsent(text, ["Synthetic persona", "Challenge data customer", "Approved", "Pending", "Reversed", " mai ", " jan "], "client es");
+  assertNoEnglish(text, "client es", ["Console"]);
+  assert.ok(text.includes(catalog.es.status.Declined), text);
+  assert.ok(text.includes(catalog.es.types.Payment), text);
+  assert.ok(text.includes("1.645,60"), text);
+  assert.equal(text.includes("· ·"), false, text);
+  const tourButton = document.getElementById("tour");
+  tourButton.listeners.click.forEach((fn) => fn());
+  const tip = document.querySelector(".tour-tip");
+  assert.equal(tip.hidden, false);
+  assert.ok(tip.textContent.includes("Esta pantalla es la del cliente"), tip.textContent);
+  document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
+  assert.equal(tip.hidden, false);
+  assert.ok(tip.textContent.includes("Esta é a tela do cliente"), tip.textContent);
+  assert.equal(tip.textContent.includes("Esta pantalla es la del cliente"), false);
+  tourButton.listeners.click.forEach((fn) => fn());
+  assert.equal(document.querySelector(".tour-shade").hidden, true);
+  document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
 
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
@@ -464,7 +592,20 @@ async function testAgent() {
   text = blob(document);
   assert.ok(text.includes(catalog.pt.queue_empty), text);
   assert.ok(text.includes(catalog.pt.load_queue), text);
+  assert.ok(text.includes("Console"), text);
   assertAbsent(text, [catalog.es.queue_empty, catalog.es.load_queue, catalog.es.agent_lede, " may "], "agent empty pt");
+  assertNoEnglish(text, "agent empty pt", ["Consola", "Ver cola", "Abrir paquete"]);
+  document.getElementById("tour").listeners.click.forEach((fn) => fn());
+  const next = document.querySelector(".tour-tip").querySelectorAll("button")[1];
+  for (let step = 0; step < 6; step += 1) next.listeners.click.forEach((fn) => fn());
+  let tourText = document.querySelector(".tour-tip").textContent;
+  assert.ok(tourText.includes("Ver fila"), tourText);
+  assert.equal(tourText.includes("Ver cola"), false, tourText);
+  for (let step = 0; step < 2; step += 1) next.listeners.click.forEach((fn) => fn());
+  tourText = document.querySelector(".tour-tip").textContent;
+  assert.ok(tourText.includes("Abrir pacote"), tourText);
+  assert.equal(tourText.includes("Abrir paquete"), false, tourText);
+  document.getElementById("tour").listeners.click.forEach((fn) => fn());
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
   text = blob(document);
@@ -517,11 +658,19 @@ async function testMetrics() {
   const raw = document.createElement("pre");
   raw.id = "raw";
   document.body.append(toggle, evalLabel, tiles, raw);
+  let metricsCalls = 0;
+  let releaseMetrics = () => {};
   const fetchImpl = async (url) => {
     const href = String(url);
     const lang = href.includes("language=pt") ? "pt" : "es";
     if (href.includes("/api/i18n")) return jsonResponse(200, catalog);
     if (href.includes("/api/metrics")) {
+      metricsCalls += 1;
+      if (metricsCalls === 2) {
+        await new Promise((resolve) => {
+          releaseMetrics = resolve;
+        });
+      }
       return jsonResponse(200, {
         eval_toggle_label: catalog[lang].eval_toggle,
         excluded_eval_cases: 0,
@@ -539,7 +688,15 @@ async function testMetrics() {
   assert.ok(text.includes(catalog.es.tile_containment), text);
   assert.ok(text.includes(catalog.es.eval_toggle), text);
   assertAbsent(text, ["Demo sample", catalog.pt.tile_containment, catalog.pt.metrics_lede], "metrics es");
+  assertNoEnglish(text, "metrics es", ["Console"]);
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
+  assert.ok(
+    document.querySelector('[data-metrics-loading="1"]'),
+    "metrics should show a loading tile",
+  );
+  assert.ok(blob(document).includes(catalog.pt.metrics_loading));
+  releaseMetrics();
   await flush();
   text = blob(document);
   assert.ok(text.includes(catalog.pt.metrics_lede), text);
@@ -548,6 +705,7 @@ async function testMetrics() {
   assert.ok(text.includes(catalog.pt.eval_toggle), text);
   assert.ok(text.includes("Como funciona?"), text);
   assertAbsent(text, esOnly, "metrics pt");
+  assertNoEnglish(text, "metrics pt", ["Consola"]);
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
   text = blob(document);
@@ -556,9 +714,30 @@ async function testMetrics() {
   assertAbsent(text, ptOnly, "metrics es again");
 }
 
+async function testLanguagePersists() {
+  memoryStore.set("hd_lang", "pt");
+  const document = makeDocument("client");
+  header(document, "Harbor Desk", catalog.es.client_lede);
+  const composer = document.createElement("form");
+  composer.id = "composer";
+  document.body.append(composer);
+  run("static/js/desk.js", document, async (url) => {
+    if (String(url).includes("/api/i18n")) return jsonResponse(200, catalog);
+    if (String(url).includes("/api/personas")) return jsonResponse(200, { personas: [] });
+    if (String(url).includes("/api/test-mode")) return jsonResponse(200, { is_test: false });
+    return jsonResponse(200, {});
+  });
+  await flush();
+  assert.equal(document.documentElement.lang, "pt");
+  assert.ok(blob(document).includes(catalog.pt.client_lede));
+  assert.equal(localStorage.getItem("hd_lang"), "pt");
+  memoryStore.set("hd_lang", "es");
+}
+
 testClient()
   .then(() => testAgent())
   .then(() => testMetrics())
+  .then(() => testLanguagePersists())
   .then(() => console.log("locale ok"))
   .catch((error) => {
     console.error(error);

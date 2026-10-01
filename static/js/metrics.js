@@ -1,8 +1,31 @@
+function storedLanguage() {
+  try {
+    return localStorage.getItem("hd_lang") === "pt" ? "pt" : "es";
+  } catch {
+    return "es";
+  }
+}
+
+function persistLanguage(next) {
+  try {
+    localStorage.setItem("hd_lang", next === "pt" ? "pt" : "es");
+  } catch {
+    /* ignore */
+  }
+}
+
+function notifyLanguage() {
+  if (typeof document.dispatchEvent !== "function" || typeof Event !== "function") return;
+  document.dispatchEvent(new Event("hd-lang"));
+}
+
 const box = document.getElementById("include-eval");
 const label = document.getElementById("eval-label");
 let catalog = null;
-let language = "es";
+let language = storedLanguage();
 let adminToken = "";
+let metricsGeneration = 0;
+document.documentElement.lang = language;
 
 function pack() {
   return catalog && catalog[language === "pt" ? "pt" : "es"];
@@ -32,6 +55,7 @@ function applyMetricsLanguage() {
   if (label && !label.dataset.loaded) label.textContent = text.eval_toggle;
   const badge = document.getElementById("test-badge");
   if (badge && text.test_badge) badge.textContent = text.test_badge;
+  notifyLanguage();
 }
 
 function tile(name, caption, value) {
@@ -56,7 +80,17 @@ function showTestBadge(on) {
 }
 
 async function load() {
+  const generation = ++metricsGeneration;
   const text = pack();
+  const tiles = document.getElementById("tiles");
+  if (tiles) {
+    const note = document.createElement("p");
+    note.className = "queue-status loading";
+    note.setAttribute("data-metrics-loading", "1");
+    note.textContent = (text && text.metrics_loading) || "Cargando las métricas…";
+    tiles.setAttribute("aria-busy", "true");
+    tiles.replaceChildren(note);
+  }
   const headers = {};
   if (adminToken) headers.authorization = `Bearer ${adminToken}`;
   const response = await fetch(
@@ -64,17 +98,26 @@ async function load() {
     { headers },
   );
   const body = await response.json();
+  if (generation !== metricsGeneration) return;
+  if (tiles) tiles.removeAttribute("aria-busy");
   label.dataset.loaded = "1";
   label.textContent = body.eval_toggle_label;
-  const tiles = document.getElementById("tiles");
   const cases = tile("cases", text ? text.tile_cases : "Casos", body.k1_volume.total);
-  const handoff = tile("handoff", text ? text.tile_handoff : "Handoff", body.k5_handoff.display);
+  const handoff = tile(
+    "handoff",
+    text ? text.tile_handoff : "Traspaso a persona",
+    body.k5_handoff.display,
+  );
   const containment = tile(
     "containment",
     text ? text.tile_containment : "Contención",
     body.k6_containment.display,
   );
-  const evalTile = tile("eval", text ? text.tile_eval : "Eval excluido", body.excluded_eval_cases);
+  const evalTile = tile(
+    "eval",
+    text ? text.tile_eval : "Evaluación excluida",
+    body.excluded_eval_cases,
+  );
   cases.setAttribute("data-metric", "cases");
   handoff.setAttribute("data-metric", "handoff");
   containment.setAttribute("data-metric", "containment");
@@ -94,6 +137,7 @@ const langButton = document.getElementById("lang");
 if (langButton) {
   langButton.addEventListener("click", () => {
     language = language === "es" ? "pt" : "es";
+    persistLanguage(language);
     applyMetricsLanguage();
     load();
   });

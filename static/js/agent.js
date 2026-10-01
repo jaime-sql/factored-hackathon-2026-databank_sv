@@ -17,7 +17,32 @@ const queueCopy = {
   },
 };
 
-const consoleState = { language: "es" };
+function storedLanguage() {
+  try {
+    return localStorage.getItem("hd_lang") === "pt" ? "pt" : "es";
+  } catch {
+    return "es";
+  }
+}
+
+function persistLanguage(language) {
+  try {
+    localStorage.setItem("hd_lang", language === "pt" ? "pt" : "es");
+  } catch {
+    /* ignore */
+  }
+}
+
+function notifyLanguage() {
+  if (typeof document === "undefined") return;
+  if (typeof document.dispatchEvent !== "function" || typeof Event !== "function") return;
+  document.dispatchEvent(new Event("hd-lang"));
+}
+
+const consoleState = { language: storedLanguage() };
+if (typeof document !== "undefined" && document.documentElement) {
+  document.documentElement.lang = consoleState.language === "pt" ? "pt" : "es";
+}
 let catalog = null;
 let queueSeen = false;
 
@@ -287,6 +312,8 @@ function applyConsoleLanguage() {
   }
   const badge = document.getElementById("test-badge");
   if (badge) badge.textContent = pack.test_badge || "MODO PRUEBA";
+  if (pack.nav_agent) document.title = `${pack.nav_agent} · Harbor Desk`;
+  notifyLanguage();
 }
 
 if (typeof document !== "undefined" && document.getElementById("load")) {
@@ -294,6 +321,7 @@ if (typeof document !== "undefined" && document.getElementById("load")) {
   if (langButton) {
     langButton.addEventListener("click", () => {
       consoleState.language = consoleState.language === "es" ? "pt" : "es";
+      persistLanguage(consoleState.language);
       applyConsoleLanguage();
       if (queueSeen) loadQueue();
     });
