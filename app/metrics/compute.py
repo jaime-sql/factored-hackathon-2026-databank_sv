@@ -1,8 +1,9 @@
-"""Operational KPIs from audit_current.
+"""Operational KPIs.
 
-Eval rows and test-traffic rows are excluded unless the matching include flag
-is true. The toggle label is the demo-sample warning. Safe-automation and
-unsafe rates need eval.case_labels, which this process does not read.
+The default row set is audit_live. include_test and include_eval read
+audit_current and apply only the filters that were not requested. The toggle
+label is the demo-sample warning. Safe-automation and unsafe rates need
+eval.case_labels, which this process does not read.
 """
 
 from __future__ import annotations
@@ -14,23 +15,37 @@ from typing import Any
 from app.eval_access import DEMO_SAMPLE_LABEL
 
 
+def _eval_traffic(row: dict[str, Any]) -> bool:
+    return row.get("eval_run_id") not in (None, "")
+
+
+def _test_traffic(row: dict[str, Any], test_ids: set[str]) -> bool:
+    return bool(row.get("is_test")) or str(row.get("case_id") or "") in test_ids
+
+
 def select_cases(
     cases: list[dict[str, Any]],
     *,
     include_eval: bool,
     include_test: bool,
+    test_ids: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], int, int]:
-    """Drop eval and test rows unless the caller asked to keep them."""
+    """Drop eval and test rows unless the caller asked to keep them.
+
+    Eval traffic is an audit tip whose eval_run_id is set. Test traffic is an
+    is_test tip or a case id listed in test_cases.
+    """
+    marked = test_ids or set()
     chosen: list[dict[str, Any]] = []
     for row in cases:
-        if row.get("is_eval_case") and not include_eval:
+        if _eval_traffic(row) and not include_eval:
             continue
-        if row.get("is_test") and not include_test:
+        if _test_traffic(row, marked) and not include_test:
             continue
         chosen.append(row)
     kept = {id(row) for row in chosen}
-    excluded_eval = sum(1 for row in cases if row.get("is_eval_case") and id(row) not in kept)
-    excluded_test = sum(1 for row in cases if row.get("is_test") and id(row) not in kept)
+    excluded_eval = sum(1 for row in cases if _eval_traffic(row) and id(row) not in kept)
+    excluded_test = sum(1 for row in cases if _test_traffic(row, marked) and id(row) not in kept)
     return chosen, excluded_eval, excluded_test
 
 
@@ -42,10 +57,19 @@ def compute_metrics(
     *,
     include_eval: bool,
     include_test: bool = False,
+    test_ids: set[str] | None = None,
+    excluded_eval: int | None = None,
+    excluded_test: int | None = None,
 ) -> dict[str, Any]:
-    chosen, excluded_eval, excluded_test = select_cases(
-        cases, include_eval=include_eval, include_test=include_test
-    )
+    if excluded_eval is None or excluded_test is None:
+        chosen, excluded_eval, excluded_test = select_cases(
+            cases,
+            include_eval=include_eval,
+            include_test=include_test,
+            test_ids=test_ids,
+        )
+    else:
+        chosen = list(cases)
     chosen_ids = {row["case_id"] for row in chosen}
     chosen_calls = [row for row in calls if row.get("case_id") in chosen_ids]
     closed = [row for row in chosen if row.get("decision")]

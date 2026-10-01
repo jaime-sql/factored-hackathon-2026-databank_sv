@@ -185,6 +185,13 @@ CREATE TABLE IF NOT EXISTS app.analytics_assumption (
   note text NOT NULL
 );
 
+-- Case ids marked as test traffic after insert. Insert and select only.
+CREATE TABLE IF NOT EXISTS app.test_cases (
+  case_id text PRIMARY KEY,
+  marked_at timestamptz NOT NULL DEFAULT now(),
+  reason text
+);
+
 -- Latest row in each supersession chain. The eval runner joins labels on case_id.
 -- security_invoker keeps RLS of the caller (app_rw) in force for console queries.
 CREATE OR REPLACE VIEW app.audit_current
@@ -206,6 +213,21 @@ WHERE NOT EXISTS (
   FROM app.audit_llm_call AS newer
   WHERE newer.supersedes_audit_id = a.audit_id
 );
+
+-- Desk metrics and the audit export. audit_current stays unfiltered for eval_rw.
+CREATE OR REPLACE VIEW app.audit_live
+WITH (security_invoker = true) AS
+SELECT cur.*
+FROM app.audit_current AS cur
+WHERE cur.eval_run_id IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM app.audit_case AS src
+    WHERE src.audit_id = cur.audit_id AND src.is_test
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM app.test_cases AS marked
+    WHERE marked.case_id = cur.case_id
+  );
 
 INSERT INTO app.llm_price (model, usd_per_1m_input, usd_per_1m_output, effective_from, source_url)
 VALUES
@@ -239,6 +261,8 @@ ALTER TABLE app.llm_price ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.llm_price FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.analytics_assumption ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.analytics_assumption FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.test_cases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.test_cases FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS cases_app_rw_select ON app.cases;
 DROP POLICY IF EXISTS cases_app_rw_insert ON app.cases;
@@ -285,6 +309,11 @@ CREATE POLICY llm_price_app_rw_select ON app.llm_price FOR SELECT TO app_rw USIN
 DROP POLICY IF EXISTS assumption_app_rw_select ON app.analytics_assumption;
 CREATE POLICY assumption_app_rw_select ON app.analytics_assumption FOR SELECT TO app_rw USING (true);
 
+DROP POLICY IF EXISTS test_cases_app_rw_select ON app.test_cases;
+DROP POLICY IF EXISTS test_cases_app_rw_insert ON app.test_cases;
+CREATE POLICY test_cases_app_rw_select ON app.test_cases FOR SELECT TO app_rw USING (true);
+CREATE POLICY test_cases_app_rw_insert ON app.test_cases FOR INSERT TO app_rw WITH CHECK (true);
+
 GRANT SELECT, INSERT, UPDATE ON app.cases TO app_rw;
 GRANT SELECT, INSERT, UPDATE ON app.handoff TO app_rw;
 REVOKE DELETE ON app.cases FROM app_rw;
@@ -306,8 +335,12 @@ REVOKE DELETE ON app.analytics_assumption FROM app_rw;
 
 GRANT SELECT ON app.audit_current TO app_rw;
 GRANT SELECT ON app.audit_llm_call_current TO app_rw;
+GRANT SELECT ON app.audit_live TO app_rw;
 GRANT SELECT ON app.llm_price TO app_rw;
 GRANT SELECT ON app.analytics_assumption TO app_rw;
+
+GRANT SELECT, INSERT ON app.test_cases TO app_rw;
+REVOKE UPDATE, DELETE ON app.test_cases FROM app_rw;
 
 -- security_invoker requires the caller to be able to read the base table.
 -- eval_rw is granted the view and, inside the same existence check, SELECT on
@@ -318,11 +351,20 @@ BEGIN
     GRANT USAGE ON SCHEMA app TO eval_rw;
     GRANT SELECT ON app.audit_current TO eval_rw;
     GRANT SELECT ON app.audit_case TO eval_rw;
+    GRANT SELECT ON app.audit_live TO eval_rw;
+    GRANT SELECT ON app.test_cases TO eval_rw;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies
       WHERE schemaname = 'app' AND tablename = 'audit_case' AND policyname = 'audit_case_eval_rw_select'
     ) THEN
       CREATE POLICY audit_case_eval_rw_select ON app.audit_case
+        FOR SELECT TO eval_rw USING (true);
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'app' AND tablename = 'test_cases' AND policyname = 'test_cases_eval_rw_select'
+    ) THEN
+      CREATE POLICY test_cases_eval_rw_select ON app.test_cases
         FOR SELECT TO eval_rw USING (true);
     END IF;
   END IF;

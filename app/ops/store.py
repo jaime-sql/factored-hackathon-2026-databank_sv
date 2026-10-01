@@ -1,9 +1,9 @@
 """SQLite and Postgres operational store.
 
 Audit rows are inserted, never updated. A correction is a new row whose
-supersedes_audit_id points at the row it replaces. KPIs read audit_current,
-the tip of each chain. SQLite mirrors that rule in this process because it
-has no roles.
+supersedes_audit_id points at the row it replaces. audit_current is the tip
+of each chain and stays unfiltered for the eval runner. Desk KPIs read
+audit_live. SQLite mirrors that rule in this process because it has no roles.
 """
 
 from __future__ import annotations
@@ -240,6 +240,12 @@ class OpsStore:
                   value REAL NOT NULL,
                   note TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS test_cases (
+                  case_id TEXT PRIMARY KEY,
+                  marked_at TEXT NOT NULL,
+                  reason TEXT
+                );
+                DROP VIEW IF EXISTS audit_live;
                 DROP VIEW IF EXISTS audit_current;
                 CREATE VIEW audit_current AS
                 SELECT * FROM audit_case AS a
@@ -278,17 +284,20 @@ class OpsStore:
             path = project_root() / "migrations" / "002_is_test.sql"
             statements = _sql_statements(path)
             with connect_app(self.dsn) as conn:
-                present = conn.execute(
+                column = conn.execute(
                     "SELECT 1 AS ok FROM information_schema.columns "
                     "WHERE table_schema = 'app' AND table_name = 'audit_case' "
                     "AND column_name = 'is_test'"
                 ).fetchone()
-                view = conn.execute(
-                    "SELECT 1 AS ok FROM information_schema.columns "
-                    "WHERE table_schema = 'app' AND table_name = 'audit_current' "
-                    "AND column_name = 'is_test'"
+                table = conn.execute(
+                    "SELECT 1 AS ok FROM information_schema.tables "
+                    "WHERE table_schema = 'app' AND table_name = 'test_cases'"
                 ).fetchone()
-                if present and view:
+                view = conn.execute(
+                    "SELECT 1 AS ok FROM information_schema.views "
+                    "WHERE table_schema = 'app' AND table_name = 'audit_live'"
+                ).fetchone()
+                if column and table and view:
                     return
                 for statement in statements:
                     try:
@@ -332,12 +341,17 @@ class OpsStore:
             ),
         )
 
-    def mark_case_test(self, case_id: str) -> None:
-        """Set is_test on one case. Does not delete the row."""
+    def insert_test_case(self, case_id: str, reason: str | None = None) -> None:
+        """Record a case id as test traffic. A repeat insert leaves the row as it is."""
         self._write(
-            f"UPDATE {self._table('cases')} SET is_test = ? WHERE case_id = ?",
-            (True, case_id),
+            f"INSERT INTO {self._table('test_cases')} (case_id, marked_at, reason) "
+            "VALUES (?, ?, ?) ON CONFLICT (case_id) DO NOTHING",
+            (case_id, _now(), reason),
         )
+
+    def test_case_ids(self) -> set[str]:
+        rows = self.execute(f"SELECT case_id FROM {self._table('test_cases')}")
+        return {str(row["case_id"]) for row in rows}
 
     def list_cases(self) -> list[dict[str, Any]]:
         rows = self.execute(f"SELECT * FROM {self._table('cases')}")
@@ -428,6 +442,11 @@ class OpsStore:
         for row in rows:
             row["is_test"] = flags.get(str(row.get("case_id")), False)
         return rows
+
+    def live_audit_cases(self) -> list[dict[str, Any]]:
+        """audit_current minus insert-time test rows, marked case ids, and eval tips."""
+        raw = self.execute(f"SELECT * FROM {self._table('audit_live')}")
+        return [_normalize_audit(row) for row in raw]
 
     def audit_chain(self, case_id: str) -> list[dict[str, Any]]:
         """Tip from audit_current, then each superseded parent. Read-only."""
@@ -615,6 +634,7 @@ class OpsStore:
 
 
 _SQLITE_AUDIT_VIEWS = """
+DROP VIEW IF EXISTS audit_live;
 DROP VIEW IF EXISTS audit_current;
 CREATE VIEW audit_current AS
 SELECT * FROM audit_case AS a
@@ -629,6 +649,18 @@ WHERE NOT EXISTS (
   SELECT 1 FROM audit_llm_call AS newer
   WHERE newer.supersedes_audit_id = a.audit_id
 );
+CREATE VIEW audit_live AS
+SELECT cur.*
+FROM audit_current AS cur
+WHERE cur.eval_run_id IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_case AS src
+    WHERE src.audit_id = cur.audit_id AND src.is_test = 1
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM test_cases AS marked
+    WHERE marked.case_id = cur.case_id
+  );
 """
 
 _SQL_COMMENT = re.compile(r"--.*?$", re.MULTILINE)
@@ -642,8 +674,32 @@ def _add_sqlite_is_test(conn: sqlite3.Connection) -> None:
 
 
 def _sql_statements(path: Path) -> list[str]:
+    """Split a migration on semicolons that are outside dollar quotes."""
     cleaned = _SQL_COMMENT.sub("", path.read_text(encoding="utf-8"))
-    return [part.strip() for part in cleaned.split(";") if part.strip()]
+    statements: list[str] = []
+    buf: list[str] = []
+    in_dollar = False
+    index = 0
+    while index < len(cleaned):
+        if cleaned.startswith("$$", index):
+            in_dollar = not in_dollar
+            buf.append("$$")
+            index += 2
+            continue
+        char = cleaned[index]
+        if char == ";" and not in_dollar:
+            statement = "".join(buf).strip()
+            if statement:
+                statements.append(statement)
+            buf = []
+            index += 1
+            continue
+        buf.append(char)
+        index += 1
+    tail = "".join(buf).strip()
+    if tail:
+        statements.append(tail)
+    return statements
 
 
 def _as_bool(value: object) -> bool:

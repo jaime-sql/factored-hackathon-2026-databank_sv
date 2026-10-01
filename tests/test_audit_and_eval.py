@@ -139,6 +139,21 @@ def test_audit_rows_are_append_only(client: TestClient) -> None:
             (opened["case_id"],),
         )
     assert client.app.state.ops.audit_case_count(opened["case_id"]) == before
+    with pytest_raises():
+        client.app.state.ops.execute(
+            "UPDATE test_cases SET reason = 'changed' WHERE case_id = ?",
+            (opened["case_id"],),
+        )
+    with pytest_raises():
+        client.app.state.ops.execute(
+            "DELETE FROM audit_case WHERE case_id = ?",
+            (opened["case_id"],),
+        )
+    with pytest_raises():
+        client.app.state.ops.execute(
+            "DELETE FROM test_cases WHERE case_id = ?",
+            (opened["case_id"],),
+        )
     contested = client.post(
         f"/cases/{opened['case_id']}/actions",
         headers=headers,
@@ -190,6 +205,42 @@ def test_migration_grants_audit_current_to_eval_rw_if_the_role_exists() -> None:
     assert "case_source" in sql
     assert "statement_timeout = '15s'" in sql
     assert "app_rw" in sql
+    view_sql = sql[
+        sql.index("CREATE OR REPLACE VIEW app.audit_current") : sql.index(
+            "CREATE OR REPLACE VIEW app.audit_llm_call_current"
+        )
+    ]
+    assert "is_test" not in view_sql
+    assert "test_cases" not in view_sql
+    assert "eval_run_id" not in view_sql
+    assert "GRANT SELECT, INSERT ON app.test_cases TO app_rw" in sql
+    assert "REVOKE UPDATE, DELETE ON app.test_cases FROM app_rw" in sql
+    assert "GRANT SELECT ON app.audit_live TO app_rw" in sql
+    assert "GRANT SELECT ON app.audit_live TO eval_rw" in sql
+    assert "GRANT SELECT ON app.test_cases TO eval_rw" in sql
+    assert "GRANT UPDATE" not in sql
+    assert "GRANT DELETE" not in sql
+    sql002 = (ROOT / "migrations" / "002_is_test.sql").read_text(encoding="utf-8")
+    assert "CREATE OR REPLACE VIEW app.audit_current" not in sql002
+    assert "CREATE OR REPLACE VIEW app.audit_live" in sql002
+    for phrase in (
+        "ON app.audit_case TO",
+        "ON app.audit_llm_call TO",
+        "ON app.audit_event TO",
+        "ON app.audit_current TO",
+        "ON app.audit_case FROM",
+        "ON app.audit_llm_call FROM",
+        "ON app.audit_event FROM",
+    ):
+        assert phrase not in sql002, phrase
+    from app.ops.store import _sql_statements
+
+    parts = _sql_statements(ROOT / "migrations" / "002_is_test.sql")
+    do_blocks = [part for part in parts if "DO $$" in part]
+    assert len(do_blocks) == 1
+    assert "GRANT SELECT ON app.audit_live TO eval_rw" in do_blocks[0]
+    assert "GRANT SELECT ON app.test_cases TO eval_rw" in do_blocks[0]
+    assert "END $$" in do_blocks[0]
 
 
 def test_app_code_does_not_read_eval_labels() -> None:

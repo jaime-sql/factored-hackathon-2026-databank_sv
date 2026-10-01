@@ -303,8 +303,21 @@ def test_sqlite_migration_adds_is_test_to_an_existing_file(tmp_path: Path) -> No
         }
     )
     assert ops.get_case(case_id)["is_test"] is False
+    with sqlite3.connect(path) as conn:
+        tables = {
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        views = {
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'view'")
+        }
+    assert "test_cases" in tables
+    assert "audit_current" in views
+    assert "audit_live" in views
     sql = (ROOT / "migrations" / "002_is_test.sql").read_text(encoding="utf-8")
     assert "ADD COLUMN IF NOT EXISTS is_test boolean NOT NULL DEFAULT false" in sql
+    assert "CREATE TABLE IF NOT EXISTS app.test_cases" in sql
+    assert "CREATE OR REPLACE VIEW app.audit_live" in sql
+    assert "CREATE OR REPLACE VIEW app.audit_current" not in sql
     assert re.search(r"(?i)\bdelete\s+from\b", sql) is None
 
 
@@ -368,26 +381,129 @@ def test_backfill_marks_ids_or_a_cutoff_and_deletes_nothing(tmp_path: Path) -> N
 
     seed(old_id, audit_old, older)
     seed(new_id, audit_new, newer)
-    before_count = ops.audit_case_count(old_id) + ops.audit_case_count(new_id)
-    marked = mark_cases_test(ops, case_ids=[old_id, "missing-id"])
+    before_audit = ops.audit_case_count(old_id) + ops.audit_case_count(new_id)
+    before_current = len(ops.current_audit_cases())
+    marked = mark_cases_test(ops, case_ids=[old_id, "missing-id"], reason="demo")
     assert marked == [old_id]
-    assert ops.get_case(old_id)["is_test"] is True
+    assert ops.get_case(old_id)["is_test"] is False
     assert ops.get_case(new_id)["is_test"] is False
-    assert ops.audit_case_count(old_id) == 2
+    assert len(ops.current_audit_cases()) == before_current
+    assert ops.audit_case_count(old_id) + ops.audit_case_count(new_id) == before_audit
+    assert ops.test_case_ids() == {old_id}
+    live_ids = {row["case_id"] for row in ops.live_audit_cases()}
+    assert old_id not in live_ids
+    assert new_id in live_ids
     tip = next(row for row in ops.current_audit_cases() if row["case_id"] == old_id)
-    assert tip["is_test"] is True
-    assert tip["supersedes_audit_id"] == audit_old
+    assert tip["is_test"] is False
+    assert tip["supersedes_audit_id"] is None
     again = mark_cases_test(ops, case_ids=[old_id])
     assert again == [old_id]
-    assert ops.audit_case_count(old_id) == 2
+    assert ops.test_case_ids() == {old_id}
+    assert len(ops.current_audit_cases()) == before_current
     cutoff = newer - timedelta(hours=1)
     marked_before = mark_cases_test(ops, before=cutoff)
     assert old_id in marked_before
     assert new_id not in marked_before
-    assert ops.audit_case_count(old_id) + ops.audit_case_count(new_id) >= before_count
+    assert ops.audit_case_count(old_id) + ops.audit_case_count(new_id) == before_audit
     source = (ROOT / "scripts" / "mark_demo_cases_test.py").read_text(encoding="utf-8")
+    store_source = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
     assert re.search(r"(?i)\bdelete\s+from\b", source) is None
+    assert re.search(r"(?i)\bupdate\b", source) is None
+    assert "insert_test_case" in source
+    assert "ON CONFLICT (case_id) DO NOTHING" in store_source
     assert "mark_cases_test(" in source
+
+
+def _seed_tip(
+    ops: OpsStore,
+    case_id: str,
+    *,
+    is_test: bool = False,
+    eval_run_id: str | None = None,
+) -> None:
+    now = datetime.now(UTC)
+    ops.insert_case(
+        {
+            "case_id": case_id,
+            "customer_key": "ck_mx_maria",
+            "transaction_key": None,
+            "state": "closed",
+            "language": "es",
+            "case_type": "other",
+            "created_at": now,
+            "updated_at": now,
+            "closed_at": now,
+            "latest_audit_id": case_id,
+            "is_eval_case": eval_run_id is not None,
+            "eval_run_id": eval_run_id,
+            "case_source": "sample" if eval_run_id else None,
+            "is_test": is_test,
+        }
+    )
+    ops.append_audit_case(
+        {
+            "audit_id": case_id,
+            "case_id": case_id,
+            "supersedes_audit_id": None,
+            "recorded_at": now,
+            "case_type": "other",
+            "customer_segment": "Basic",
+            "final_resolution_status": "closed",
+            "case_created_at": now,
+            "case_closed_at": now,
+            "decision": "abandoned",
+            "automation_attempted": False,
+            "handoff_reason": None,
+            "handoff_packet_complete": None,
+            "language": "es",
+            "country": "MX",
+            "accent_group": None,
+            "rule_or_model_version": "rule",
+            "prompt_version": "prompt_v1",
+            "fraud_score": None,
+            "model_risk_score": None,
+            "guardrail_flags": [],
+            "is_eval_case": eval_run_id is not None,
+            "eval_run_id": eval_run_id,
+            "case_source": "sample" if eval_run_id else None,
+            "is_test": is_test,
+        }
+    )
+
+
+def test_audit_live_excludes_inserted_test_marked_ids_and_eval(tmp_path: Path) -> None:
+    ops = OpsStore("sqlite", path=str(tmp_path / "ops.sqlite"))
+    live_id = new_case_id()
+    inserted_id = new_case_id()
+    marked_id = new_case_id()
+    eval_id = new_case_id()
+    _seed_tip(ops, live_id)
+    _seed_tip(ops, inserted_id, is_test=True)
+    _seed_tip(ops, marked_id)
+    _seed_tip(ops, eval_id, eval_run_id="run-live")
+    before_current = len(ops.current_audit_cases())
+    ops.insert_test_case(marked_id, "demo")
+    assert len(ops.current_audit_cases()) == before_current == 4
+    assert {row["case_id"] for row in ops.live_audit_cases()} == {live_id}
+
+
+def test_metrics_drop_marked_ids_until_admin_includes_them(client: TestClient) -> None:
+    headers = login(client, "maria")
+    opened = _open(client, headers)
+    case_id = str(opened["case_id"])
+    before = len(client.app.state.ops.current_audit_cases())
+    client.app.state.ops.insert_test_case(case_id, "demo")
+    assert len(client.app.state.ops.current_audit_cases()) == before
+    quiet = client.get("/api/metrics").json()
+    assert quiet["k1_volume"]["total"] == 0
+    assert quiet["excluded_test_cases"] == 1
+    included = client.get("/api/metrics?include_test=1", headers=ADMIN).json()
+    assert included["k1_volume"]["total"] == 1
+    assert included["excluded_test_cases"] == 0
+    export = client.get("/audit/export", headers=ADMIN)
+    assert export.text.count("\n") == 1
+    exported = client.get("/audit/export?include_test=1", headers=ADMIN)
+    assert case_id in exported.text
 
 
 def test_customer_page_sends_the_query_token_without_keeping_it() -> None:

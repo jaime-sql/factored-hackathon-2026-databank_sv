@@ -455,6 +455,28 @@ def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str
     return {"status": "resolved"}
 
 
+def _audit_rows_for_read(
+    ops: Any, *, include_eval: bool, include_test: bool
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Default reads audit_live. Admin include flags read audit_current."""
+    current = ops.current_audit_cases()
+    test_ids = ops.test_case_ids()
+    if include_eval or include_test:
+        return select_cases(
+            current,
+            include_eval=include_eval,
+            include_test=include_test,
+            test_ids=test_ids,
+        )
+    _, excluded_eval, excluded_test = select_cases(
+        current,
+        include_eval=False,
+        include_test=False,
+        test_ids=test_ids,
+    )
+    return ops.live_audit_cases(), excluded_eval, excluded_test
+
+
 @router.get("/api/metrics")
 def metrics(
     request: Request,
@@ -467,13 +489,18 @@ def metrics(
     include_eval = _admin_include(request, include_eval)
     include_test = _admin_include(request, include_test)
     ops = request.app.state.ops
+    rows, excluded_eval, excluded_test = _audit_rows_for_read(
+        ops, include_eval=include_eval, include_test=include_test
+    )
     payload = compute_metrics(
-        ops.current_audit_cases(),
+        rows,
         ops.current_llm_calls(),
         ops.prices(),
         ops.assumptions(),
         include_eval=include_eval,
         include_test=include_test,
+        excluded_eval=excluded_eval,
+        excluded_test=excluded_test,
     )
     if language in {"es", "pt"}:
         payload = localize_metrics(payload, language)
@@ -488,10 +515,8 @@ def export_audit(
     _agent(request, admin_only=True)
     include_eval = _admin_include(request, include_eval)
     include_test = _admin_include(request, include_test)
-    rows, _, _ = select_cases(
-        request.app.state.ops.current_audit_cases(),
-        include_eval=include_eval,
-        include_test=include_test,
+    rows, _, _ = _audit_rows_for_read(
+        request.app.state.ops, include_eval=include_eval, include_test=include_test
     )
     buffer = io.StringIO()
     fieldnames = [

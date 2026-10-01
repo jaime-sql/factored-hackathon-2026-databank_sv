@@ -1,6 +1,7 @@
-"""Mark existing demo cases as test traffic.
+"""Insert demo case ids into test_cases.
 
-Does not delete rows and does not run on startup. Pass case ids, a cutoff, or both.
+Does not change audit rows and does not run on startup. A second run leaves
+existing ids in place. Pass case ids, a cutoff, or both.
 
     uv run python scripts/mark_demo_cases_test.py CASE_ID [CASE_ID ...]
     uv run python scripts/mark_demo_cases_test.py --before 2026-10-01T00:00:00Z
@@ -11,10 +12,8 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import UTC, datetime
-from typing import Any
 
 from app.config import Settings
-from app.ids import new_case_id
 from app.ops.store import OpsStore
 from app.paths import project_root
 
@@ -42,13 +41,13 @@ def mark_cases_test(
     ops: OpsStore,
     case_ids: list[str] | None = None,
     before: datetime | None = None,
+    reason: str | None = None,
 ) -> list[str]:
-    """Set is_test on matching cases and append an audit tip. Nothing is deleted."""
+    """Insert matching case ids into test_cases. Audit rows stay as inserted."""
     if not case_ids and before is None:
         raise ValueError("pass case ids or before")
     wanted = {item.strip() for item in (case_ids or []) if item.strip()}
-    tips = {str(row["case_id"]): row for row in ops.current_audit_cases()}
-    updated: list[str] = []
+    marked: list[str] = []
     seen: set[str] = set()
     for case in ops.list_cases():
         case_id = str(case["case_id"])
@@ -64,22 +63,12 @@ def mark_cases_test(
                 continue
         elif not by_time:
             continue
-        ops.mark_case_test(case_id)
-        tip = tips.get(case_id)
-        if tip is not None and not tip.get("is_test"):
-            audit_id = new_case_id()
-            copied: dict[str, Any] = dict(tip)
-            copied["audit_id"] = audit_id
-            copied["supersedes_audit_id"] = tip["audit_id"]
-            copied["is_test"] = True
-            copied["recorded_at"] = datetime.now(UTC)
-            ops.append_audit_case(copied)
-            ops.update_case(case_id, {"latest_audit_id": audit_id, "updated_at": datetime.now(UTC)})
-        updated.append(case_id)
+        ops.insert_test_case(case_id, reason)
+        marked.append(case_id)
     missing = sorted(wanted - seen)
     for case_id in missing:
         print(f"not found: {case_id}", file=sys.stderr)
-    return updated
+    return marked
 
 
 def _store(settings: Settings) -> OpsStore:
@@ -93,12 +82,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Mark demo cases as test traffic")
     parser.add_argument("case_ids", nargs="*", help="case ids to mark")
     parser.add_argument("--before", help="also mark cases created before this timestamp")
+    parser.add_argument("--reason", help="stored next to the case id")
     args = parser.parse_args(argv)
     if not args.case_ids and not args.before:
         parser.error("pass case ids or --before")
     before = _parse_before(args.before) if args.before else None
-    updated = mark_cases_test(_store(Settings()), args.case_ids, before)
-    print(f"marked {len(updated)} case(s)")
+    marked = mark_cases_test(_store(Settings()), args.case_ids, before, args.reason)
+    print(f"marked {len(marked)} case(s)")
     return 0
 
 

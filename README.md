@@ -29,13 +29,13 @@ SQLite uses the synthetic fixture in `app/bank/fixture.py`. With `DATABASE_URL` 
 
 `DATABASE_URL` is read from the environment only. Leave it empty for SQLite. Never commit a real URL.
 
-The app connects as the `app_rw` role: read public data tables, no writes to them, no access to `eval`, statement timeout 15 seconds. Apply `migrations/001_app_schema.sql` yourself as the owner. The app does not run that file. `migrations/002_is_test.sql` adds `is_test` and is applied on startup when the role can alter the tables; otherwise the owner runs it too. On Cloud Run the URL belongs in Secret Manager; `deploy/cloudrun.sh` uploads the environment value into a secret and passes the secret name, not the URL, to the service.
+The app connects as the `app_rw` role: read public data tables, no writes to them, no access to `eval`, statement timeout 15 seconds. Apply `migrations/001_app_schema.sql` yourself as the owner. The app does not run that file. `migrations/002_is_test.sql` adds the insert-time `is_test` columns, `app.test_cases`, and `app.audit_live`. It does not replace `app.audit_current` and it does not change grants on the audit tables. Startup applies it when the role can; otherwise the owner runs it too. On Cloud Run the URL belongs in Secret Manager; `deploy/cloudrun.sh` uploads the environment value into a secret and passes the secret name, not the URL, to the service.
 
 Model features are read from `public.fraud_features` joined to the customer’s transaction. Pending and Reversed charges have no feature row. If any other status has no feature row, the desk routes it to REVIEW and never LOW.
 
 ## Eval runner
 
-`POST /cases` accepts optional `eval_run_id` and `case_source` (`sample`, `synthetic_dup`, `red_team`, `ood_sv_text`, `pt_translated`) only when the `EVAL_RUNNER_TOKEN` header matches the environment value. Without that header the fields are stored as null. Case ids are server-generated text UUIDs. Both fields are on the case, on each audit row, and on `app.audit_current`, which the runner joins to its labels.
+`POST /cases` accepts optional `eval_run_id` and `case_source` (`sample`, `synthetic_dup`, `red_team`, `ood_sv_text`, `pt_translated`) only when the `EVAL_RUNNER_TOKEN` header matches the environment value. Without that header the fields are stored as null. Case ids are server-generated text UUIDs. Both fields are on the case, on each audit row, and on `app.audit_current`, which the runner joins to its labels. That view stays unfiltered so `eval_rw` still sees test and eval tips.
 
 The metrics page excludes eval traffic by default. The toggle label comes from the language catalog (Spanish by default on the page; the unscoped API still returns the English demo-sample warning). `include_eval=1` changes the totals only when the request presents the admin token. A missing or wrong token leaves the rows out and still returns 200.
 
@@ -47,9 +47,9 @@ A browser session started at `/?test=<token>`, or any request with header `X-Tes
 
 Eval runs are unchanged and never set `is_test`, even if the test header is also present.
 
-`/api/metrics` and `GET /audit/export` leave out both test rows and eval rows unless the admin token is present with `include_test=1` or `include_eval=1`. The export adds an `is_test` column. A judge token cannot bring those rows back.
+`/api/metrics` and `GET /audit/export` read `app.audit_live` by default. That view leaves out insert-time `is_test` rows, case ids listed in `app.test_cases`, and tips whose `eval_run_id` is set. An admin token with `include_test=1` or `include_eval=1` reads `app.audit_current` and applies only the filters that were not requested. The export adds an `is_test` column. A judge token cannot bring those rows back.
 
-To mark older demo rows after the fact, without deleting anything and without running it on startup:
+To mark older demo case ids after the fact, insert them into `app.test_cases`. The script does not change audit rows and it is not run on startup. A second run leaves existing ids in place:
 
 ```bash
 uv run python scripts/mark_demo_cases_test.py --before 2026-10-01T00:00:00Z
