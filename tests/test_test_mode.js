@@ -94,6 +94,9 @@ const context = {
 };
 context.window = context;
 context.globalThis = context;
+vm.runInNewContext(fs.readFileSync("static/js/catalog.js", "utf8"), context, {
+  filename: "static/js/catalog.js",
+});
 vm.runInNewContext(fs.readFileSync("static/js/desk.js", "utf8"), context, { filename: "desk.js" });
 
 setTimeout(async () => {

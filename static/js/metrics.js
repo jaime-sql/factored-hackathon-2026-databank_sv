@@ -27,7 +27,7 @@ function revealCopy() {
 
 const box = document.getElementById("include-eval");
 const label = document.getElementById("eval-label");
-let catalog = null;
+let catalog = globalThis.HD_CATALOG || null;
 let language = storedLanguage();
 let adminToken = "";
 let metricsGeneration = 0;
@@ -150,14 +150,10 @@ if (langButton) {
   });
 }
 
-fetch("/api/i18n")
-  .then((res) => res.json())
-  .then((body) => {
-    catalog = body;
-    applyMetricsLanguage();
-  })
-  .catch(() => {})
-  .then(() => fetch("/api/auth/config").then((res) => (res.ok ? res.json() : {})).catch(() => ({})))
+applyMetricsLanguage();
+fetch("/api/auth/config")
+  .then((res) => (res.ok ? res.json() : {}))
+  .catch(() => ({}))
   .then((config) => {
     adminToken = (config && config.demo_token) || "";
     return fetch("/api/test-mode")

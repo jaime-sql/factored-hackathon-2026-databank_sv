@@ -53,7 +53,7 @@ const state = {
   language: storedLanguage(),
   token: "",
   caseId: null,
-  catalog: null,
+  catalog: globalThis.HD_CATALOG || null,
   personas: [],
   testMode: false,
   testToken: "",
@@ -340,16 +340,11 @@ document.getElementById("lang").addEventListener("click", () => {
   refreshCharges();
 });
 
-async function bootstrap() {
-  try {
-    state.catalog = await fetch("/api/i18n").then((res) => res.json());
-  } catch {
-    state.catalog = null;
-  }
-  bindTestArm();
-  await refreshTestMode();
+function bootstrap() {
   applyLanguage();
-  await loadPersonas();
+  bindTestArm();
+  refreshTestMode();
+  loadPersonas();
 }
 
 bootstrap();

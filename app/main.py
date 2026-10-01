@@ -18,6 +18,7 @@ from app.cases.engine import Engine
 from app.config import Settings, get_settings
 from app.errors import APIError
 from app.guardrails.pii import set_known_names
+from app.i18n import write_catalog_script
 from app.logging_config import configure_logging
 from app.ops.store import OpsStore
 from app.paths import project_root
@@ -70,6 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(router)
+    write_catalog_script()
     static = project_root() / "static"
     if static.exists():
         app.mount("/static", StaticFiles(directory=static), name="static")

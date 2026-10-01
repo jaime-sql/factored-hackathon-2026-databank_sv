@@ -13,11 +13,9 @@
       } catch (e) {}
       document.documentElement.lang = lang;
       document.documentElement.classList.add("i18n-pending");
-      setTimeout(function () {
-        document.documentElement.classList.remove("i18n-pending");
-      }, 1200);
     })();
   </script>
+  <script src="/static/js/catalog.js"></script>
   <link rel="icon" href="/favicon.ico" />
   <link rel="stylesheet" href="/static/css/app.css" />
 </head>

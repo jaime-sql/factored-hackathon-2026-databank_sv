@@ -175,6 +175,16 @@ def test_every_category_has_spanish_and_portuguese() -> None:
     assert category_label("pt", "Entretenimiento") == "Entretenimento"
 
 
+def test_page_catalog_is_generated_from_ui_catalog() -> None:
+    from app.i18n import catalog_script, write_catalog_script
+
+    path = write_catalog_script()
+    script = path.read_text(encoding="utf-8")
+    assert script == catalog_script()
+    assert script.startswith("// Generated from app.i18n.ui_catalog. Do not edit.\n")
+    assert "globalThis.HD_CATALOG=" in script
+
+
 def test_locale_toggle_on_each_page() -> None:
     completed = subprocess.run(
         ["node", "tests/test_locale.js"],

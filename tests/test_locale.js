@@ -276,6 +276,9 @@ function run(filename, document, fetchImpl) {
   context.window = context;
   context.globalThis = context;
   context.addEventListener = () => {};
+  vm.runInNewContext(fs.readFileSync("static/js/catalog.js", "utf8"), context, {
+    filename: "static/js/catalog.js",
+  });
   vm.runInNewContext(fs.readFileSync(filename, "utf8"), context, { filename });
   return context;
 }
@@ -431,6 +434,13 @@ for (const file of ["static/index.html", "static/agent.html", "static/metrics.ht
   assert.ok(html.includes('localStorage.getItem("hd_lang")'), file);
   assert.ok(html.includes("i18n-pending"), file);
   assert.ok(html.includes("visibility:hidden"), file);
+  assert.ok(html.includes('src="/static/js/catalog.js"'), file);
+  assert.equal(html.includes("setTimeout"), false, file);
+  assert.equal(html.includes("/api/i18n"), false, file);
+}
+for (const file of ["static/js/desk.js", "static/js/agent.js", "static/js/metrics.js"]) {
+  const source = fs.readFileSync(file, "utf8");
+  assert.equal(source.includes("/api/i18n"), false, file);
 }
 
 function charges(lang) {
@@ -728,6 +738,148 @@ async function testMetrics() {
   assertAbsent(text, ptOnly, "metrics es again");
 }
 
+function refuseI18n(url, extras) {
+  const href = String(url);
+  if (href.includes("/api/i18n")) throw new Error("pages must not fetch /api/i18n");
+  return extras(href);
+}
+
+async function testBundledPortuguese() {
+  memoryStore.set("hd_lang", "pt");
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(String(url));
+    return refuseI18n(String(url), (href) => {
+      if (href.includes("/api/personas")) return jsonResponse(200, { personas });
+      if (href.includes("/api/test-mode")) return jsonResponse(200, { is_test: false });
+      if (href.includes("/api/auth/config")) return jsonResponse(200, {});
+      if (href.includes("/api/metrics")) {
+        return jsonResponse(200, {
+          eval_toggle_label: catalog.pt.eval_toggle,
+          excluded_eval_cases: 0,
+          excluded_test_cases: 0,
+          k1_volume: { total: 2 },
+          k5_handoff: { display: "0 / 2" },
+          k6_containment: { display: "2 / 2" },
+        });
+      }
+      return jsonResponse(404, {});
+    });
+  };
+
+  const client = makeDocument("client");
+  client.documentElement.classList.add("i18n-pending");
+  header(client, "Harbor Desk", catalog.es.client_lede);
+  const message = client.createElement("input");
+  message.id = "message";
+  message.placeholder = "Mensaje";
+  const send = client.createElement("button");
+  send.id = "send";
+  send.textContent = "Enviar";
+  const composer = client.createElement("form");
+  composer.id = "composer";
+  composer.append(message, send);
+  const testLink = client.createElement("button");
+  testLink.id = "test-mode-link";
+  testLink.textContent = "Modo de prueba";
+  const testLabel = client.createElement("label");
+  testLabel.id = "test-token-label";
+  testLabel.textContent = "Token de prueba";
+  const testToken = client.createElement("input");
+  testToken.id = "test-token";
+  testToken.placeholder = "Token de prueba";
+  const testSend = client.createElement("button");
+  testSend.id = "test-mode-send";
+  testSend.textContent = "Activar";
+  const personasBox = client.createElement("section");
+  personasBox.id = "personas";
+  const chargesBox = client.createElement("section");
+  chargesBox.id = "charges";
+  client.body.append(personasBox, chargesBox, composer, testLink, testLabel, testToken, testSend);
+  run("static/js/desk.js", client, fetchImpl);
+  run("static/js/tour.js", client, fetchImpl);
+  await flush();
+  let text = blob(client);
+  assert.equal(client.documentElement.lang, "pt");
+  assert.equal(client.documentElement.className.includes("i18n-pending"), false);
+  assert.ok(text.includes(catalog.pt.client_lede), text);
+  assert.ok(text.includes(catalog.pt.tour_open), text);
+  assert.ok(text.includes(catalog.pt.lang_name), text);
+  assert.ok(text.includes("Console"), text);
+  assert.ok(text.includes("Mensagem"), text);
+  assert.ok(text.includes("Modo de teste"), text);
+  assert.ok(text.includes("Token de teste"), text);
+  assert.ok(text.includes("Colômbia"), text);
+  assert.ok(text.includes("Pessoa sintética"), text);
+  assertAbsent(
+    text,
+    [catalog.es.client_lede, "Consola", "¿Cómo funciona?", "Español", "Mensaje", "Modo de prueba", "Persona sintética"],
+    "bundled client pt",
+  );
+
+  const agent = makeDocument("agent");
+  agent.documentElement.classList.add("i18n-pending");
+  header(agent, catalog.es.agent_title, catalog.es.agent_lede);
+  const token = agent.createElement("input");
+  token.id = "token";
+  token.placeholder = catalog.es.token_placeholder;
+  const load = agent.createElement("button");
+  load.id = "load";
+  load.textContent = catalog.es.load_queue;
+  const queue = agent.createElement("section");
+  queue.id = "queue";
+  agent.body.append(token, load, queue);
+  run("static/js/agent.js", agent, fetchImpl);
+  run("static/js/tour.js", agent, fetchImpl);
+  await flush();
+  text = blob(agent);
+  assert.equal(agent.documentElement.lang, "pt");
+  assert.equal(agent.documentElement.className.includes("i18n-pending"), false);
+  assert.ok(text.includes(catalog.pt.agent_title), text);
+  assert.ok(text.includes(catalog.pt.agent_lede), text);
+  assert.ok(text.includes(catalog.pt.token_placeholder), text);
+  assert.ok(text.includes(catalog.pt.load_queue), text);
+  assert.ok(text.includes(catalog.pt.tour_open), text);
+  assertAbsent(
+    text,
+    [catalog.es.agent_title, catalog.es.agent_lede, catalog.es.token_placeholder, "Ver cola", "¿Cómo funciona?"],
+    "bundled agent pt",
+  );
+
+  const metrics = makeDocument("metrics");
+  metrics.documentElement.classList.add("i18n-pending");
+  header(metrics, catalog.es.metrics_title, catalog.es.metrics_lede);
+  const toggle = metrics.createElement("input");
+  toggle.id = "include-eval";
+  const evalLabel = metrics.createElement("span");
+  evalLabel.id = "eval-label";
+  evalLabel.textContent = catalog.es.eval_toggle;
+  const tiles = metrics.createElement("div");
+  tiles.id = "tiles";
+  const raw = metrics.createElement("pre");
+  raw.id = "raw";
+  metrics.body.append(toggle, evalLabel, tiles, raw);
+  run("static/js/metrics.js", metrics, fetchImpl);
+  run("static/js/tour.js", metrics, fetchImpl);
+  await flush();
+  text = blob(metrics);
+  assert.equal(metrics.documentElement.lang, "pt");
+  assert.equal(metrics.documentElement.className.includes("i18n-pending"), false);
+  assert.ok(text.includes(catalog.pt.metrics_lede), text);
+  assert.ok(text.includes(catalog.pt.eval_toggle), text);
+  assert.ok(text.includes(catalog.pt.tile_cases), text);
+  assert.ok(text.includes(catalog.pt.tile_handoff), text);
+  assert.ok(text.includes(catalog.pt.tile_eval), text);
+  assert.ok(text.includes("Console"), text);
+  assertAbsent(
+    text,
+    [catalog.es.metrics_lede, catalog.es.eval_toggle, catalog.es.tile_handoff, "¿Cómo funciona?", "Consola"],
+    "bundled metrics pt",
+  );
+  assert.equal(calls.some((url) => url.includes("/api/i18n")), false, calls.join("\n"));
+  memoryStore.set("hd_lang", "es");
+}
+
 async function testLanguagePersists() {
   memoryStore.set("hd_lang", "pt");
   const document = makeDocument("client");
@@ -752,6 +904,7 @@ testClient()
   .then(() => testAgent())
   .then(() => testMetrics())
   .then(() => testLanguagePersists())
+  .then(() => testBundledPortuguese())
   .then(() => console.log("locale ok"))
   .catch((error) => {
     console.error(error);

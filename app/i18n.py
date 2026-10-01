@@ -7,7 +7,9 @@ customers in this slice are in MX, CO, and AR.
 
 from __future__ import annotations
 
+import json
 from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
 
 PT_MARKERS = (
     "não",
@@ -250,10 +252,7 @@ def merchant_label(language: str, name: str, category: str, transaction_type: st
         return cleaned_name
     cleaned_category = (category or "").strip()
     if cleaned_category:
-        label = category_label(language, cleaned_category)
-        if language == "pt":
-            return f"categoria {label}"
-        return f"categoría {label}"
+        return category_label(language, cleaned_category)
     label = transaction_type_label(language, transaction_type)
     if label:
         return label
@@ -940,6 +939,29 @@ def ui_copy(language: str) -> dict[str, object]:
 
 def ui_catalog() -> dict[str, dict[str, object]]:
     return {"es": ui_copy("es"), "pt": ui_copy("pt")}
+
+
+def catalog_script() -> str:
+    """ES and PT strings for the pages. Generated from ui_catalog(); do not hand-edit."""
+    payload = json.dumps(ui_catalog(), ensure_ascii=False, separators=(",", ":"))
+    payload = (
+        payload.replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+    )
+    return (
+        f"// Generated from app.i18n.ui_catalog. Do not edit.\nglobalThis.HD_CATALOG={payload};\n"
+    )
+
+
+def write_catalog_script(path: Path | None = None) -> Path:
+    from app.paths import project_root
+
+    destination = path or (project_root() / "static" / "js" / "catalog.js")
+    text = catalog_script()
+    current = destination.read_text(encoding="utf-8") if destination.exists() else ""
+    if current != text:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(text, encoding="utf-8")
+    return destination
 
 
 _METRICS_TEXT = {

@@ -382,6 +382,7 @@ function applyConsoleLanguage() {
 }
 
 if (typeof document !== "undefined" && document.getElementById("load")) {
+  adoptCatalog(globalThis.HD_CATALOG || null);
   const langButton = document.getElementById("lang");
   if (langButton) {
     langButton.addEventListener("click", () => {
@@ -390,16 +391,9 @@ if (typeof document !== "undefined" && document.getElementById("load")) {
       applyConsoleLanguage();
       if (queueSeen) loadQueue();
     });
-    applyConsoleLanguage();
   }
+  applyConsoleLanguage();
   document.getElementById("load").addEventListener("click", loadQueue);
-  fetch("/api/i18n")
-    .then((res) => res.json())
-    .then((payload) => {
-      adoptCatalog(payload);
-      applyConsoleLanguage();
-    })
-    .catch(() => {});
   boot();
 }
 
