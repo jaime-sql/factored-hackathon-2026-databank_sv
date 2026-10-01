@@ -243,6 +243,35 @@ def test_migration_grants_audit_current_to_eval_rw_if_the_role_exists() -> None:
     assert "END $$" in do_blocks[0]
 
 
+def test_migration_003_leaves_app_rw_select_only_on_the_audit_views() -> None:
+    from app.ops.store import _privileges_are_select_only, _sql_statements
+
+    sql003 = (ROOT / "migrations" / "003_view_grants.sql").read_text(encoding="utf-8")
+    sql002 = (ROOT / "migrations" / "002_is_test.sql").read_text(encoding="utf-8")
+    revoke = (
+        "REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON "
+        "app.audit_current, app.audit_live, app.audit_llm_call_current FROM app_rw"
+    )
+    grant = (
+        "GRANT SELECT ON app.audit_current, app.audit_live, app.audit_llm_call_current TO app_rw"
+    )
+    assert revoke in sql003
+    assert grant in sql003
+    assert "alter default privileges" not in sql003.lower()
+    assert revoke not in sql002
+    parts = _sql_statements(ROOT / "migrations" / "003_view_grants.sql")
+    assert parts == [revoke, grant]
+    applied = "\n".join(parts).lower()
+    assert "eval_rw" not in applied
+    assert "default" not in applied
+    store = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
+    assert "003_view_grants.sql" in store
+    views = {"audit_current", "audit_live", "audit_llm_call_current"}
+    assert _privileges_are_select_only({name: {"SELECT"} for name in views})
+    assert not _privileges_are_select_only({name: {"SELECT", "INSERT"} for name in views})
+    assert not _privileges_are_select_only({"audit_current": {"SELECT"}})
+
+
 def test_app_code_does_not_read_eval_labels() -> None:
     for path in (ROOT / "app").rglob("*.py"):
         text = path.read_text(encoding="utf-8")

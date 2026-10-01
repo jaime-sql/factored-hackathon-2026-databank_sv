@@ -73,6 +73,7 @@ class OpsStore:
             self._init_sqlite()
         else:
             self._ensure_postgres_is_test()
+            self._ensure_postgres_view_grants()
         self.refresh_test_schema()
 
     def _q(self, sql: str) -> str:
@@ -384,6 +385,35 @@ class OpsStore:
                         return
         except Exception as exc:
             logger.warning("is_test migration skipped (%s)", type(exc).__name__)
+
+    def _ensure_postgres_view_grants(self) -> None:
+        """Apply migrations/003 when this role can. A refusal leaves startup up.
+
+        migrations_ok stays the test-schema probe. View privileges are not
+        folded into that flag.
+        """
+        try:
+            from app.db import connect_app
+            from app.paths import project_root
+
+            path = project_root() / "migrations" / "003_view_grants.sql"
+            statements = _sql_statements(path)
+            with connect_app(self.dsn) as conn:
+                if _privileges_are_select_only(_view_privileges(conn)):
+                    return
+                for statement in statements:
+                    try:
+                        conn.execute(statement)
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+                        logger.warning(
+                            "view grants were not applied; "
+                            "run migrations/003_view_grants.sql as the database owner"
+                        )
+                        return
+        except Exception as exc:
+            logger.warning("view grants migration skipped (%s)", type(exc).__name__)
 
     def insert_case(self, row: dict[str, Any]) -> None:
         self._insert_with_optional_test(
@@ -796,6 +826,28 @@ def _sql_statements(path: Path) -> list[str]:
     if tail:
         statements.append(tail)
     return statements
+
+
+_AUDIT_VIEWS = ("audit_current", "audit_live", "audit_llm_call_current")
+
+
+def _view_privileges(conn: Any) -> dict[str, set[str]]:
+    rows = conn.execute(
+        "SELECT table_name, privilege_type FROM information_schema.table_privileges "
+        "WHERE table_schema = 'app' AND grantee = 'app_rw' "
+        "AND table_name IN ('audit_current', 'audit_live', 'audit_llm_call_current')"
+    ).fetchall()
+    found: dict[str, set[str]] = {}
+    for row in rows:
+        name = str(row["table_name"])
+        found.setdefault(name, set()).add(str(row["privilege_type"]).upper())
+    return found
+
+
+def _privileges_are_select_only(found: dict[str, set[str]]) -> bool:
+    if set(found) != set(_AUDIT_VIEWS):
+        return False
+    return all(privileges == {"SELECT"} for privileges in found.values())
 
 
 def _placeholders(count: int) -> str:
