@@ -12,7 +12,7 @@ def test_blank_merchant_uses_category_then_type_then_rewrites() -> None:
         category="Food",
         transaction_type="Purchase",
     )
-    assert "El cargo de la categoría Food (159.62 USD)" in category
+    assert "El cargo de la categoría Comida (159.62 USD)" in category
     assert "de  (" not in category
 
     typed = reply_high(
@@ -36,7 +36,8 @@ def test_named_merchant_stays_in_the_sentence() -> None:
 
 def test_packet_merchant_uses_the_same_fallback() -> None:
     assert packet_merchant("es", "Farmacia Norte", "Food", "Purchase") == "Farmacia Norte"
-    assert packet_merchant("es", "", "Food", "Purchase") == "categoría Food"
+    assert packet_merchant("es", "", "Food", "Purchase") == "categoría Comida"
+    assert packet_merchant("pt", "", "Entertainment", "Purchase") == "categoria Entretenimento"
     assert packet_merchant("pt", "", "", "Purchase") == "tipo Compra"
     assert packet_merchant("es", "", "", "Payment") == "tipo Pago"
     assert packet_merchant("pt", "", "", "Withdrawal") == "tipo Saque"

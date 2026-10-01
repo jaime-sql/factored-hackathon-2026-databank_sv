@@ -10,7 +10,14 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.bank.fixture import build_rows
-from app.i18n import money, place_label, transaction_status_label, transaction_type_label, ui_copy
+from app.i18n import (
+    category_label,
+    money,
+    place_label,
+    transaction_status_label,
+    transaction_type_label,
+    ui_copy,
+)
 from app.timeutil import present_time
 from tests.conftest import login
 
@@ -137,6 +144,31 @@ def test_statuses_types_amounts_and_foreign_country(client: TestClient) -> None:
     )
     joined = " · ".join(part for part in parts if str(part or "").strip())
     assert "· ·" not in joined
+
+
+def test_every_category_has_spanish_and_portuguese() -> None:
+    mapping_path = ROOT / "triage/artifacts/category_mappings.json"
+    mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
+    found = set(mapping["transaction_category"]) | set(mapping["merchant_category"])
+    for table in build_rows():
+        for row in table:
+            if not isinstance(row, dict):
+                continue
+            for key in ("transaction_category", "merchant_category"):
+                value = str(row.get(key) or "").strip()
+                if value:
+                    found.add(value)
+    assert found
+    for category in sorted(found):
+        spanish = category_label("es", category)
+        portuguese = category_label("pt", category)
+        assert spanish
+        assert portuguese
+        assert spanish != category
+        assert portuguese != category
+    assert category_label("es", "Entertainment") == "Entretenimiento"
+    assert category_label("pt", "Entertainment") == "Entretenimento"
+    assert category_label("pt", "Entretenimiento") == "Entretenimento"
 
 
 def test_locale_toggle_on_each_page() -> None:

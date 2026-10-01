@@ -30,19 +30,21 @@ context.renderPacket(panel, {
 assert.equal(panel.hidden, false);
 assert.equal(panel.textContent.split("\n").includes(""), false);
 for (const part of [
-  "high",
+  "Alto",
   "rule_fs_gt30_v1",
   "fraud_score > 30",
   "220.00 MXN",
   "U•••",
   "15 ene 2026, 12:00 CST",
   "America/Mexico_City",
-  "block_card verified",
+  "Bloqueo de tarjeta verificado",
   "Riesgo alto: tarjeta bloqueada",
   "Revisar la tarjeta bloqueada.",
 ]) {
   assert.ok(panel.textContent.includes(part), part);
 }
+assert.equal(panel.textContent.includes("block_card"), false);
+assert.equal(panel.textContent.includes("\nhigh\n") || panel.textContent.startsWith("high\n"), false);
 assert.equal(panel.textContent.includes("fraud rate"), false);
 assert.equal(panel.textContent.includes("Prueba"), false);
 
@@ -100,7 +102,38 @@ context.renderPacket(
 );
 assert.ok(withTrail.textContent.includes("fraud rate in this band on val 1.2%"));
 assert.ok(withTrail.textContent.includes("lgbm:v"));
-assert.ok(withTrail.textContent.includes("handoff verified"));
+assert.ok(withTrail.textContent.includes("Traspaso verificado"));
+assert.equal(withTrail.textContent.includes("handoff verified"), false);
+assert.ok(withTrail.textContent.includes("Revisión"));
+context.consoleState.language = "pt";
+const portuguese = { textContent: "", hidden: true, dataset: {} };
+context.renderPacket(
+  portuguese,
+  {
+    band: "low",
+    model_version: "lgbm:v",
+    threshold_crossed: "score < 0.0002756",
+    amount: "10.00 MXN",
+    merchant: "U•••",
+    local_time: "15 jan 2026, 12:00 CST",
+    utc: "2026-01-15T18:00:00+00:00",
+    customer_tz: "America/Mexico_City",
+    actions_taken: [{ name: "block_card", verification_status: "verified" }],
+    reason_label: "Cliente pediu uma pessoa",
+    recommended_next_step: "Revisar",
+  },
+  {
+    steps: [
+      { kind: "action", at: "15 jan 2026, 12:01 CST", action: "handoff", verification: "verified" },
+    ],
+  },
+);
+assert.ok(portuguese.textContent.includes("Baixo"));
+assert.ok(portuguese.textContent.includes("Bloqueio de cartão verificado"));
+assert.ok(portuguese.textContent.includes("Repasse verificado"));
+assert.equal(portuguese.textContent.includes("block_card"), false);
+assert.equal(portuguese.textContent.includes("handoff verified"), false);
+context.consoleState.language = "es";
 
 assert.match(source, /\/api\/cases\/\$\{encodeURIComponent\(caseId\)\}\/trail/);
 const desk = fs.readFileSync("static/js/desk.js", "utf8");

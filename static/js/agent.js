@@ -55,6 +55,62 @@ function ui(key, fallback) {
   return (pack && pack[key]) || fallback;
 }
 
+const PACKET_LABELS = {
+  es: {
+    bands: { high: "Alto", low: "Bajo", review: "Revisión", out_of_scope: "Fuera de alcance" },
+    actions: {
+      "block_card verified": "Bloqueo de tarjeta verificado",
+      "block_card failed": "Bloqueo de tarjeta fallido",
+      "handoff verified": "Traspaso verificado",
+      "handoff failed": "Traspaso fallido",
+      "decline_block not_applicable": "Bloqueo no aplicado",
+      "contest not_applicable": "Impugnación registrada",
+      "open_dispute not_applicable": "Disputa abierta",
+    },
+    decisions: { handoff: "Traspaso" },
+  },
+  pt: {
+    bands: { high: "Alto", low: "Baixo", review: "Revisão", out_of_scope: "Fora de escopo" },
+    actions: {
+      "block_card verified": "Bloqueio de cartão verificado",
+      "block_card failed": "Bloqueio de cartão falhou",
+      "handoff verified": "Repasse verificado",
+      "handoff failed": "Repasse falhou",
+      "decline_block not_applicable": "Bloqueio não aplicado",
+      "contest not_applicable": "Contestação registrada",
+      "open_dispute not_applicable": "Disputa aberta",
+    },
+    decisions: { handoff: "Repasse" },
+  },
+};
+
+function packetLanguage() {
+  return consoleState.language === "pt" ? "pt" : "es";
+}
+
+function localizedToken(group, key) {
+  const cleaned = String(key || "").trim();
+  if (!cleaned) return "";
+  const lang = packetLanguage();
+  const pack = textPack();
+  const fromCatalog = pack && pack[group] && pack[group][cleaned];
+  if (fromCatalog) return fromCatalog;
+  const fallback = PACKET_LABELS[lang][group][cleaned];
+  return fallback || cleaned;
+}
+
+function bandLabel(band) {
+  return localizedToken("bands", band);
+}
+
+function actionLabel(name, status) {
+  return localizedToken("actions", `${name || ""} ${status || ""}`.trim());
+}
+
+function decisionLabel(decision) {
+  return localizedToken("decisions", decision);
+}
+
 function adoptCatalog(payload) {
   catalog = payload;
   if (!payload) return;
@@ -97,10 +153,11 @@ function showQueueStatus(box, kind, text) {
 
 function renderPacket(panel, view, trail) {
   const actions = (view.actions_taken || [])
-    .map((action) => `${action.name} ${action.verification_status}`)
+    .map((action) => actionLabel(action.name, action.verification_status))
+    .filter(Boolean)
     .join(", ");
   const lines = [
-    view.band,
+    bandLabel(view.band),
     view.model_version,
   ];
   if (view.model_risk_score != null) lines.push(String(view.model_risk_score));
@@ -119,17 +176,17 @@ function renderPacket(panel, view, trail) {
   if (view.is_test) lines.unshift(ui("test_chip", "Prueba"));
   for (const step of (trail && trail.steps) || []) {
     if (step.kind === "action") {
-      const action = `${step.action || ""} ${step.verification || ""}`.trim();
+      const action = actionLabel(step.action, step.verification);
       lines.push([step.at, action].filter(Boolean).join(" · "));
     } else {
       lines.push(
         [
           step.at,
           step.rule_or_model,
-          step.band,
+          bandLabel(step.band),
           step.threshold,
           (step.guardrail_flags || []).join(","),
-          step.handoff,
+          decisionLabel(step.handoff),
           step.reason_label,
         ]
           .filter(Boolean)
@@ -169,7 +226,7 @@ function fillCard(card, item) {
   meta.className = "meta";
   const chip = document.createElement("span");
   chip.className = "chip";
-  chip.textContent = item.band || "";
+  chip.textContent = bandLabel(item.band);
   meta.append(chip, document.createTextNode(` ${item.amount || ""}`));
   if (item.is_test) {
     const testChip = document.createElement("span");

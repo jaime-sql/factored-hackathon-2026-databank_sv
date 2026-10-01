@@ -385,12 +385,22 @@ function collectStrings(value, out) {
   }
 }
 
+function englishWord(word) {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "u");
+}
+
 function assertNoEnglish(text, label, extra = []) {
   for (const word of [...ENGLISH, ...extra]) {
-    const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${word}(?![\\p{L}\\p{N}_])`, "u");
-    assert.equal(pattern.test(text), false, `${label} still shows ${word}`);
+    assert.equal(englishWord(word).test(text), false, `${label} still shows ${word}`);
   }
 }
+
+assert.equal(englishWord("Transfer").test("Transferencia"), false);
+assert.equal(englishWord("Transfer").test("Transferência"), false);
+assert.equal(englishWord("Transfer").test("tipo Transferencia"), false);
+assert.equal(englishWord("Transfer").test("Transfer"), true);
+assert.equal(englishWord("Transfer").test("El tipo Transfer."), true);
 
 function catalogText(lang) {
   const out = [];

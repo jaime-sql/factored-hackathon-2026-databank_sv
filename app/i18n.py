@@ -138,11 +138,104 @@ def money(amount: float, currency: str, language: str = "es") -> str:
     return f"{label}{_NBSP}{number}"
 
 
+_CATEGORIES = {
+    "es": {
+        "Entertainment": "Entretenimiento",
+        "Food": "Comida",
+        "Health": "Salud",
+        "Other": "Otros",
+        "Services": "Servicios",
+        "Transport": "Transporte",
+    },
+    "pt": {
+        "Entertainment": "Entretenimento",
+        "Food": "Alimentação",
+        "Health": "Saúde",
+        "Other": "Outros",
+        "Services": "Serviços",
+        "Transport": "Transporte",
+    },
+}
+_CATEGORY_KEYS = {
+    label.casefold(): key for table in _CATEGORIES.values() for key, label in table.items()
+}
+_CATEGORY_KEYS.update({key.casefold(): key for key in _CATEGORIES["es"]})
+_BANDS = {
+    "es": {
+        "high": "Alto",
+        "low": "Bajo",
+        "review": "Revisión",
+        "out_of_scope": "Fuera de alcance",
+    },
+    "pt": {
+        "high": "Alto",
+        "low": "Baixo",
+        "review": "Revisão",
+        "out_of_scope": "Fora de escopo",
+    },
+}
+_ACTION_PHRASES = {
+    "es": {
+        "block_card verified": "Bloqueo de tarjeta verificado",
+        "block_card failed": "Bloqueo de tarjeta fallido",
+        "handoff verified": "Traspaso verificado",
+        "handoff failed": "Traspaso fallido",
+        "decline_block not_applicable": "Bloqueo no aplicado",
+        "contest not_applicable": "Impugnación registrada",
+        "open_dispute not_applicable": "Disputa abierta",
+    },
+    "pt": {
+        "block_card verified": "Bloqueio de cartão verificado",
+        "block_card failed": "Bloqueio de cartão falhou",
+        "handoff verified": "Repasse verificado",
+        "handoff failed": "Repasse falhou",
+        "decline_block not_applicable": "Bloqueio não aplicado",
+        "contest not_applicable": "Contestação registrada",
+        "open_dispute not_applicable": "Disputa aberta",
+    },
+}
+_DECISIONS = {
+    "es": {"handoff": "Traspaso"},
+    "pt": {"handoff": "Repasse"},
+}
+
+
 def transaction_type_label(language: str, transaction_type: str) -> str:
     cleaned = (transaction_type or "").strip()
     if not cleaned:
         return ""
     return _TRANSACTION_TYPES[_ui_language(language)].get(cleaned, cleaned)
+
+
+def category_label(language: str, category: str) -> str:
+    cleaned = (category or "").strip()
+    if not cleaned:
+        return ""
+    key = _CATEGORY_KEYS.get(cleaned.casefold())
+    if key is None:
+        return cleaned
+    return _CATEGORIES[_ui_language(language)][key]
+
+
+def band_label(language: str, band: str) -> str:
+    cleaned = (band or "").strip()
+    if not cleaned:
+        return ""
+    return _BANDS[_ui_language(language)].get(cleaned, cleaned)
+
+
+def action_phrase(language: str, name: str, status: str) -> str:
+    key = f"{(name or '').strip()} {(status or '').strip()}".strip()
+    if not key:
+        return ""
+    return _ACTION_PHRASES[_ui_language(language)].get(key, key)
+
+
+def decision_label(language: str, decision: str) -> str:
+    cleaned = (decision or "").strip()
+    if not cleaned:
+        return ""
+    return _DECISIONS[_ui_language(language)].get(cleaned, cleaned)
 
 
 def _region_code(value: str) -> str:
@@ -169,9 +262,10 @@ def merchant_label(language: str, name: str, category: str, transaction_type: st
         return cleaned_name
     cleaned_category = (category or "").strip()
     if cleaned_category:
+        label = category_label(language, cleaned_category)
         if language == "pt":
-            return f"categoria {cleaned_category}"
-        return f"categoría {cleaned_category}"
+            return f"categoria {label}"
+        return f"categoría {label}"
     label = transaction_type_label(language, transaction_type)
     if label:
         return f"tipo {label}"
@@ -194,7 +288,8 @@ def _charge_with_amount(
     label = merchant_label(language, name, category, transaction_type)
     if language == "pt":
         if not (name or "").strip() and (category or "").strip():
-            return f"A cobrança da categoria {(category or '').strip()} ({amount})"
+            label = category_label(language, category)
+            return f"A cobrança da categoria {label} ({amount})"
         typed = transaction_type_label(language, transaction_type)
         if not (name or "").strip() and not (category or "").strip() and typed:
             return f"A cobrança do tipo {typed} ({amount})"
@@ -202,7 +297,8 @@ def _charge_with_amount(
             return f"A cobrança de {label} ({amount})"
         return f"A cobrança ({amount})"
     if not (name or "").strip() and (category or "").strip():
-        return f"El cargo de la categoría {(category or '').strip()} ({amount})"
+        label = category_label(language, category)
+        return f"El cargo de la categoría {label} ({amount})"
     typed = transaction_type_label(language, transaction_type)
     if not (name or "").strip() and not (category or "").strip() and typed:
         return f"El cargo de tipo {typed} ({amount})"
@@ -394,7 +490,8 @@ def reply_duplicate(
     label = merchant_label(language, merchant, category, transaction_type)
     if language == "pt":
         if not (merchant or "").strip() and (category or "").strip():
-            head = f"Há um possível duplicado SINTÉTICO da categoria {(category or '').strip()} ({amount})"
+            label = category_label(language, category)
+            head = f"Há um possível duplicado SINTÉTICO da categoria {label} ({amount})"
         elif label:
             head = f"Há um possível duplicado SINTÉTICO de {label} ({amount})"
         else:
@@ -405,7 +502,8 @@ def reply_duplicate(
             "Se reconhece o comércio, fechamos. Se não, uma pessoa revisa. Nenhum dinheiro foi movido."
         )
     if not (merchant or "").strip() and (category or "").strip():
-        head = f"Hay un posible duplicado SINTÉTICO de la categoría {(category or '').strip()} ({amount})"
+        label = category_label(language, category)
+        head = f"Hay un posible duplicado SINTÉTICO de la categoría {label} ({amount})"
     elif label:
         head = f"Hay un posible duplicado SINTÉTICO de {label} ({amount})"
     else:
@@ -844,6 +942,10 @@ def ui_copy(language: str) -> dict[str, object]:
     payload: dict[str, object] = dict(_UI[lang])
     payload["status"] = dict(_STATUS[lang])
     payload["types"] = dict(_TRANSACTION_TYPES[lang])
+    payload["categories"] = dict(_CATEGORIES[lang])
+    payload["bands"] = dict(_BANDS[lang])
+    payload["actions"] = dict(_ACTION_PHRASES[lang])
+    payload["decisions"] = dict(_DECISIONS[lang])
     payload["months"] = list(MONTHS[lang])
     return payload
 

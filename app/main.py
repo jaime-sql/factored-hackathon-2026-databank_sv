@@ -74,6 +74,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if static.exists():
         app.mount("/static", StaticFiles(directory=static), name="static")
 
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon() -> FileResponse:
+        return FileResponse(static / "favicon.ico", media_type="image/x-icon")
+
     @app.get("/")
     def desk() -> FileResponse:
         return FileResponse(static / "index.html")
