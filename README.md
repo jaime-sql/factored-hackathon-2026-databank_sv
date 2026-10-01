@@ -54,8 +54,8 @@ If `is_test`, `app.test_cases`, or `app.audit_live` is missing, the process keep
 To mark older demo case ids after the fact, insert them into `app.test_cases`. The script does not change audit rows and it is not run on startup. `--before` skips cases that have an `eval_run_id`. The printed count is how many rows this run inserted:
 
 ```bash
-uv run python scripts/mark_demo_cases_test.py --before 2026-10-01T00:00:00Z
-uv run python scripts/mark_demo_cases_test.py <case-id>
+uv run python -m scripts.mark_demo_cases_test --before 2026-10-01T00:00:00Z
+uv run python -m scripts.mark_demo_cases_test <case-id>
 ```
 
 ## Routing

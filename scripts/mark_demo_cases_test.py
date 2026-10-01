@@ -4,8 +4,8 @@ Does not change audit rows and does not run on startup. A second run inserts
 nothing for ids that are already there. `--before` skips cases that carry an
 eval_run_id. The printed count is the number of rows actually inserted.
 
-    uv run python scripts/mark_demo_cases_test.py CASE_ID [CASE_ID ...]
-    uv run python scripts/mark_demo_cases_test.py --before 2026-10-01T00:00:00Z
+    python -m scripts.mark_demo_cases_test CASE_ID [CASE_ID ...]
+    python -m scripts.mark_demo_cases_test --before 2026-10-01T00:00:00Z
 """
 
 from __future__ import annotations
@@ -13,6 +13,10 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import Settings
 from app.ops.store import OpsStore

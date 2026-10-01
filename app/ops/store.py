@@ -514,13 +514,22 @@ class OpsStore:
         return str(row["audit_id"])
 
     def current_audit_cases(self) -> list[dict[str, Any]]:
+        """Tips from audit_current. is_test comes from cases and test_cases.
+
+        audit_current keeps the column list it had when it was created, so a
+        later is_test column on audit_case is not on the view. The queue, the
+        packet, and the admin include filters read the flag from cases and
+        from test_cases membership instead.
+        """
         raw = self.execute(f"SELECT * FROM {self._table('audit_current')}")
         rows = [_normalize_audit(row) for row in raw]
-        if not raw or "is_test" in raw[0]:
+        if not rows:
             return rows
         flags = {str(row["case_id"]): bool(row.get("is_test")) for row in self.list_cases()}
+        marked = self.test_case_ids()
         for row in rows:
-            row["is_test"] = flags.get(str(row.get("case_id")), False)
+            case_id = str(row.get("case_id") or "")
+            row["is_test"] = flags.get(case_id, False) or case_id in marked
         return rows
 
     def live_audit_cases(self) -> list[dict[str, Any]]:

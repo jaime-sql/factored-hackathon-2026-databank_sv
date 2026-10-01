@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 import re
 import sqlite3
 import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -235,6 +237,123 @@ def test_metrics_and_export_exclude_test_unless_admin(qa_client: TestClient) -> 
     assert "True" in included_csv.text or "true" in included_csv.text
 
 
+def _audit_current_without_is_test(path: str) -> None:
+    """Recreate the tip view with the column list it had before is_test existed."""
+    with sqlite3.connect(path) as conn:
+        columns = [str(row[1]) for row in conn.execute("PRAGMA table_info(audit_case)")]
+        selected = ", ".join(f'"{name}"' for name in columns if name != "is_test")
+        conn.execute("DROP VIEW IF EXISTS audit_live")
+        conn.execute("DROP VIEW IF EXISTS audit_current")
+        conn.execute(
+            f"""
+            CREATE VIEW audit_current AS
+            SELECT {selected}
+            FROM audit_case AS a
+            WHERE NOT EXISTS (
+              SELECT 1 FROM audit_case AS newer
+              WHERE newer.supersedes_audit_id = a.audit_id
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE VIEW audit_live AS
+            SELECT cur.*
+            FROM audit_current AS cur
+            WHERE cur.eval_run_id IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM audit_case AS src
+                WHERE src.audit_id = cur.audit_id AND src.is_test = 1
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM test_cases AS marked
+                WHERE marked.case_id = cur.case_id
+              )
+            """
+        )
+
+
+def test_view_without_is_test_still_flags_queue_and_metrics(qa_client: TestClient) -> None:
+    headers = login(qa_client, "maria")
+    plain = _open(qa_client, headers, "tx_maria_home")
+    marked = _open(qa_client, headers, "tx_maria_reversed")
+    contested = qa_client.post(
+        f"/cases/{marked['case_id']}/actions",
+        headers=headers,
+        json={"action": "contest"},
+    )
+    assert contested.status_code == 200, contested.text
+    flagged = qa_client.post(
+        "/cases",
+        headers={**headers, "X-Test-Token": QA_TOKEN},
+        json={"transaction_key": "tx_maria_pending", "message": "No reconozco este cargo"},
+    ).json()
+    contested = qa_client.post(
+        f"/cases/{flagged['case_id']}/actions",
+        headers=headers,
+        json={"action": "contest"},
+    )
+    assert contested.status_code == 200, contested.text
+    assert qa_client.app.state.ops.get_case(str(marked["case_id"]))["is_test"] is False
+    assert qa_client.app.state.ops.get_case(str(flagged["case_id"]))["is_test"] is True
+    qa_client.app.state.ops.insert_test_case(str(marked["case_id"]), "demo")
+    _audit_current_without_is_test(qa_client.app.state.ops.path)
+    with sqlite3.connect(qa_client.app.state.ops.path) as conn:
+        view_columns = {row[1] for row in conn.execute("PRAGMA table_info(audit_current)")}
+    assert "is_test" not in view_columns
+
+    tips = {row["case_id"]: row for row in qa_client.app.state.ops.current_audit_cases()}
+    assert tips[flagged["case_id"]]["is_test"] is True
+    assert tips[marked["case_id"]]["is_test"] is True
+    assert tips[plain["case_id"]]["is_test"] is False
+
+    queue = qa_client.get("/api/handoff", headers=ADMIN).json()
+    cards = {item["case_id"]: item for item in queue["queue"]}
+    assert cards[flagged["case_id"]]["is_test"] is True
+    assert cards[marked["case_id"]]["is_test"] is True
+    flagged_packet = qa_client.get(f"/api/handoff/{flagged['case_id']}", headers=ADMIN).json()
+    marked_packet = qa_client.get(f"/api/handoff/{marked['case_id']}", headers=ADMIN).json()
+    assert flagged_packet["view"]["is_test"] is True
+    assert marked_packet["view"]["is_test"] is True
+
+    quiet = qa_client.get("/api/metrics?language=es").json()
+    assert quiet["k1_volume"]["total"] == 1
+    assert quiet["excluded_test_cases"] == 2
+    eval_only = qa_client.get("/api/metrics?include_eval=1", headers=ADMIN).json()
+    assert eval_only["include_eval"] is True
+    assert eval_only["include_test"] is False
+    assert eval_only["k1_volume"]["total"] == 1
+    assert eval_only["excluded_test_cases"] == 2
+    included = qa_client.get("/api/metrics?include_test=1", headers=ADMIN).json()
+    assert included["k1_volume"]["total"] == 3
+    assert included["excluded_test_cases"] == 0
+
+
+def test_mark_script_runs_without_pythonpath() -> None:
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    module = subprocess.run(
+        [sys.executable, "-m", "scripts.mark_demo_cases_test", "--help"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert module.returncode == 0, module.stderr
+    script = subprocess.run(
+        [sys.executable, "scripts/mark_demo_cases_test.py", "--help"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert script.returncode == 0, script.stderr
+    source = (ROOT / "scripts" / "mark_demo_cases_test.py").read_text(encoding="utf-8")
+    assert "python -m scripts.mark_demo_cases_test" in source
+
+
 def test_agent_packet_shows_the_flag(qa_client: TestClient) -> None:
     headers = login(qa_client, "maria")
     opened = qa_client.post(
@@ -400,8 +519,10 @@ def test_backfill_marks_ids_or_a_cutoff_and_deletes_nothing(tmp_path: Path) -> N
     assert old_id not in live_ids
     assert new_id in live_ids
     tip = next(row for row in ops.current_audit_cases() if row["case_id"] == old_id)
-    assert tip["is_test"] is False
+    assert tip["is_test"] is True
     assert tip["supersedes_audit_id"] is None
+    stored = ops.execute("SELECT is_test FROM audit_case WHERE case_id = ?", (old_id,))
+    assert stored[0]["is_test"] in (0, False)
     again = mark_cases_test(ops, case_ids=[old_id])
     assert again == []
     assert ops.test_case_ids() == {old_id}
