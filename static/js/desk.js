@@ -41,6 +41,10 @@ function applyLanguage() {
   const heading = document.querySelector("#charges h2");
   if (heading) heading.textContent = copy.charges_title;
   showTestBadge(state.testMode);
+  const testLink = document.getElementById("test-mode-link");
+  if (testLink && copy.test_arm) testLink.textContent = copy.test_arm;
+  const testSend = document.getElementById("test-mode-send");
+  if (testSend && copy.test_arm_send) testSend.textContent = copy.test_arm_send;
   for (const button of document.querySelectorAll('#charges [data-action="select-charge"]')) {
     button.textContent = copy.dispute;
   }
@@ -126,29 +130,7 @@ function showTestBadge(on) {
   badge.hidden = !on;
 }
 
-function pageSearch() {
-  try {
-    if (typeof location === "undefined" || !location || !location.search) return "";
-    return String(location.search);
-  } catch {
-    return "";
-  }
-}
-
-async function armTestQuery() {
-  const params = new URLSearchParams(pageSearch());
-  const token = params.get("test");
-  if (token) {
-    await fetch("/api/test-mode", {
-      method: "POST",
-      headers: { "X-Test-Token": token },
-    });
-    params.delete("test");
-    if (typeof history !== "undefined" && history.replaceState) {
-      const next = params.toString();
-      history.replaceState(null, "", next ? `/?${next}` : "/");
-    }
-  }
+async function refreshTestMode() {
   try {
     const status = await fetch("/api/test-mode").then((res) => res.json());
     state.testMode = Boolean(status && status.is_test);
@@ -156,6 +138,32 @@ async function armTestQuery() {
     state.testMode = false;
   }
   showTestBadge(state.testMode);
+}
+
+function bindTestArm() {
+  const link = document.getElementById("test-mode-link");
+  const form = document.getElementById("test-mode-form");
+  if (link && form) {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      form.hidden = false;
+      const input = document.getElementById("test-token");
+      if (input && input.focus) input.focus();
+    });
+  }
+  if (!form) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = document.getElementById("test-token");
+    const token = input ? String(input.value || "") : "";
+    if (input) input.value = "";
+    if (!token) return;
+    await fetch("/api/test-mode", {
+      method: "POST",
+      headers: { "X-Test-Token": token },
+    });
+    await refreshTestMode();
+  });
 }
 
 async function openCase(transactionKey, message) {
@@ -268,7 +276,8 @@ async function bootstrap() {
   } catch {
     state.catalog = null;
   }
-  await armTestQuery();
+  bindTestArm();
+  await refreshTestMode();
   applyLanguage();
   await loadPersonas();
 }

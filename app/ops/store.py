@@ -20,6 +20,12 @@ from app.ops.guard import assert_statement_allowed
 
 logger = logging.getLogger(__name__)
 
+_SCHEMA_WARNING = (
+    "test-traffic schema is missing (is_test, test_cases, or audit_live); "
+    "run migrations/002_is_test.sql as the database owner. "
+    "Case inserts omit is_test, test marks are ignored, and metrics read audit_current."
+)
+
 _PRICES = (
     ("gpt-4o-mini", 0.15, 0.60, "2026-09-29", "https://openai.com/api/pricing/"),
     ("openai/gpt-4o-mini", 0.15, 0.60, "2026-09-29", "https://openrouter.ai/models"),
@@ -61,10 +67,13 @@ class OpsStore:
         self.path = path
         self.dsn = dsn
         self.readback_tamper: Any = None
+        self.migrations_ok = True
+        self._schema_warned = False
         if backend == "sqlite":
             self._init_sqlite()
         else:
             self._ensure_postgres_is_test()
+        self.refresh_test_schema()
 
     def _q(self, sql: str) -> str:
         if self.backend == "postgres":
@@ -109,19 +118,82 @@ class OpsStore:
             conn.commit()
             return rows
 
-    def _write(self, sql: str, params: tuple[object, ...]) -> None:
+    def _write(self, sql: str, params: tuple[object, ...]) -> int:
         assert_statement_allowed(sql)
         params = self._params(params)
         query = self._q(sql)
         if self.backend == "sqlite":
             with sqlite3.connect(self.path) as conn:
-                conn.execute(query, params)
-            return
+                cursor = conn.execute(query, params)
+                return int(cursor.rowcount)
         from app.db import connect_app
 
         with connect_app(self.dsn) as conn:
-            conn.execute(query, params)
+            cursor = conn.execute(query, params)
             conn.commit()
+            return int(cursor.rowcount)
+
+    def refresh_test_schema(self) -> bool:
+        """True when is_test, test_cases, and audit_live are all present."""
+        try:
+            present = self._probe_test_schema()
+        except Exception:
+            present = False
+        if present:
+            self.migrations_ok = True
+            return True
+        self._mark_migrations_missing()
+        return False
+
+    def _mark_migrations_missing(self) -> None:
+        self.migrations_ok = False
+        if self._schema_warned:
+            return
+        self._schema_warned = True
+        logger.warning(_SCHEMA_WARNING)
+
+    def _probe_test_schema(self) -> bool:
+        if self.backend == "sqlite":
+            with sqlite3.connect(self.path) as conn:
+                return _sqlite_has_test_schema(conn)
+        columns = self.execute(
+            "SELECT table_name FROM information_schema.columns "
+            "WHERE table_schema = 'app' AND column_name = 'is_test' "
+            "AND table_name IN ('cases', 'audit_case', 'audit_llm_call')"
+        )
+        found = {str(row["table_name"]) for row in columns}
+        if found != {"cases", "audit_case", "audit_llm_call"}:
+            return False
+        tables = self.execute(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = 'app' AND table_name = 'test_cases'"
+        )
+        views = self.execute(
+            "SELECT table_name FROM information_schema.views "
+            "WHERE table_schema = 'app' AND table_name = 'audit_live'"
+        )
+        return bool(tables and views)
+
+    def _insert_with_optional_test(
+        self, table: str, columns: str, params: tuple[object, ...], *, is_test: bool
+    ) -> None:
+        without = (
+            f"INSERT INTO {self._table(table)} ({columns}) VALUES ({_placeholders(len(params))})"
+        )
+        if not self.migrations_ok:
+            self._write(without, params)
+            return
+        try:
+            self._write(
+                f"INSERT INTO {self._table(table)} ({columns}, is_test) "
+                f"VALUES ({_placeholders(len(params) + 1)})",
+                params + (is_test,),
+            )
+        except Exception as exc:
+            if not _missing_test_schema(exc):
+                raise
+            self._mark_migrations_missing()
+            self._write(without, params)
 
     def _init_sqlite(self) -> None:
         with sqlite3.connect(self.path) as conn:
@@ -314,15 +386,11 @@ class OpsStore:
             logger.warning("is_test migration skipped (%s)", type(exc).__name__)
 
     def insert_case(self, row: dict[str, Any]) -> None:
-        sql = (
-            f"INSERT INTO {self._table('cases')} ("
+        self._insert_with_optional_test(
+            "cases",
             "case_id, customer_key, transaction_key, state, language, case_type, "
             "created_at, updated_at, closed_at, latest_audit_id, is_eval_case, "
-            "eval_run_id, case_source, is_test) VALUES ("
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
-        self._write(
-            sql,
+            "eval_run_id, case_source",
             (
                 row["case_id"],
                 row["customer_key"],
@@ -337,20 +405,36 @@ class OpsStore:
                 bool(row.get("is_eval_case")),
                 row.get("eval_run_id"),
                 row.get("case_source"),
-                bool(row.get("is_test")),
             ),
+            is_test=bool(row.get("is_test")),
         )
 
-    def insert_test_case(self, case_id: str, reason: str | None = None) -> None:
-        """Record a case id as test traffic. A repeat insert leaves the row as it is."""
-        self._write(
-            f"INSERT INTO {self._table('test_cases')} (case_id, marked_at, reason) "
-            "VALUES (?, ?, ?) ON CONFLICT (case_id) DO NOTHING",
-            (case_id, _now(), reason),
-        )
+    def insert_test_case(self, case_id: str, reason: str | None = None) -> int:
+        """Insert one case id. Returns the row count: 1 inserted, 0 already present."""
+        if not self.migrations_ok:
+            return 0
+        try:
+            return self._write(
+                f"INSERT INTO {self._table('test_cases')} (case_id, marked_at, reason) "
+                "VALUES (?, ?, ?) ON CONFLICT (case_id) DO NOTHING",
+                (case_id, _now(), reason),
+            )
+        except Exception as exc:
+            if not _missing_test_schema(exc):
+                raise
+            self._mark_migrations_missing()
+            return 0
 
     def test_case_ids(self) -> set[str]:
-        rows = self.execute(f"SELECT case_id FROM {self._table('test_cases')}")
+        if not self.migrations_ok:
+            return set()
+        try:
+            rows = self.execute(f"SELECT case_id FROM {self._table('test_cases')}")
+        except Exception as exc:
+            if not _missing_test_schema(exc):
+                raise
+            self._mark_migrations_missing()
+            return set()
         return {str(row["case_id"]) for row in rows}
 
     def list_cases(self) -> list[dict[str, Any]]:
@@ -391,18 +475,14 @@ class OpsStore:
             flag_value = list(flags)
         else:
             flag_value = json.dumps(list(flags))
-        sql = (
-            f"INSERT INTO {self._table('audit_case')} ("
+        self._insert_with_optional_test(
+            "audit_case",
             "audit_id, case_id, supersedes_audit_id, recorded_at, case_type, "
             "customer_segment, final_resolution_status, case_created_at, case_closed_at, "
             "decision, automation_attempted, handoff_reason, handoff_packet_complete, "
             "language, country, accent_group, rule_or_model_version, prompt_version, "
             "fraud_score, model_risk_score, guardrail_flags, is_eval_case, eval_run_id, "
-            "case_source, is_test) VALUES ("
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
-        self._write(
-            sql,
+            "case_source",
             (
                 row["audit_id"],
                 row["case_id"],
@@ -428,8 +508,8 @@ class OpsStore:
                 bool(row.get("is_eval_case")),
                 row.get("eval_run_id"),
                 row.get("case_source"),
-                bool(row.get("is_test")),
             ),
+            is_test=bool(row.get("is_test")),
         )
         return str(row["audit_id"])
 
@@ -445,7 +525,15 @@ class OpsStore:
 
     def live_audit_cases(self) -> list[dict[str, Any]]:
         """audit_current minus insert-time test rows, marked case ids, and eval tips."""
-        raw = self.execute(f"SELECT * FROM {self._table('audit_live')}")
+        if not self.migrations_ok:
+            return self.current_audit_cases()
+        try:
+            raw = self.execute(f"SELECT * FROM {self._table('audit_live')}")
+        except Exception as exc:
+            if not _missing_test_schema(exc):
+                raise
+            self._mark_migrations_missing()
+            return self.current_audit_cases()
         return [_normalize_audit(row) for row in raw]
 
     def audit_chain(self, case_id: str) -> list[dict[str, Any]]:
@@ -510,12 +598,11 @@ class OpsStore:
         )
 
     def append_llm_call(self, row: dict[str, Any]) -> None:
-        self._write(
-            f"INSERT INTO {self._table('audit_llm_call')} ("
+        self._insert_with_optional_test(
+            "audit_llm_call",
             "audit_id, llm_call_id, case_id, supersedes_audit_id, recorded_at, case_type, "
             "model, input_tokens, output_tokens, latency_ms, call_started_at, call_purpose, "
-            "call_status, retry_attempt, prompt_version, is_eval_case, eval_run_id, is_test) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "call_status, retry_attempt, prompt_version, is_eval_case, eval_run_id",
             (
                 row["audit_id"],
                 row["llm_call_id"],
@@ -534,8 +621,8 @@ class OpsStore:
                 row.get("prompt_version"),
                 bool(row.get("is_eval_case")),
                 row.get("eval_run_id"),
-                bool(row.get("is_test")),
             ),
+            is_test=bool(row.get("is_test")),
         )
 
     def current_llm_calls(self) -> list[dict[str, Any]]:
@@ -700,6 +787,34 @@ def _sql_statements(path: Path) -> list[str]:
     if tail:
         statements.append(tail)
     return statements
+
+
+def _placeholders(count: int) -> str:
+    return ", ".join("?" for _ in range(count))
+
+
+def _missing_test_schema(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    names = ("is_test", "test_cases", "audit_live")
+    markers = ("no such", "does not exist", "undefined")
+    return any(name in text for name in names) and any(marker in text for marker in markers)
+
+
+def _sqlite_has_test_schema(conn: sqlite3.Connection) -> bool:
+    def columns(table: str) -> set[str]:
+        return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+
+    names = {
+        str(row[0])
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")
+    }
+    return (
+        "is_test" in columns("cases")
+        and "is_test" in columns("audit_case")
+        and "is_test" in columns("audit_llm_call")
+        and "test_cases" in names
+        and "audit_live" in names
+    )
 
 
 def _as_bool(value: object) -> bool:

@@ -1,7 +1,8 @@
 """Insert demo case ids into test_cases.
 
-Does not change audit rows and does not run on startup. A second run leaves
-existing ids in place. Pass case ids, a cutoff, or both.
+Does not change audit rows and does not run on startup. A second run inserts
+nothing for ids that are already there. `--before` skips cases that carry an
+eval_run_id. The printed count is the number of rows actually inserted.
 
     uv run python scripts/mark_demo_cases_test.py CASE_ID [CASE_ID ...]
     uv run python scripts/mark_demo_cases_test.py --before 2026-10-01T00:00:00Z
@@ -37,13 +38,19 @@ def _parse_before(value: str) -> datetime:
     return stamp
 
 
+def _has_eval_run(case: object) -> bool:
+    if not isinstance(case, dict):
+        return False
+    return case.get("eval_run_id") not in (None, "")
+
+
 def mark_cases_test(
     ops: OpsStore,
     case_ids: list[str] | None = None,
     before: datetime | None = None,
     reason: str | None = None,
 ) -> list[str]:
-    """Insert matching case ids into test_cases. Audit rows stay as inserted."""
+    """Insert matching case ids. The list is the rows this call inserted."""
     if not case_ids and before is None:
         raise ValueError("pass case ids or before")
     wanted = {item.strip() for item in (case_ids or []) if item.strip()}
@@ -52,19 +59,13 @@ def mark_cases_test(
     for case in ops.list_cases():
         case_id = str(case["case_id"])
         seen.add(case_id)
-        by_id = case_id in wanted
+        explicit = case_id in wanted
         created = _stamp(case.get("created_at"))
         by_time = before is not None and created is not None and created < before
-        if wanted and before is not None:
-            if not (by_id or by_time):
-                continue
-        elif wanted:
-            if not by_id:
-                continue
-        elif not by_time:
+        if not explicit and not (by_time and not _has_eval_run(case)):
             continue
-        ops.insert_test_case(case_id, reason)
-        marked.append(case_id)
+        if ops.insert_test_case(case_id, reason) > 0:
+            marked.append(case_id)
     missing = sorted(wanted - seen)
     for case_id in missing:
         print(f"not found: {case_id}", file=sys.stderr)

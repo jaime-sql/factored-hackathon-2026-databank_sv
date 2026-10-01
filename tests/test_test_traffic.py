@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import re
 import sqlite3
 import subprocess
@@ -330,7 +331,12 @@ def test_backfill_marks_ids_or_a_cutoff_and_deletes_nothing(tmp_path: Path) -> N
     audit_old = new_case_id()
     audit_new = new_case_id()
 
-    def seed(case_id: str, audit_id: str, created: datetime) -> None:
+    def seed(
+        case_id: str,
+        audit_id: str,
+        created: datetime,
+        eval_run_id: str | None = None,
+    ) -> None:
         ops.insert_case(
             {
                 "case_id": case_id,
@@ -343,9 +349,9 @@ def test_backfill_marks_ids_or_a_cutoff_and_deletes_nothing(tmp_path: Path) -> N
                 "updated_at": created,
                 "closed_at": created,
                 "latest_audit_id": audit_id,
-                "is_eval_case": False,
-                "eval_run_id": None,
-                "case_source": None,
+                "is_eval_case": eval_run_id is not None,
+                "eval_run_id": eval_run_id,
+                "case_source": "sample" if eval_run_id else None,
                 "is_test": False,
             }
         )
@@ -372,9 +378,9 @@ def test_backfill_marks_ids_or_a_cutoff_and_deletes_nothing(tmp_path: Path) -> N
                 "fraud_score": None,
                 "model_risk_score": None,
                 "guardrail_flags": [],
-                "is_eval_case": False,
-                "eval_run_id": None,
-                "case_source": None,
+                "is_eval_case": eval_run_id is not None,
+                "eval_run_id": eval_run_id,
+                "case_source": "sample" if eval_run_id else None,
                 "is_test": False,
             }
         )
@@ -397,13 +403,20 @@ def test_backfill_marks_ids_or_a_cutoff_and_deletes_nothing(tmp_path: Path) -> N
     assert tip["is_test"] is False
     assert tip["supersedes_audit_id"] is None
     again = mark_cases_test(ops, case_ids=[old_id])
-    assert again == [old_id]
+    assert again == []
     assert ops.test_case_ids() == {old_id}
     assert len(ops.current_audit_cases()) == before_current
+    plain_id = new_case_id()
+    eval_id = new_case_id()
+    seed(plain_id, new_case_id(), older)
+    seed(eval_id, new_case_id(), older, eval_run_id="run-before")
     cutoff = newer - timedelta(hours=1)
     marked_before = mark_cases_test(ops, before=cutoff)
-    assert old_id in marked_before
+    assert marked_before == [plain_id]
+    assert eval_id not in ops.test_case_ids()
     assert new_id not in marked_before
+    repeated = mark_cases_test(ops, before=cutoff)
+    assert repeated == []
     assert ops.audit_case_count(old_id) + ops.audit_case_count(new_id) == before_audit
     source = (ROOT / "scripts" / "mark_demo_cases_test.py").read_text(encoding="utf-8")
     store_source = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
@@ -506,7 +519,74 @@ def test_metrics_drop_marked_ids_until_admin_includes_them(client: TestClient) -
     assert case_id in exported.text
 
 
-def test_customer_page_sends_the_query_token_without_keeping_it() -> None:
+def _strip_test_schema(path: str) -> None:
+    with sqlite3.connect(path) as conn:
+        conn.execute("DROP VIEW IF EXISTS audit_live")
+        conn.execute("DROP VIEW IF EXISTS audit_current")
+        conn.execute("DROP VIEW IF EXISTS audit_llm_call_current")
+        for table in ("cases", "audit_case", "audit_llm_call"):
+            columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if "is_test" in columns:
+                conn.execute(f"ALTER TABLE {table} DROP COLUMN is_test")
+        conn.execute("DROP TABLE IF EXISTS test_cases")
+        conn.execute(
+            """
+            CREATE VIEW audit_current AS
+            SELECT * FROM audit_case AS a
+            WHERE NOT EXISTS (
+              SELECT 1 FROM audit_case AS newer
+              WHERE newer.supersedes_audit_id = a.audit_id
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE VIEW audit_llm_call_current AS
+            SELECT * FROM audit_llm_call AS a
+            WHERE NOT EXISTS (
+              SELECT 1 FROM audit_llm_call AS newer
+              WHERE newer.supersedes_audit_id = a.audit_id
+            )
+            """
+        )
+
+
+def test_missing_test_schema_keeps_serving(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    ops = client.app.state.ops
+    _strip_test_schema(ops.path)
+    with caplog.at_level(logging.WARNING, logger="app.ops.store"):
+        assert ops.refresh_test_schema() is False
+    assert "test-traffic schema is missing" in caplog.text
+    assert "audit_current" in caplog.text
+    health = client.get("/health").json()
+    assert health["migrations_ok"] is False
+    assert client.get("/healthz").json()["migrations_ok"] is False
+    headers = login(client, "maria")
+    opened = client.post(
+        "/cases",
+        headers={**headers, "X-Test-Token": "qa-local-test-token"},
+        json={"transaction_key": "tx_maria_pending", "message": "No reconozco este cargo"},
+    )
+    assert opened.status_code == 200, opened.text
+    with sqlite3.connect(ops.path) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
+        assert "is_test" not in columns
+        assert conn.execute("SELECT count(*) FROM cases").fetchone()[0] == 1
+    assert ops.test_case_ids() == set()
+    metrics = client.get("/api/metrics")
+    assert metrics.status_code == 200
+    assert metrics.json()["k1_volume"]["total"] == 1
+    exported = client.get("/audit/export", headers=ADMIN)
+    assert exported.status_code == 200
+    assert opened.json()["case_id"] in exported.text
+
+
+def test_customer_page_sends_the_token_from_the_field_not_the_url() -> None:
+    source = (ROOT / "static" / "js" / "desk.js").read_text(encoding="utf-8")
+    assert 'get("test")' not in source
+    assert "?test=" not in source
     completed = subprocess.run(
         ["node", "tests/test_test_mode.js"],
         cwd=ROOT,

@@ -124,23 +124,25 @@ def _agent(request: Request, *, admin_only: bool = False) -> str:
     return role
 
 
-def _health(request: Request) -> dict[str, str]:
+def _health(request: Request) -> dict[str, Any]:
     settings = _settings(request)
+    ops = request.app.state.ops
     return {
         "status": "ok",
         "bank": "postgres" if settings.database_url else "sqlite",
         "ops": "postgres" if settings.database_url else "sqlite",
         "llm": settings.resolved_llm_provider(),
+        "migrations_ok": bool(getattr(ops, "migrations_ok", False)),
     }
 
 
 @router.get("/healthz")
-def healthz(request: Request) -> dict[str, str]:
+def healthz(request: Request) -> dict[str, Any]:
     return _health(request)
 
 
 @router.get("/health")
-def health(request: Request) -> dict[str, str]:
+def health(request: Request) -> dict[str, Any]:
     return _health(request)
 
 
@@ -458,8 +460,18 @@ def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str
 def _audit_rows_for_read(
     ops: Any, *, include_eval: bool, include_test: bool
 ) -> tuple[list[dict[str, Any]], int, int]:
-    """Default reads audit_live. Admin include flags read audit_current."""
+    """Default reads audit_live. Admin include flags read audit_current.
+
+    A missing test schema reads audit_current so metrics and the export stay up.
+    """
     current = ops.current_audit_cases()
+    if not getattr(ops, "migrations_ok", False):
+        return select_cases(
+            current,
+            include_eval=include_eval,
+            include_test=include_test,
+            test_ids=set(),
+        )
     test_ids = ops.test_case_ids()
     if include_eval or include_test:
         return select_cases(

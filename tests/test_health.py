@@ -13,4 +13,5 @@ def test_health_matches_healthz(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["bank"] == "sqlite"
     assert body["ops"] == "sqlite"
+    assert body["migrations_ok"] is True
     assert "llm" in body

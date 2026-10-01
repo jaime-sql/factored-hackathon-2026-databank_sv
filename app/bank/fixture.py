@@ -73,7 +73,6 @@ PERSONAS: tuple[dict[str, str], ...] = (
         "accent": "bajio",
         "tz": "America/Mexico_City",
         "note": "Synthetic persona, duplicate charge",
-        "bank_note": "Challenge data customer, duplicate charge",
     },
 )
 

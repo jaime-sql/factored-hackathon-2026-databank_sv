@@ -19,7 +19,7 @@ Open [http://127.0.0.1:8091](http://127.0.0.1:8091). The other pages are `/agent
 
 `DEMO_AGENT_TOKEN` is the admin console token (export and config). `DEMO_JUDGE_TOKEN` is optional: when set, it can list, open, and resolve the handoff queue only. Leave it unset to disable it. Do not commit either value.
 
-`GET /health` is the health check. `GET /healthz` returns the same JSON. On Cloud Run, probe `/health`: the run.app front end reserves `/healthz` and answers 404 before the container.
+`GET /health` is the health check. `GET /healthz` returns the same JSON, including `migrations_ok`. On Cloud Run, probe `/health`: the run.app front end reserves `/healthz` and answers 404 before the container.
 
 `make check` runs ruff, mypy, and pytest.
 
@@ -43,13 +43,15 @@ The metrics page excludes eval traffic by default. The toggle label comes from t
 
 `QA_TEST_TOKEN` is optional. Leave it empty to disable the flag. Do not commit the value.
 
-A browser session started at `/?test=<token>`, or any request with header `X-Test-Token`, stores new cases with `is_test=true` when the value matches. The flag is kept in the session cookie, so the rest of that browser session counts as test traffic. The header shows **MODO PRUEBA** (Portuguese: **MODO TESTE**). Agent cards and the packet show a **Prueba** chip. A wrong token does not set the flag and does not return an error. The token is never written back in a response.
+Send `X-Test-Token` on a request, or open **Modo de prueba** on the customer page and POST the token to `/api/test-mode`. The token is not read from the URL. When it matches, new cases are stored with `is_test=true` and the flag stays in the session cookie, so the rest of that browser session counts as test traffic. The header shows **MODO PRUEBA** (Portuguese: **MODO TESTE**). Agent cards and the packet show a **Prueba** chip. A wrong token does not set the flag and does not return an error. The token is never written back in a response.
 
 Eval runs are unchanged and never set `is_test`, even if the test header is also present.
 
 `/api/metrics` and `GET /audit/export` read `app.audit_live` by default. That view leaves out insert-time `is_test` rows, case ids listed in `app.test_cases`, and tips whose `eval_run_id` is set. An admin token with `include_test=1` or `include_eval=1` reads `app.audit_current` and applies only the filters that were not requested. The export adds an `is_test` column. A judge token cannot bring those rows back.
 
-To mark older demo case ids after the fact, insert them into `app.test_cases`. The script does not change audit rows and it is not run on startup. A second run leaves existing ids in place:
+If `is_test`, `app.test_cases`, or `app.audit_live` is missing, the process keeps serving. Case inserts omit `is_test`, test marks are ignored, and metrics and the export read `audit_current`. `GET /health` and `GET /healthz` include `migrations_ok`.
+
+To mark older demo case ids after the fact, insert them into `app.test_cases`. The script does not change audit rows and it is not run on startup. `--before` skips cases that have an `eval_run_id`. The printed count is how many rows this run inserted:
 
 ```bash
 uv run python scripts/mark_demo_cases_test.py --before 2026-10-01T00:00:00Z

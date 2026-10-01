@@ -132,6 +132,17 @@ pre { overflow: auto; background: #241f1a; color: #f6f1e7; padding: 1rem; border
   border-radius: 999px;
 }
 .test-badge[hidden] { display: none; }
+.test-arm { margin: 0.6rem 0 0; }
+button.linkish {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--muted, #5c564c);
+  font-size: 0.75rem;
+  text-decoration: underline;
+}
+.test-arm-form { display: flex; gap: 0.4rem; margin-top: 0.4rem; max-width: 24rem; }
+.test-arm-form[hidden] { display: none; }
 @media (max-width: 700px) {
   header { flex-direction: column; align-items: start; }
 }
