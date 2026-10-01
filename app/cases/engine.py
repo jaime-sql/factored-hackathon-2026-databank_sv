@@ -235,7 +235,7 @@ class Engine:
         config = self.thresholds.get()
         route = preliminary_route(tx.fraud_score, tx.transaction_status, config)
         shown = present_time(tx.transaction_ts_utc, customer.tz, customer.customer_country, lang)
-        amount = money(tx.amount, tx.currency, lang)
+        amount = money(tx.amount, tx.currency, customer.customer_country)
         scored: TriageScore | None = None
         if route == "high":
             band = "high"

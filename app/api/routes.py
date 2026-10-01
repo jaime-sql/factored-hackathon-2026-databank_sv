@@ -263,7 +263,7 @@ def transactions(request: Request, language: str = "es") -> dict[str, Any]:
                 "merchant_category": tx.merchant_category,
                 "transaction_type": tx.transaction_type,
                 "amount": tx.amount,
-                "amount_label": money(tx.amount, tx.currency, lang),
+                "amount_label": money(tx.amount, tx.currency, home),
                 "currency": tx.currency,
                 "transaction_city": tx.transaction_city,
                 "transaction_country": tx.transaction_country,

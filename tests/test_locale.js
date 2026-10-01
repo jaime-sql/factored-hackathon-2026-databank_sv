@@ -426,7 +426,11 @@ assertNoEnglish(tourCopy("pt"), "tour pt", ["Consola", "Ver cola", "Abrir paquet
 assert.ok(GUIDE.pages.agent[6].pt.startsWith("Ver fila"));
 assert.ok(GUIDE.pages.agent[8].pt.startsWith("Abrir pacote"));
 for (const file of ["static/index.html", "static/agent.html", "static/metrics.html"]) {
-  assertNoEnglish(fs.readFileSync(file, "utf8"), file, ["Console"]);
+  const html = fs.readFileSync(file, "utf8");
+  assertNoEnglish(html, file, ["Console"]);
+  assert.ok(html.includes('localStorage.getItem("hd_lang")'), file);
+  assert.ok(html.includes("i18n-pending"), file);
+  assert.ok(html.includes("visibility:hidden"), file);
 }
 
 function charges(lang) {

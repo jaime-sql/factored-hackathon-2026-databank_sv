@@ -4,6 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Harbor Desk</title>
+  <style>html.i18n-pending body{visibility:hidden}</style>
+  <script>
+    (function () {
+      var lang = "es";
+      try {
+        if (localStorage.getItem("hd_lang") === "pt") lang = "pt";
+      } catch (e) {}
+      document.documentElement.lang = lang;
+      document.documentElement.classList.add("i18n-pending");
+      setTimeout(function () {
+        document.documentElement.classList.remove("i18n-pending");
+      }, 1200);
+    })();
+  </script>
   <link rel="icon" href="/favicon.ico" />
   <link rel="stylesheet" href="/static/css/app.css" />
 </head>

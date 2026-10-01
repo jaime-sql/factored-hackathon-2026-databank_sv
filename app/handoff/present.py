@@ -44,7 +44,7 @@ def _card_blocked(packet: dict[str, Any]) -> bool:
     )
 
 
-def _amount(transaction: dict[str, Any], language: str) -> str:
+def _amount(transaction: dict[str, Any], country: str) -> str:
     raw = transaction.get("amount")
     currency = str(transaction.get("currency") or "")
     if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
@@ -53,7 +53,7 @@ def _amount(transaction: dict[str, Any], language: str) -> str:
         amount = float(raw)
     except ValueError:
         return currency
-    return money(amount, currency, language)
+    return money(amount, currency, country)
 
 
 def _display_language(packet: dict[str, Any], display_language: str | None) -> str:
@@ -90,6 +90,7 @@ def queue_card(
     triage = _triage(packet)
     audit_row = audit or {}
     language = _display_language(packet, display_language)
+    country = str(audit_row.get("country") or "")
     band = str(triage.get("band") or "")
     reason = str(audit_row.get("handoff_reason") or "")
     synthetic = bool(packet.get("synthetic_duplicate"))
@@ -101,7 +102,7 @@ def queue_card(
         "status": row["status"],
         "language": language,
         "band": band,
-        "amount": _amount(transaction, language),
+        "amount": _amount(transaction, country),
         "currency": str(transaction.get("currency") or ""),
         "merchant": mask_merchant(merchant),
         "local_time": _local_label(transaction, language),

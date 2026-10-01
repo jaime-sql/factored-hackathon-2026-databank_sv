@@ -19,6 +19,12 @@ function notifyLanguage() {
   document.dispatchEvent(new Event("hd-lang"));
 }
 
+function revealCopy() {
+  const root = document.documentElement;
+  if (!root || !root.classList || typeof root.classList.remove !== "function") return;
+  root.classList.remove("i18n-pending");
+}
+
 const box = document.getElementById("include-eval");
 const label = document.getElementById("eval-label");
 let catalog = null;
@@ -55,6 +61,7 @@ function applyMetricsLanguage() {
   if (label && !label.dataset.loaded) label.textContent = text.eval_toggle;
   const badge = document.getElementById("test-badge");
   if (badge && text.test_badge) badge.textContent = text.test_badge;
+  revealCopy();
   notifyLanguage();
 }
 

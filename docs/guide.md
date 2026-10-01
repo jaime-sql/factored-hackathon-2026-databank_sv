@@ -135,7 +135,7 @@ PT: Cliente volta à tela onde se abre um caso.
 
 Esta pantalla es la consola: la cola de casos para una persona.
 
-PT: Esta tela é a console: a fila de casos para uma pessoa.
+PT: Esta tela é o console: a fila de casos para uma pessoa.
 
 ### 3. `a[href="/metrics"]`
 

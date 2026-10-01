@@ -39,6 +39,13 @@ function notifyLanguage() {
   document.dispatchEvent(new Event("hd-lang"));
 }
 
+function revealCopy() {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (!root || !root.classList || typeof root.classList.remove !== "function") return;
+  root.classList.remove("i18n-pending");
+}
+
 const consoleState = { language: storedLanguage() };
 if (typeof document !== "undefined" && document.documentElement) {
   document.documentElement.lang = consoleState.language === "pt" ? "pt" : "es";
@@ -370,6 +377,7 @@ function applyConsoleLanguage() {
   const badge = document.getElementById("test-badge");
   if (badge) badge.textContent = pack.test_badge || "MODO PRUEBA";
   if (pack.nav_agent) document.title = `${pack.nav_agent} · Harbor Desk`;
+  revealCopy();
   notifyLanguage();
 }
 

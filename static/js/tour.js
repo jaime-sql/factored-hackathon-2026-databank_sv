@@ -118,7 +118,7 @@ const GUIDE = {
       {
         selector: 'a[href="/agent"]',
         es: "Esta pantalla es la consola: la cola de casos para una persona.",
-        pt: "Esta tela é a console: a fila de casos para uma pessoa.",
+        pt: "Esta tela é o console: a fila de casos para uma pessoa.",
       },
       {
         selector: 'a[href="/metrics"]',

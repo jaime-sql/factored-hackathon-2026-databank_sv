@@ -106,10 +106,14 @@ def test_statuses_types_amounts_and_foreign_country(client: TestClient) -> None:
     for kind in mapping["transaction_type"]:
         assert transaction_type_label("es", kind) != kind
         assert transaction_type_label("pt", kind) != kind
-    assert money(1645.6, "USD", "es") == "US$\u00a01.645,60"
-    assert money(1645.6, "USD", "pt") == "US$\u00a01.645,60"
-    assert money(220, "MXN", "es") == "MXN\u00a0220,00"
-    assert money(220, "MXN", "pt") == "MX$\u00a0220,00"
+    assert money(1645.6, "USD", "Mexico") == "US$1,645.60"
+    assert money(1645.6, "USD", "MX") == "US$1,645.60"
+    assert money(1645.6, "USD", "Colombia") == "US$ 1.645,60"
+    assert money(1645.6, "USD", "Argentina") == "US$ 1.645,60"
+    assert money(1645.6, "USD", "Spain") == "US$ 1.645,60"
+    assert money(1645.6, "USD", "Brazil") == "US$ 1.645,60"
+    assert money(220, "MXN", "Mexico") == "MXN220.00"
+    assert money(220, "MXN", "Colombia") == "MXN 220,00"
     assert place_label("Valencia", "Spain", "Mexico", "es") == "Valencia, España"
     assert place_label("Valencia", "Spain", "Mexico", "pt") == "Valencia, Espanha"
     assert place_label("Valencia", "", "Mexico", "es") == "Valencia"

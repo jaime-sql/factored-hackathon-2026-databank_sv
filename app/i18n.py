@@ -34,25 +34,6 @@ def detect_language(text: str, override: str | None = None) -> str:
     return "es"
 
 
-_NBSP = "\u00a0"
-_CURRENCY_LABEL = {
-    "es": {
-        "USD": "US$",
-        "MXN": "MXN",
-        "ARS": "$",
-        "COP": "COP",
-        "BRL": "BRL",
-        "EUR": "EUR",
-    },
-    "pt": {
-        "USD": "US$",
-        "MXN": "MX$",
-        "ARS": "ARS",
-        "COP": "COP",
-        "BRL": "R$",
-        "EUR": "€",
-    },
-}
 _TRANSACTION_TYPES = {
     "es": {
         "Adjustment": "Ajuste",
@@ -117,8 +98,12 @@ def _ui_language(language: str) -> str:
     return "pt" if language == "pt" else "es"
 
 
-def money(amount: float, currency: str, language: str = "es") -> str:
-    """Two decimals, thousands '.', decimal ','. Matches es-AR / pt-BR currency format."""
+def money(amount: float, currency: str, country: str = "") -> str:
+    """Format by the customer's country, not the UI language.
+
+    Mexico uses comma thousands, a dot decimal, and no space (US$1,645.60).
+    Every other country uses dot thousands, a comma decimal, and a space (US$ 1.645,60).
+    """
     try:
         quant = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except (ArithmeticError, ValueError):
@@ -130,12 +115,15 @@ def money(amount: float, currency: str, language: str = "es") -> str:
     while digits:
         groups.append(digits[-3:])
         digits = digits[:-3]
-    number = f"{sign}{'.'.join(reversed(groups))},{frac}"
+    mexico = _region_code(country) == "MX"
+    grouped = ",".join(reversed(groups)) if mexico else ".".join(reversed(groups))
+    number = f"{grouped}.{frac}" if mexico else f"{grouped},{frac}"
     code = (currency or "").strip().upper()
     if not code:
-        return number
-    label = _CURRENCY_LABEL[_ui_language(language)].get(code, code)
-    return f"{label}{_NBSP}{number}"
+        return f"{sign}{number}"
+    label = "US$" if code == "USD" else code
+    gap = "" if mexico else " "
+    return f"{sign}{label}{gap}{number}"
 
 
 _CATEGORIES = {
@@ -268,7 +256,7 @@ def merchant_label(language: str, name: str, category: str, transaction_type: st
         return f"categoría {label}"
     label = transaction_type_label(language, transaction_type)
     if label:
-        return f"tipo {label}"
+        return label
     return ""
 
 

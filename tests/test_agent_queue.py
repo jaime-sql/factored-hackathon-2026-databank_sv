@@ -123,6 +123,64 @@ def test_queue_cards_and_packet_view(client: TestClient) -> None:
     assert review_view["model_risk_score"] is not None
 
 
+def test_packet_enums_stay_raw_in_audit_api_and_export(client: TestClient) -> None:
+    headers = login(client, "maria")
+    opened = _open(client, headers, "tx_maria_pending_high", "No reconozco este cargo")
+    blocked = client.post(
+        f"/cases/{opened['case_id']}/actions",
+        headers=headers,
+        json={"action": "confirm_block"},
+    )
+    assert blocked.status_code == 200, blocked.text
+    case_id = str(opened["case_id"])
+    agent = {"Authorization": "Bearer demo-agent-local"}
+    detail = client.get(f"/api/handoff/{case_id}", headers=agent)
+    assert detail.status_code == 200, detail.text
+    view = detail.json()["view"]
+    assert view["band"] == "high"
+    assert {"name": "block_card", "verification_status": "verified"} in view["actions_taken"]
+    for translated in ("Alto", "Bloqueo de tarjeta verificado", "Traspaso verificado"):
+        assert translated not in detail.text
+
+    ops = client.app.state.ops
+    stored = ops.get_handoff(case_id)
+    assert stored is not None
+    packet = stored["packet"]
+    assert packet["triage"]["band"] == "high"
+    assert {"name": "block_card", "verification_status": "verified"} in packet["actions_taken"]
+    events = ops.list_events(case_id)
+    pairs = {(row["name"], row["verification_status"]) for row in events}
+    assert ("block_card", "verified") in pairs
+    assert ("handoff", "verified") in pairs
+
+    current = [row for row in ops.current_audit_cases() if row["case_id"] == case_id]
+    assert current
+    assert all(row["decision"] == "handoff" for row in current if row.get("decision"))
+    underlying = ops.execute(
+        f"SELECT decision FROM {ops._table('audit_case')} WHERE case_id = ?",
+        (case_id,),
+    )
+    assert underlying
+    decisions = {row["decision"] for row in underlying}
+    assert "handoff" in decisions
+    assert decisions <= {None, "handoff"}
+
+    exported = client.get("/audit/export", headers=agent)
+    assert exported.status_code == 200, exported.text
+    assert "handoff" in exported.text
+    for translated in ("Alto", "Bloqueo de tarjeta verificado", "Traspaso verificado"):
+        assert translated not in exported.text
+
+    trail = client.get(f"/api/cases/{case_id}/trail", headers=agent)
+    assert trail.status_code == 200, trail.text
+    steps = trail.json()["steps"]
+    assert any(step.get("band") == "high" for step in steps)
+    assert any(
+        step.get("action") == "handoff" and step.get("verification") == "verified" for step in steps
+    )
+    assert "Traspaso verificado" not in trail.text
+
+
 def test_agent_console_script_renders_packet() -> None:
     completed = subprocess.run(
         ["node", "tests/test_agent_console.js"],

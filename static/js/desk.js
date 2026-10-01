@@ -19,27 +19,34 @@ function notifyLanguage() {
   document.dispatchEvent(new Event("hd-lang"));
 }
 
-function formatMoney(amount, currency, language) {
+function isMexico(country) {
+  const key = String(country || "").trim().toLowerCase();
+  return key === "mx" || key === "mexico" || key === "méxico";
+}
+
+function formatMoney(amount, currency, country) {
   const value = Number(amount);
   if (!Number.isFinite(value)) return "";
-  const locale = language === "pt" ? "pt-BR" : "es-AR";
-  const code = String(currency || "").trim().toUpperCase();
-  try {
-    if (!code) {
-      return new Intl.NumberFormat(locale, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(value);
-    }
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: code,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return `${value.toFixed(2)} ${code}`.trim();
+  const negative = value < 0;
+  const [whole, frac] = Math.abs(value).toFixed(2).split(".");
+  const groups = [];
+  let digits = whole;
+  while (digits) {
+    groups.unshift(digits.slice(-3));
+    digits = digits.slice(0, -3);
   }
+  const mexico = isMexico(country);
+  const number = `${groups.join(mexico ? "," : ".")}${mexico ? "." : ","}${frac}`;
+  const code = String(currency || "").trim().toUpperCase();
+  if (!code) return `${negative ? "-" : ""}${number}`;
+  const label = code === "USD" ? "US$" : code;
+  return `${negative ? "-" : ""}${label}${mexico ? "" : " "}${number}`;
+}
+
+function revealCopy() {
+  const root = document.documentElement;
+  if (!root || !root.classList || typeof root.classList.remove !== "function") return;
+  root.classList.remove("i18n-pending");
 }
 
 const state = {
@@ -95,6 +102,7 @@ function applyLanguage() {
   if (testToken && copy.test_token) testToken.placeholder = copy.test_token;
   const testTokenLabel = document.getElementById("test-token-label");
   if (testTokenLabel && copy.test_token) testTokenLabel.textContent = copy.test_token;
+  revealCopy();
   notifyLanguage();
   for (const button of document.querySelectorAll('#charges [data-action="select-charge"]')) {
     button.textContent = copy.dispute;
@@ -142,7 +150,7 @@ function renderCharges(charges) {
     const meta = document.createElement("div");
     meta.className = "meta";
     const status = tx.status_label || (copy && copy.status && copy.status[tx.transaction_status]) || "";
-    const amount = tx.amount_label || formatMoney(tx.amount, tx.currency, state.language);
+    const amount = tx.amount_label || formatMoney(tx.amount, tx.currency, tx.customer_country);
     const place = String(tx.place || tx.transaction_city || "").trim();
     meta.textContent = [tx.local_time, place, amount, status]
       .map((part) => String(part || "").trim())
