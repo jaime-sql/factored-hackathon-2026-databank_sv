@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from typing import Any
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, BackgroundTasks, Header, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -44,6 +45,8 @@ from app.reply.draft import fact_sheet
 from app.timeutil import present_time
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+_EVAL_BODY_FIELDS = frozenset({"eval_run_id", "case_source", "is_eval_case"})
 
 
 class SessionIn(BaseModel):
@@ -56,6 +59,7 @@ class CaseIn(BaseModel):
     language: str | None = None
     eval_run_id: str | None = None
     case_source: str | None = None
+    is_eval_case: bool | None = None
     case_id: str | None = None
     demo_attack: bool = False
 
@@ -133,8 +137,25 @@ def _console_source(request: Request) -> str | None:
     return None
 
 
-def _record_console(request: Request, case_id: str, action: str) -> None:
-    request.app.state.engine.record_console_action(case_id, action, _console_source(request))
+def _record_console(
+    background: BackgroundTasks, request: Request, case_id: str, action: str
+) -> None:
+    """Audit after the response body is ready.
+
+    The task still finishes before the ASGI call returns, so Cloud Run does
+    not freeze the instance out from under the insert. A failure is logged
+    and does not change the response the console already received.
+    """
+    source = _console_source(request)
+    engine = request.app.state.engine
+
+    def write() -> None:
+        try:
+            engine.record_console_action(case_id, action, source)
+        except Exception:
+            logger.exception("console audit %s was not stored for %s", action, case_id)
+
+    background.add_task(write)
 
 
 def _agent(request: Request, *, admin_only: bool = False) -> str:
@@ -309,18 +330,21 @@ def open_case(
     settings = _settings(request)
     customer_key = _customer(request)
     presented_eval = (eval_runner_token or "").strip()
-    # A judge token never stamps an eval run, even with a valid runner header.
-    judge_bearer = agent_role(settings, _bearer(request)) == "judge"
-    judge_header = agent_role(settings, presented_eval) == "judge"
-    if judge_bearer or judge_header:
-        eval_run_id, case_source = None, None
-    else:
-        eval_run_id, case_source = accept_eval_fields(
-            eval_runner_token,
-            settings.eval_runner_token,
-            body.eval_run_id,
-            body.case_source,
+    judge_request = agent_role(settings, _bearer(request)) == "judge" or agent_role(
+        settings, presented_eval
+    ) == "judge"
+    if judge_request and body.model_fields_set & _EVAL_BODY_FIELDS:
+        raise APIError(
+            403,
+            "eval_fields_forbidden",
+            "A judge token cannot set eval_run_id, case_source, or is_eval_case",
         )
+    eval_run_id, case_source = accept_eval_fields(
+        eval_runner_token,
+        settings.eval_runner_token,
+        body.eval_run_id,
+        body.case_source,
+    )
     is_eval = bool(eval_run_id or case_source)
     header_match = accepts_qa_test_token(
         _settings(request).qa_test_token, request.headers.get("x-test-token", "")
@@ -420,13 +444,16 @@ def handoff_queue(request: Request, language: str | None = None) -> dict[str, An
         queue_card(row, audits.get(row["case_id"]), display_language=lang)
         for row in request.app.state.ops.list_handoffs()
     ]
-    for item in items:
-        _record_console(request, str(item["case_id"]), "list")
     return {"queue": items}
 
 
 @router.get("/api/handoff/{case_id}")
-def handoff_case(case_id: str, request: Request, language: str | None = None) -> dict[str, Any]:
+def handoff_case(
+    case_id: str,
+    request: Request,
+    background: BackgroundTasks,
+    language: str | None = None,
+) -> dict[str, Any]:
     _agent(request)
     row = request.app.state.ops.get_handoff(case_id)
     if row is None:
@@ -453,7 +480,7 @@ def handoff_case(case_id: str, request: Request, language: str | None = None) ->
     if evidence:
         view["band_evidence"] = evidence
     _attach_reply(request, case_id, view)
-    _record_console(request, case_id, "open")
+    _record_console(background, request, case_id, "open")
     return {
         "handoff": row,
         "events": safe_events,
@@ -487,10 +514,12 @@ def _attach_reply(request: Request, case_id: str, view: dict[str, Any]) -> None:
 
 
 @router.post("/api/handoff/{case_id}/draft-check")
-def draft_check(case_id: str, body: ReplyIn, request: Request) -> dict[str, Any]:
+def draft_check(
+    case_id: str, body: ReplyIn, request: Request, background: BackgroundTasks
+) -> dict[str, Any]:
     _agent(request)
     checked = grounded(body.text, _reply_facts(request, case_id))
-    _record_console(request, case_id, "draft")
+    _record_console(background, request, case_id, "draft")
     return checked
 
 
@@ -528,7 +557,9 @@ def claim(case_id: str, request: Request) -> dict[str, str]:
 
 
 @router.post("/api/handoff/{case_id}/resolve")
-def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str, str]:
+def resolve_handoff(
+    case_id: str, body: ResolveIn, request: Request, background: BackgroundTasks
+) -> dict[str, str]:
     _agent(request)
     if request.app.state.ops.get_handoff(case_id) is None:
         raise APIError(404, "not_found", "Handoff not found")
@@ -542,7 +573,7 @@ def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str
             "updated_at": datetime.now(UTC),
         },
     )
-    _record_console(request, case_id, "resolve")
+    _record_console(background, request, case_id, "resolve")
     return {"status": "resolved"}
 
 

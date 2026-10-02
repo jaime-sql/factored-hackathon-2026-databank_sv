@@ -6,8 +6,11 @@ KPI totals skip them and keep the customer decision.
 
 from __future__ import annotations
 
-CONSOLE_ACTIONS = ("list", "open", "resolve", "draft")
-CONSOLE_DECISIONS = frozenset(f"console_{action}" for action in CONSOLE_ACTIONS)
+CONSOLE_ACTIONS = ("open", "resolve", "draft")
+# Older builds wrote console_list. Those rows stay out of routing and KPI totals.
+CONSOLE_DECISIONS = frozenset(
+    {"console_list", *(f"console_{action}" for action in CONSOLE_ACTIONS)}
+)
 
 
 def is_console_decision(decision: object) -> bool:

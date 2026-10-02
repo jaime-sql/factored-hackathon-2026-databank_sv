@@ -68,6 +68,7 @@ def test_judge_cannot_set_eval_run_or_open_eval_export(tmp_path: Path) -> None:
         assert stamped.status_code == 200, stamped.text
         assert stamped.json()["eval_run_id"] == "run-real"
 
+        before = len(client.app.state.ops.list_cases())
         blocked = client.post(
             "/cases",
             headers={
@@ -81,14 +82,39 @@ def test_judge_cannot_set_eval_run_or_open_eval_export(tmp_path: Path) -> None:
                 "case_source": "sample",
             },
         )
-        assert blocked.status_code == 200, blocked.text
-        body = blocked.json()
+        assert blocked.status_code == 403, blocked.text
+        assert blocked.json()["error"] == "eval_fields_forbidden"
+        assert len(client.app.state.ops.list_cases()) == before
+        for payload in (
+            {"case_source": "sample"},
+            {"is_eval_case": True},
+            {"eval_run_id": "run-judge"},
+        ):
+            again = client.post(
+                "/cases",
+                headers={"Authorization": f"Bearer {JUDGE}"},
+                json={
+                    "transaction_key": "tx_maria_low",
+                    "message": "No reconozco este cargo",
+                    **payload,
+                },
+            )
+            assert again.status_code == 403, again.text
+            assert again.json()["error"] == "eval_fields_forbidden"
+        opened = client.post(
+            "/cases",
+            headers={"Authorization": f"Bearer {JUDGE}"},
+            json={"transaction_key": "tx_maria_low", "message": "No reconozco este cargo"},
+        )
+        assert opened.status_code == 200, opened.text
+        body = opened.json()
         assert body["eval_run_id"] is None
         assert body["case_source"] is None
         stored = client.app.state.ops.get_case(body["case_id"])
         assert stored is not None
         assert stored["eval_run_id"] is None
         assert stored["case_source"] is None
+        assert stored["is_eval_case"] in (False, 0)
 
         judge = {"Authorization": f"Bearer {JUDGE}"}
         assert client.get("/audit/export", headers=judge).status_code == 403

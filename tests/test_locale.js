@@ -977,8 +977,10 @@ async function testBreakItAndPersonas() {
   const orig = document.createElement.bind(document);
   document.createElement = (tag) => {
     const el = orig(tag);
-    el.scrollIntoView = () => {
+    el.scrollIntoView = (options) => {
       el.scrolled = true;
+      el.scrolls = (el.scrolls || 0) + 1;
+      el.scrollBlock = options && options.block;
     };
     return el;
   };
@@ -1042,6 +1044,11 @@ async function testBreakItAndPersonas() {
   assert.equal(Object.prototype.hasOwnProperty.call(posted, "message"), false);
   const card = thread.children[0];
   assert.equal(card.scrolled, true);
+  const why = card.querySelector("details.why");
+  assert.ok(why, "why line missing");
+  assert.equal(why.scrolled, true);
+  assert.equal(why.scrollBlock, "center");
+  assert.ok(why.textContent.includes("¿Por qué?"), why.textContent);
   const spanish = card.textContent;
   assert.equal(spanish.split("Protegido").length - 1, 1, spanish);
   assert.ok(spanish.includes(catalog.es.score_guardrail), spanish);

@@ -363,9 +363,17 @@ function render(body) {
   }
   box.appendChild(card);
   const flags = (body.audit && body.audit.guardrail_flags) || body.guardrail_flags || [];
-  if (body.case_id) attachWhy(card, body.case_id, flags);
+  const why = body.case_id ? attachWhy(card, body.case_id, flags) : null;
   if ((body.demo_attack || body.protected) && typeof card.scrollIntoView === "function") {
     card.scrollIntoView({ block: "nearest" });
+  }
+  if ((body.demo_attack || body.protected) && why && typeof why.then === "function") {
+    why.then((details) => {
+      const target = details || card;
+      if (typeof target.scrollIntoView === "function") {
+        target.scrollIntoView({ block: "center" });
+      }
+    });
   }
 }
 
@@ -373,7 +381,7 @@ async function attachWhy(card, caseId, flags) {
   const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/trail`, {
     headers: { authorization: `Bearer ${state.token}` },
   });
-  if (!response.ok) return;
+  if (!response.ok) return null;
   const body = await response.json();
   const details = document.createElement("details");
   details.className = "why";
@@ -405,6 +413,7 @@ async function attachWhy(card, caseId, flags) {
   }
   details.appendChild(list);
   card.appendChild(details);
+  return details;
 }
 
 document.getElementById("composer").addEventListener("submit", async (event) => {
