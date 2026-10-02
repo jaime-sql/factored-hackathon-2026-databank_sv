@@ -24,6 +24,7 @@ from app.cases.trail import build_steps
 from app.config import Settings
 from app.errors import APIError
 from app.eval_access import accept_eval_fields
+from app.guardrails.draft_check import grounded
 from app.handoff.packet import HandoffPacket
 from app.handoff.present import packet_view, queue_card
 from app.i18n import (
@@ -41,7 +42,6 @@ from app.metrics.compute import compute_metrics, select_cases
 from app.panels import fairness_panel, simulator_panel, trust_panel
 from app.reply.draft import fact_sheet
 from app.timeutil import present_time
-from evals.draft_check import grounded
 
 router = APIRouter()
 

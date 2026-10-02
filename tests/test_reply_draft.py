@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import logging
+import sqlite3
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.guardrails.draft_check import grounded as app_grounded
 from evals.draft_check import grounded
 from tests.conftest import login
 
 ADMIN = {"Authorization": "Bearer demo-agent-local"}
+
+
+def test_harness_reexports_the_app_check() -> None:
+    assert grounded is app_grounded
 
 
 def test_grounded_rejects_amounts_dates_and_merchants_outside_the_packet() -> None:
@@ -101,3 +110,28 @@ def test_handoff_draft_is_grounded_and_unsent(client: TestClient) -> None:
         if row["case_id"] == opened["case_id"]
     ]
     assert tip[0]["decision"] == "handoff"
+
+
+def test_missing_reply_columns_skip_the_draft_without_a_500(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    path = client.app.state.ops.path
+    with sqlite3.connect(path) as conn:
+        conn.execute("ALTER TABLE cases DROP COLUMN reply_draft")
+        conn.execute("ALTER TABLE cases DROP COLUMN reply_sent")
+    headers = login(client, "maria")
+    with caplog.at_level(logging.WARNING, logger="app.ops.store"):
+        opened = client.post(
+            "/cases",
+            headers=headers,
+            json={"transaction_key": "tx_maria_review", "message": "No reconozco este cargo"},
+        )
+    assert opened.status_code == 200, opened.text
+    assert "reply draft was not stored" in caplog.text
+    sent = client.post(
+        f"/api/handoff/{opened.json()['case_id']}/reply",
+        headers=ADMIN,
+        json={"text": "Revisamos el cargo."},
+    )
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["status"] == "reply_sent"

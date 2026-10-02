@@ -543,12 +543,24 @@ class OpsStore:
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"case columns are not updated this way: {sorted(unknown)}")
+        self._update_case_fields(case_id, fields)
+
+    def _update_case_fields(self, case_id: str, fields: dict[str, Any]) -> None:
         assignments = ", ".join(f"{name} = ?" for name in fields)
         params = tuple(fields.values()) + (case_id,)
-        self._write(
-            f"UPDATE {self._table('cases')} SET {assignments} WHERE case_id = ?",
-            params,
-        )
+        try:
+            self._write(
+                f"UPDATE {self._table('cases')} SET {assignments} WHERE case_id = ?",
+                params,
+            )
+        except Exception as exc:
+            optional = {"reply_draft", "reply_sent"}
+            if not optional.intersection(fields) or not _missing_added_column(exc):
+                raise
+            logger.warning("reply draft was not stored (%s)", type(exc).__name__)
+            kept = {name: value for name, value in fields.items() if name not in optional}
+            if kept:
+                self._update_case_fields(case_id, kept)
 
     def get_case(self, case_id: str) -> dict[str, Any] | None:
         rows = self.execute(

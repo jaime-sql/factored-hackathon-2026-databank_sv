@@ -280,6 +280,29 @@ def test_migration_003_leaves_app_rw_select_only_on_the_audit_views() -> None:
     assert not _privileges_are_select_only({"audit_current": {"SELECT"}})
 
 
+def test_migration_004_appends_demo_attack_and_leaves_audit_grants() -> None:
+    sql = (ROOT / "migrations" / "004_demo_attack.sql").read_text(encoding="utf-8")
+    assert sql.count("ADD COLUMN IF NOT EXISTS demo_attack boolean NOT NULL DEFAULT false") == 3
+    assert "ADD COLUMN IF NOT EXISTS reply_draft text" in sql
+    assert "ADD COLUMN IF NOT EXISTS reply_sent text" in sql
+    assert "DROP VIEW" not in sql.upper()
+    assert "CREATE OR REPLACE VIEW app.audit_current" not in sql
+    assert "CREATE OR REPLACE VIEW app.audit_live" in sql
+    view = sql[sql.index("CREATE OR REPLACE VIEW app.audit_live") : sql.index("REVOKE")]
+    assert view.index("cur.*") < view.index("AS demo_attack")
+    assert "GRANT SELECT ON app.audit_live TO app_rw" in sql
+    for phrase in (
+        "ON app.audit_case",
+        "ON app.audit_llm_call",
+        "ON app.audit_event",
+        "ON app.audit_current",
+    ):
+        assert phrase not in sql, phrase
+    assert "GRANT INSERT" not in sql
+    assert "GRANT UPDATE" not in sql
+    assert "GRANT DELETE" not in sql
+
+
 def test_app_code_does_not_read_eval_labels() -> None:
     for path in (ROOT / "app").rglob("*.py"):
         text = path.read_text(encoding="utf-8")

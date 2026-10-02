@@ -14,9 +14,17 @@ ALTER TABLE app.cases ADD COLUMN IF NOT EXISTS reply_draft text;
 
 ALTER TABLE app.cases ADD COLUMN IF NOT EXISTS reply_sent text;
 
+-- Keep the column list app.audit_live already has (cur.* from the view
+-- created while 7bba350 is serving). demo_attack is appended at the end.
+-- CREATE OR REPLACE cannot reorder or drop columns. Do not replace
+-- app.audit_current and do not change grants on the audit tables.
 CREATE OR REPLACE VIEW app.audit_live
 WITH (security_invoker = true) AS
-SELECT cur.*
+SELECT cur.*,
+       EXISTS (
+         SELECT 1 FROM app.audit_case AS flagged
+         WHERE flagged.audit_id = cur.audit_id AND flagged.demo_attack
+       ) AS demo_attack
 FROM app.audit_current AS cur
 WHERE cur.eval_run_id IS NULL
   AND NOT EXISTS (
