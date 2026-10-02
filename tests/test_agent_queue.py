@@ -163,7 +163,8 @@ def test_packet_enums_stay_raw_in_audit_api_and_export(client: TestClient) -> No
     assert underlying
     decisions = {row["decision"] for row in underlying}
     assert "handoff" in decisions
-    assert decisions <= {None, "handoff"}
+    assert "reply_draft" in decisions
+    assert decisions <= {None, "handoff", "reply_draft", "reply_sent"}
 
     exported = client.get("/audit/export", headers=agent)
     assert exported.status_code == 200, exported.text

@@ -24,6 +24,7 @@ from app.cases.trail import build_steps
 from app.config import Settings
 from app.errors import APIError
 from app.eval_access import accept_eval_fields
+from app.handoff.packet import HandoffPacket
 from app.handoff.present import packet_view, queue_card
 from app.i18n import (
     localize_metrics,
@@ -37,7 +38,10 @@ from app.i18n import (
     ui_copy,
 )
 from app.metrics.compute import compute_metrics, select_cases
+from app.panels import fairness_panel, simulator_panel, trust_panel
+from app.reply.draft import fact_sheet
 from app.timeutil import present_time
+from evals.draft_check import grounded
 
 router = APIRouter()
 
@@ -53,6 +57,7 @@ class CaseIn(BaseModel):
     eval_run_id: str | None = None
     case_source: str | None = None
     case_id: str | None = None
+    demo_attack: bool = False
 
 
 class ActionIn(BaseModel):
@@ -61,6 +66,10 @@ class ActionIn(BaseModel):
 
 class ResolveIn(BaseModel):
     note: str = Field(default="", max_length=500)
+
+
+class ReplyIn(BaseModel):
+    text: str = Field(default="", max_length=2000)
 
 
 def _settings(request: Request) -> Settings:
@@ -305,6 +314,7 @@ def open_case(
         eval_run_id,
         case_source,
         is_test=False if is_eval else _traffic_is_test(request),
+        demo_attack=body.demo_attack,
     )
     response = JSONResponse(result.as_dict())
     if header_match and not is_eval:
@@ -421,10 +431,57 @@ def handoff_case(case_id: str, request: Request, language: str | None = None) ->
     evidence = request.app.state.band_evidence.line(str(view.get("band") or ""))
     if evidence:
         view["band_evidence"] = evidence
+    _attach_reply(request, case_id, view)
     return {
         "handoff": row,
         "events": safe_events,
         "view": view,
+    }
+
+
+def _reply_facts(request: Request, case_id: str) -> dict[str, str]:
+    row = request.app.state.ops.get_handoff(case_id)
+    if row is None:
+        raise APIError(404, "not_found", "Handoff not found")
+    packet = HandoffPacket.model_validate(row["packet"])
+    customer = request.app.state.engine.bank.get_customer(packet.customer_key)
+    country = customer.customer_country if customer is not None else ""
+    return fact_sheet(packet, country)
+
+
+def _attach_reply(request: Request, case_id: str, view: dict[str, Any]) -> None:
+    case = request.app.state.ops.get_case(case_id)
+    draft = str(case.get("reply_draft") or "") if case else ""
+    sent = str(case.get("reply_sent") or "") if case else ""
+    view["reply_draft"] = draft
+    view["reply_sent"] = sent
+    if not draft:
+        view["reply_grounded"] = False
+        view["reply_unsupported"] = []
+        return
+    checked = grounded(draft, _reply_facts(request, case_id))
+    view["reply_grounded"] = bool(checked["ok"])
+    view["reply_unsupported"] = list(checked["unsupported_facts"])
+
+
+@router.post("/api/handoff/{case_id}/draft-check")
+def draft_check(case_id: str, body: ReplyIn, request: Request) -> dict[str, Any]:
+    _agent(request)
+    return grounded(body.text, _reply_facts(request, case_id))
+
+
+@router.post("/api/handoff/{case_id}/reply")
+def send_reply(case_id: str, body: ReplyIn, request: Request) -> dict[str, Any]:
+    _agent(request)
+    text = body.text.strip()
+    if not text:
+        raise APIError(400, "empty_reply", "Reply text is required")
+    request.app.state.engine.record_reply_sent(case_id, text)
+    checked = grounded(text, _reply_facts(request, case_id))
+    return {
+        "status": "reply_sent",
+        "ok": checked["ok"],
+        "unsupported_facts": checked["unsupported_facts"],
     }
 
 
@@ -524,6 +581,9 @@ def metrics(
     if language in {"es", "pt"}:
         payload = localize_metrics(payload, language)
         payload["eval_toggle_label"] = str(ui_copy(language)["eval_toggle"])
+    payload["trust"] = trust_panel()
+    payload["simulator"] = simulator_panel()
+    payload["fairness"] = fairness_panel()
     return payload
 
 

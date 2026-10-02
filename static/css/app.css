@@ -150,6 +150,15 @@ button.linkish {
 .test-arm-form { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; max-width: 24rem; align-items: center; }
 .test-arm-form label { flex: 1 0 100%; font-family: "Segoe UI", sans-serif; font-size: 0.75rem; }
 .test-arm-form[hidden] { display: none; }
+#break-it { border-color: var(--warn); }
+.audit-row, .draft { margin-top: 0.8rem; }
+.draft textarea { width: 100%; min-height: 6rem; }
+.grounded[data-grounded="1"] { color: var(--ok, #1f6b3a); }
+.grounded[data-grounded="0"] { color: var(--warn); }
+.health-line, .trust-line { margin: 0.3rem 0; }
+.sim-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.sim-table td, .sim-table th { text-align: left; padding: 0.25rem 0.4rem; border-bottom: 1px solid var(--line, #ddd); }
+tr.is-default { font-weight: 700; }
 @media (max-width: 700px) {
   header { flex-direction: column; align-items: start; }
 }

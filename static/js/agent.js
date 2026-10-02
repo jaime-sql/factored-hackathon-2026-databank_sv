@@ -203,6 +203,67 @@ function renderPacket(panel, view, trail) {
   }
   panel.textContent = lines.join("\n");
   panel.hidden = false;
+  if (!view.reply_draft || typeof document === "undefined" || !panel.appendChild) return;
+  const form = document.createElement("form");
+  form.className = "draft";
+  const label = document.createElement("p");
+  label.className = "meta";
+  label.textContent = ui("draft_label", "Borrador IA");
+  const badge = document.createElement("span");
+  badge.className = "grounded";
+  badge.dataset.grounded = view.reply_grounded ? "1" : "0";
+  badge.textContent = view.reply_grounded
+    ? ui("grounded_ok", "Fundamentado")
+    : ui("grounded_bad", "Sin fundamento");
+  label.append(" ");
+  label.appendChild(badge);
+  const area = document.createElement("textarea");
+  area.value = view.reply_sent || view.reply_draft;
+  const send = document.createElement("button");
+  send.type = "submit";
+  send.textContent = ui("send_reply", "Enviar respuesta");
+  const note = document.createElement("p");
+  note.className = "meta";
+  if (view.reply_sent) note.textContent = ui("reply_sent_label", "Respuesta registrada");
+  const caseId = panel.dataset.caseId || "";
+  area.addEventListener("input", async () => {
+    if (!caseId) return;
+    const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/draft-check`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${tokenInput.value}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ text: area.value }),
+    });
+    if (!response.ok) return;
+    const checked = await response.json();
+    badge.dataset.grounded = checked.ok ? "1" : "0";
+    badge.textContent = checked.ok
+      ? ui("grounded_ok", "Fundamentado")
+      : ui("grounded_bad", "Sin fundamento");
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!caseId) return;
+    const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/reply`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${tokenInput.value}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ text: area.value }),
+    });
+    if (!response.ok) return;
+    note.textContent = ui("reply_sent_label", "Respuesta registrada");
+    const checked = await response.json();
+    badge.dataset.grounded = checked.ok ? "1" : "0";
+    badge.textContent = checked.ok
+      ? ui("grounded_ok", "Fundamentado")
+      : ui("grounded_bad", "Sin fundamento");
+  });
+  form.append(label, area, send, note);
+  panel.appendChild(form);
 }
 
 function showTestBadge(on) {
@@ -328,6 +389,7 @@ async function togglePacket(panel, caseId) {
     { headers },
   );
   if (trailResponse.ok) trail = await trailResponse.json();
+  panel.dataset.caseId = caseId;
   renderPacket(panel, body.view || {}, trail);
   panel.dataset.loaded = "1";
 }

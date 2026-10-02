@@ -23,6 +23,10 @@ def _test_traffic(row: dict[str, Any], test_ids: set[str]) -> bool:
     return bool(row.get("is_test")) or str(row.get("case_id") or "") in test_ids
 
 
+def _demo_attack(row: dict[str, Any]) -> bool:
+    return bool(row.get("demo_attack"))
+
+
 def select_cases(
     cases: list[dict[str, Any]],
     *,
@@ -38,6 +42,8 @@ def select_cases(
     marked = test_ids or set()
     chosen: list[dict[str, Any]] = []
     for row in cases:
+        if _demo_attack(row):
+            continue
         if _eval_traffic(row) and not include_eval:
             continue
         if _test_traffic(row, marked) and not include_test:
@@ -92,6 +98,7 @@ def compute_metrics(
     failed_calls = [row for row in chosen_calls if row.get("call_status") != "ok"]
     costs = [_case_cost(row, chosen_calls, prices) for row in chosen]
     mean_cost = sum(costs) / len(costs) if costs else None
+    health = _llm_health(chosen_calls, prices)
     return {
         "include_eval": include_eval,
         "include_test": include_test,
@@ -159,6 +166,28 @@ def compute_metrics(
             "Rates use closed cases. Open cases are counted as still_open and are not mixed in."
         ),
         "small_sample_rule": "n < 30 is not reliable",
+        "health": health,
+    }
+
+
+def _llm_health(calls: list[dict[str, Any]], prices: list[dict[str, Any]]) -> dict[str, Any]:
+    """p50/p95 latency and mean cost for the same live calls as the other tiles."""
+    latencies = [int(row.get("latency_ms") or 0) for row in calls]
+    priced: list[float] = []
+    for call in calls:
+        price = _price_for(str(call.get("model") or ""), call.get("call_started_at"), prices)
+        if price is None:
+            continue
+        priced.append(
+            int(call.get("input_tokens") or 0) * price[0] / 1_000_000
+            + int(call.get("output_tokens") or 0) * price[1] / 1_000_000
+        )
+    mean = round(sum(priced) / len(priced), 6) if priced else None
+    return {
+        "llm_calls": len(calls),
+        "latency_p50_ms": _percentile(latencies, 0.5),
+        "latency_p95_ms": _percentile(latencies, 0.95),
+        "mean_cost_per_call_usd": mean,
     }
 
 

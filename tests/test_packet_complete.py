@@ -69,7 +69,15 @@ def test_review_open_records_completeness_at_insert(client: TestClient) -> None:
         HandoffPacket.model_validate(stored)
     )
     assert current["handoff_packet_complete"] is True
-    assert client.app.state.ops.audit_case_count(opened["case_id"]) == 1
+    assert client.app.state.ops.audit_case_count(opened["case_id"]) == 2
+    stored_decisions = {
+        row["decision"]
+        for row in client.app.state.ops.execute(
+            "SELECT decision FROM audit_case WHERE case_id = ?",
+            (opened["case_id"],),
+        )
+    }
+    assert stored_decisions == {"handoff", "reply_draft"}
     metrics = compute_metrics(
         client.app.state.ops.current_audit_cases(), [], [], {}, include_eval=False
     )

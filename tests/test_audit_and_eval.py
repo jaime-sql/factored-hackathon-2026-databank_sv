@@ -160,7 +160,15 @@ def test_audit_rows_are_append_only(client: TestClient) -> None:
         json={"action": "contest"},
     )
     assert contested.status_code == 200, contested.text
-    assert client.app.state.ops.audit_case_count(opened["case_id"]) == before + 1
+    assert client.app.state.ops.audit_case_count(opened["case_id"]) == before + 2
+    decisions = {
+        row["decision"]
+        for row in client.app.state.ops.execute(
+            "SELECT decision FROM audit_case WHERE case_id = ?",
+            (opened["case_id"],),
+        )
+    }
+    assert "reply_draft" in decisions
     current = [
         row
         for row in client.app.state.ops.current_audit_cases()
