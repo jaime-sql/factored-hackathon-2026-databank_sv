@@ -17,7 +17,10 @@ context.renderPacket(panel, {
   band: "high",
   model_version: "rule_fs_gt30_v1",
   model_risk_score: null,
+  fraud_score: 45,
+  high_value: 30,
   threshold_crossed: "fraud_score > 30",
+  score_line: "Puntaje de fraude 45 > 30 → bloqueo",
   amount: "220.00 MXN",
   merchant: "U•••",
   local_time: "15 ene 2026, 12:00 CST",
@@ -30,19 +33,20 @@ context.renderPacket(panel, {
 assert.equal(panel.hidden, false);
 assert.equal(panel.textContent.split("\n").includes(""), false);
 for (const part of [
-  "Alto",
+  "Banda: Alto",
   "rule_fs_gt30_v1",
-  "fraud_score > 30",
-  "220.00 MXN",
-  "U•••",
-  "15 ene 2026, 12:00 CST",
+  "Puntaje vs umbral: Puntaje de fraude 45 > 30 → bloqueo",
+  "Monto: 220.00 MXN",
+  "Comercio enmascarado: U•••",
+  "Hora local: 15 ene 2026, 12:00 CST",
   "America/Mexico_City",
   "Bloqueo de tarjeta verificado",
   "Riesgo alto: tarjeta bloqueada",
-  "Revisar la tarjeta bloqueada.",
+  "Siguiente paso: Revisar la tarjeta bloqueada.",
 ]) {
   assert.ok(panel.textContent.includes(part), part);
 }
+assert.equal(panel.textContent.includes("fraud_score > 30"), false);
 assert.equal(panel.textContent.includes("block_card"), false);
 assert.equal(panel.textContent.includes("\nhigh\n") || panel.textContent.startsWith("high\n"), false);
 assert.equal(panel.textContent.includes("fraud rate"), false);
@@ -56,6 +60,7 @@ context.renderPacket(
     model_version: "lgbm:v",
     model_risk_score: null,
     threshold_crossed: "score >= 0.0002756",
+    score_line: "Puntaje: ≥1.00× umbral · encima → revisión",
     amount: "10.00 MXN",
     merchant: "U•••",
     local_time: "15 ene 2026, 12:00 CST",
@@ -77,6 +82,7 @@ context.renderPacket(
     band: "review",
     model_version: "lgbm:v",
     threshold_crossed: "score >= 0.0002756",
+    score_line: "Puntaje: 1.02× umbral · encima → revisión",
     amount: "1,400.00 MXN",
     merchant: "T•••••",
     reason_label: "Modelo: revisión",
@@ -102,6 +108,8 @@ context.renderPacket(
 );
 assert.ok(withTrail.textContent.includes("fraud rate in this band on val 1.2%"));
 assert.ok(withTrail.textContent.includes("lgbm:v"));
+assert.ok(withTrail.textContent.includes("Puntaje: 1.02× umbral · encima → revisión"));
+assert.ok(withTrail.textContent.includes("score >= 0.0002756"));
 assert.ok(withTrail.textContent.includes("Traspaso verificado"));
 assert.equal(withTrail.textContent.includes("handoff verified"), false);
 assert.ok(withTrail.textContent.includes("Revisión"));
@@ -113,6 +121,7 @@ context.renderPacket(
     band: "low",
     model_version: "lgbm:v",
     threshold_crossed: "score < 0.0002756",
+    score_line: "Pontuação: 0,85× limiar · abaixo → automático",
     amount: "10.00 MXN",
     merchant: "U•••",
     local_time: "15 jan 2026, 12:00 CST",
@@ -128,12 +137,108 @@ context.renderPacket(
     ],
   },
 );
-assert.ok(portuguese.textContent.includes("Baixo"));
+assert.ok(portuguese.textContent.includes("Faixa: Baixo"));
+assert.ok(portuguese.textContent.includes("Pontuação vs limiar: Pontuação: 0,85× limiar · abaixo → automático"));
+assert.ok(portuguese.textContent.includes("Valor: 10.00 MXN"));
+assert.ok(portuguese.textContent.includes("Comércio mascarado: U•••"));
+assert.ok(portuguese.textContent.includes("Horário local: 15 jan 2026, 12:00 CST"));
+assert.ok(portuguese.textContent.includes("Próximo passo: Revisar"));
+assert.equal(portuguese.textContent.includes("score < 0.0002756"), false);
 assert.ok(portuguese.textContent.includes("Bloqueio de cartão verificado"));
 assert.ok(portuguese.textContent.includes("Repasse verificado"));
 assert.equal(portuguese.textContent.includes("block_card"), false);
 assert.equal(portuguese.textContent.includes("handoff verified"), false);
 context.consoleState.language = "es";
+
+function fakeElement() {
+  return {
+    className: "",
+    textContent: "",
+    title: "",
+    hidden: false,
+    dataset: {},
+    children: [],
+    append(...items) {
+      this.children.push(...items);
+    },
+    appendChild(node) {
+      this.children.push(node);
+    },
+    replaceChildren(...items) {
+      this.children = items;
+    },
+    addEventListener() {},
+    setAttribute() {},
+  };
+}
+context.document = { createElement: () => fakeElement() };
+
+function findScore(node) {
+  if (node.className === "score-line") return node;
+  for (const child of node.children || []) {
+    const found = findScore(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+const boundary = fakeElement();
+context.renderPacket(boundary, {
+  band: "review",
+  model_risk_score: 1,
+  t_low: 1,
+  score_line: "Puntaje: ≥1.00× umbral · encima → revisión",
+  amount: "10 MXN",
+  merchant: "U•••",
+  recommended_next_step: "Revisar",
+});
+const boundaryScore = findScore(boundary);
+assert.equal(boundaryScore.dataset.band, "review");
+assert.equal(boundaryScore.textContent, "Puntaje: ≥1.00× umbral · encima → revisión");
+assert.equal(boundaryScore.title, "1 · t_low 1");
+
+const belowRounded = fakeElement();
+context.renderPacket(belowRounded, {
+  band: "low",
+  model_risk_score: 0.995,
+  t_low: 1,
+  score_line: "Puntaje: <1.00× umbral · debajo → automático",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Listo",
+});
+const belowScore = findScore(belowRounded);
+assert.equal(belowScore.dataset.band, "low");
+assert.equal(belowScore.textContent, "Puntaje: <1.00× umbral · debajo → automático");
+assert.equal(belowScore.title, "0.995 · t_low 1");
+
+const highDom = fakeElement();
+context.renderPacket(highDom, {
+  band: "high",
+  fraud_score: 45,
+  high_value: 30,
+  score_line: "Puntaje de fraude 45 > 30 → bloqueo",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Bloquear",
+});
+const highScore = findScore(highDom);
+assert.equal(highScore.dataset.band, "high");
+assert.equal(highScore.title, "45 · 30");
+
+const pendingDom = fakeElement();
+context.renderPacket(pendingDom, {
+  band: "out_of_scope",
+  score_line: "Pendiente/Revertido → explicación por regla",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Explicar",
+});
+const pendingScore = findScore(pendingDom);
+assert.equal(pendingScore.dataset.band, "out_of_scope");
+assert.equal(pendingScore.textContent, "Pendiente/Revertido → explicación por regla");
+assert.equal(pendingScore.title, "");
+delete context.document;
 
 assert.match(source, /\/api\/cases\/\$\{encodeURIComponent\(caseId\)\}\/trail/);
 const desk = fs.readFileSync("static/js/desk.js", "utf8");
@@ -258,6 +363,8 @@ async function checkLoadQueue() {
   }
   walk(flagged);
   assert.ok(texts.includes("Prueba"));
+  assert.ok(texts.includes("M · 10 MXN · c1"));
+  assert.equal(texts.includes("c1"), false);
   const plain = node();
   context.fillCard(plain, {
     case_id: "c2",
@@ -275,6 +382,25 @@ async function checkLoadQueue() {
   }
   walkPlain(plain);
   assert.equal(plainTexts.includes("Prueba"), false);
+  const full = "abcdef12-3456-7890-abcd-ef1234567890";
+  const titled = node();
+  context.fillCard(titled, {
+    case_id: full,
+    band: "low",
+    amount: "20 MXN",
+    is_test: false,
+    merchant: "A•••",
+    local_time: "t",
+    reason_label: "r",
+  });
+  const titleTexts = [];
+  function walkTitle(el) {
+    if (el.textContent && !(el.children && el.children.length)) titleTexts.push(el.textContent);
+    for (const child of el.children || []) walkTitle(child);
+  }
+  walkTitle(titled);
+  assert.ok(titleTexts.includes("A••• · 20 MXN · abcdef12"));
+  assert.equal(titleTexts.includes(full), false);
 }
 
 checkLoadQueue()

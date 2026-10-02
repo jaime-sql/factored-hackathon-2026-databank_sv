@@ -118,6 +118,50 @@ function decisionLabel(decision) {
   return localizedToken("decisions", decision);
 }
 
+const FIELD_LABELS = {
+  es: {
+    field_band: "Banda",
+    field_score: "Puntaje vs umbral",
+    field_amount: "Monto",
+    field_merchant: "Comercio enmascarado",
+    field_time: "Hora local",
+    field_step: "Siguiente paso",
+  },
+  pt: {
+    field_band: "Faixa",
+    field_score: "Pontuação vs limiar",
+    field_amount: "Valor",
+    field_merchant: "Comércio mascarado",
+    field_time: "Horário local",
+    field_step: "Próximo passo",
+  },
+};
+
+function fieldLabel(key) {
+  const pack = textPack();
+  if (pack && pack[key]) return pack[key];
+  return FIELD_LABELS[packetLanguage()][key] || key;
+}
+
+function scoreTooltip(view) {
+  if (
+    (view.band === "low" || view.band === "review") &&
+    view.model_risk_score != null &&
+    view.t_low != null
+  ) {
+    return `${view.model_risk_score} · t_low ${view.t_low}`;
+  }
+  if (view.band === "high" && view.fraud_score != null && view.high_value != null) {
+    return `${view.fraud_score} · ${view.high_value}`;
+  }
+  return "";
+}
+
+function cardTitle(item) {
+  const short = String(item.case_id || "").slice(0, 8);
+  return [item.merchant || "", item.amount || "", short].join(" · ");
+}
+
 function adoptCatalog(payload) {
   catalog = payload;
   if (!payload) return;
@@ -158,36 +202,36 @@ function showQueueStatus(box, kind, text) {
   box.appendChild(note);
 }
 
-function renderPacket(panel, view, trail) {
+function packetLines(view, trail) {
   const actions = (view.actions_taken || [])
     .map((action) => actionLabel(action.name, action.verification_status))
     .filter(Boolean)
     .join(", ");
-  const lines = [
-    bandLabel(view.band),
-    view.model_version,
-  ];
-  if (view.model_risk_score != null) lines.push(String(view.model_risk_score));
-  lines.push(
-    view.threshold_crossed,
-    view.amount,
-    view.merchant,
-    view.local_time,
-    view.utc,
-    view.customer_tz,
-    actions || ui("no_actions", "ninguna"),
-    view.reason_label,
-    view.recommended_next_step,
-  );
-  if (view.band_evidence) lines.push(view.band_evidence);
-  if (view.is_test) lines.unshift(ui("test_chip", "Prueba"));
+  const lines = [];
+  if (view.is_test) lines.push({ text: ui("test_chip", "Prueba") });
+  lines.push({ text: `${fieldLabel("field_band")}: ${bandLabel(view.band)}` });
+  if (view.model_version) lines.push({ text: view.model_version });
+  lines.push({
+    text: `${fieldLabel("field_score")}: ${view.score_line || ""}`,
+    score: true,
+    value: view.score_line || "",
+  });
+  lines.push({ text: `${fieldLabel("field_amount")}: ${view.amount || ""}` });
+  lines.push({ text: `${fieldLabel("field_merchant")}: ${view.merchant || ""}` });
+  lines.push({ text: `${fieldLabel("field_time")}: ${view.local_time || ""}` });
+  if (view.utc) lines.push({ text: view.utc });
+  if (view.customer_tz) lines.push({ text: view.customer_tz });
+  lines.push({ text: actions || ui("no_actions", "ninguna") });
+  if (view.reason_label) lines.push({ text: view.reason_label });
+  lines.push({ text: `${fieldLabel("field_step")}: ${view.recommended_next_step || ""}` });
+  if (view.band_evidence) lines.push({ text: view.band_evidence });
   for (const step of (trail && trail.steps) || []) {
     if (step.kind === "action") {
       const action = actionLabel(step.action, step.verification);
-      lines.push([step.at, action].filter(Boolean).join(" · "));
+      lines.push({ text: [step.at, action].filter(Boolean).join(" · ") });
     } else {
-      lines.push(
-        [
+      lines.push({
+        text: [
           step.at,
           step.rule_or_model,
           bandLabel(step.band),
@@ -198,11 +242,47 @@ function renderPacket(panel, view, trail) {
         ]
           .filter(Boolean)
           .join(" · "),
-      );
+      });
     }
   }
-  panel.textContent = lines.join("\n");
+  return lines;
+}
+
+function renderPacket(panel, view, trail) {
+  const lines = packetLines(view, trail);
   panel.hidden = false;
+  const canDom =
+    typeof document !== "undefined" &&
+    typeof document.createElement === "function" &&
+    typeof panel.replaceChildren === "function";
+  if (!canDom) {
+    panel.textContent = lines.map((line) => line.text).join("\n");
+    appendDraft(panel, view);
+    return;
+  }
+  const nodes = lines.map((line) => {
+    const row = document.createElement("span");
+    row.className = "packet-line";
+    if (!line.score) {
+      row.textContent = line.text;
+      return row;
+    }
+    const name = document.createElement("span");
+    name.textContent = `${fieldLabel("field_score")}: `;
+    const value = document.createElement("span");
+    value.className = "score-line";
+    value.dataset.band = view.band || "";
+    value.textContent = line.value;
+    const tip = scoreTooltip(view);
+    if (tip) value.title = tip;
+    row.append(name, value);
+    return row;
+  });
+  panel.replaceChildren(...nodes);
+  appendDraft(panel, view);
+}
+
+function appendDraft(panel, view) {
   if (!view.reply_draft || typeof document === "undefined" || !panel.appendChild) return;
   const form = document.createElement("form");
   form.className = "draft";
@@ -289,7 +369,7 @@ function fillCard(card, item) {
   card.className = "card";
   card.replaceChildren();
   const title = document.createElement("strong");
-  title.textContent = item.case_id || "";
+  title.textContent = cardTitle(item);
   const meta = document.createElement("div");
   meta.className = "meta";
   const chip = document.createElement("span");

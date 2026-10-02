@@ -711,6 +711,71 @@ def threshold_crossed(
     return "Pending/Reversed"
 
 
+def _finite(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    if number != number or number in {float("inf"), float("-inf")}:
+        return None
+    return number
+
+
+def _count_text(value: float, language: str) -> str:
+    text = f"{value:g}"
+    if language == "pt":
+        return text.replace(".", ",")
+    return text
+
+
+def _ratio_text(score: float, t_low: float, language: str) -> str | None:
+    """Two-decimal score/t_low. A 1.00 rounding keeps the raw >= direction."""
+    if t_low <= 0:
+        return None
+    ratio = (Decimal(str(score)) / Decimal(str(t_low))).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    digits = f"{ratio:.2f}"
+    if language == "pt":
+        digits = digits.replace(".", ",")
+    if ratio == Decimal("1.00"):
+        sign = "≥" if score >= t_low else "<"
+        return f"{sign}{digits}×"
+    return f"{digits}×"
+
+
+def score_line(
+    language: str,
+    band: str,
+    *,
+    model_risk_score: float | None,
+    fraud_score: float | None,
+    t_low: float,
+    high_value: float,
+) -> str:
+    """Agent-facing score sentence. Audit, API enums, and CSV stay on threshold_crossed."""
+    lang = _lang(language)
+    if band == "high":
+        prefix = "Pontuação de fraude" if lang == "pt" else "Puntaje de fraude"
+        action = "bloqueio" if lang == "pt" else "bloqueo"
+        shown = _finite(fraud_score)
+        if shown is None:
+            return f"{prefix} > {_count_text(high_value, lang)} → {action}"
+        return f"{prefix} {_count_text(shown, lang)} > {_count_text(high_value, lang)} → {action}"
+    if band not in {"low", "review"}:
+        if lang == "pt":
+            return "Pendente/Revertido → explicação por regra"
+        return "Pendiente/Revertido → explicación por regla"
+    score = _finite(model_risk_score)
+    marker = None if score is None else _ratio_text(score, t_low, lang)
+    if score is None or marker is None:
+        return "Pontuação: —" if lang == "pt" else "Puntaje: —"
+    if lang == "pt":
+        tail = "acima → revisão" if score >= t_low else "abaixo → automático"
+        return f"Pontuação: {marker} limiar · {tail}"
+    tail = "encima → revisión" if score >= t_low else "debajo → automático"
+    return f"Puntaje: {marker} umbral · {tail}"
+
+
 def next_step_contest(language: str) -> str:
     if language == "pt":
         return "O cliente rejeitou a explicação automática. Revisar a cobrança. Nenhum crédito foi emitido."
@@ -771,6 +836,12 @@ _UI = {
         "queue_failed": "No se pudo leer la cola.",
         "queue_loading": "Cargando la cola…",
         "open_packet": "Abrir paquete",
+        "field_band": "Banda",
+        "field_score": "Puntaje vs umbral",
+        "field_amount": "Monto",
+        "field_merchant": "Comercio enmascarado",
+        "field_time": "Hora local",
+        "field_step": "Siguiente paso",
         "resolve": "Resolver",
         "packet_error": "No se pudo abrir el paquete",
         "resolved": "Resuelto",
@@ -865,6 +936,12 @@ _UI = {
         "queue_failed": "Não foi possível ler a fila.",
         "queue_loading": "Carregando a fila…",
         "open_packet": "Abrir pacote",
+        "field_band": "Faixa",
+        "field_score": "Pontuação vs limiar",
+        "field_amount": "Valor",
+        "field_merchant": "Comércio mascarado",
+        "field_time": "Horário local",
+        "field_step": "Próximo passo",
         "resolve": "Resolver",
         "packet_error": "Não foi possível abrir o pacote",
         "resolved": "Resolvido",

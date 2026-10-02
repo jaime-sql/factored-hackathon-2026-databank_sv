@@ -54,6 +54,12 @@ pre.packet-panel {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.packet-line { display: block; }
+.score-line { font-weight: 700; }
+.score-line[data-band="high"] { color: var(--warn); }
+.score-line[data-band="review"] { color: #9a6700; }
+.score-line[data-band="low"] { color: var(--accent); }
+.score-line[data-band="out_of_scope"] { color: #6b645b; }
 .queue-status {
   background: var(--card);
   border: 1px solid var(--line);
