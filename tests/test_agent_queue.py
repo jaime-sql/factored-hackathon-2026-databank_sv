@@ -139,7 +139,7 @@ def test_queue_cards_and_packet_view(client: TestClient) -> None:
     pending_view = pending_detail.json()["view"]
     assert pending_view["band"] == "out_of_scope"
     assert pending_view["threshold_crossed"] == "Pending/Reversed"
-    assert pending_view["score_line"] == "Pendiente/Revertido → explicación por regla"
+    assert pending_view["score_line"] == "Pendiente/Reversado → explicación por regla"
 
     low_view = client.get(f"/api/handoff/{low['case_id']}", headers=agent).json()["view"]
     assert low_view["threshold_crossed"].startswith("score < ")
@@ -200,7 +200,14 @@ def test_packet_enums_stay_raw_in_audit_api_and_export(client: TestClient) -> No
     assert "handoff" in exported.text
     for translated in ("Alto", "Bloqueo de tarjeta verificado", "Traspaso verificado"):
         assert translated not in exported.text
-    for display in ("Puntaje", "Pontuação", "umbral", "limiar", "Pendiente/Revertido"):
+    for display in (
+        "Puntaje",
+        "Pontuação",
+        "umbral",
+        "limiar",
+        "Pendiente/Reversado",
+        "Pendente/Estornado",
+    ):
         assert display not in exported.text
 
     trail = client.get(f"/api/cases/{case_id}/trail", headers=agent)

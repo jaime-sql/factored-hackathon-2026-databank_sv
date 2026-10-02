@@ -156,6 +156,21 @@ function renderJudgePanels(body, text) {
   renderK11(body, text);
 }
 
+function formatUsd(value) {
+  if (value == null || value === "") return "—";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "—";
+  const digits = number !== 0 && Math.abs(number) < 0.01 ? 4 : 2;
+  return `US$${number.toFixed(digits)}`;
+}
+
+function formatMs(value) {
+  if (value == null || value === "") return "—";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "—";
+  return `${number} ms`;
+}
+
 function renderHealth(health, text) {
   const node = clearSection("health");
   if (!node || !health) return;
@@ -171,12 +186,11 @@ function renderHealth(health, text) {
   }
   const line = document.createElement("p");
   line.className = "health-line";
-  const cost = health.mean_cost_per_call_usd == null ? "—" : String(health.mean_cost_per_call_usd);
   line.textContent = [
     `${text ? text.health_calls : "Llamadas"}: ${health.llm_calls}`,
-    `${text ? text.health_p50 : "Latencia p50"}: ${health.latency_p50_ms}`,
-    `${text ? text.health_p95 : "Latencia p95"}: ${health.latency_p95_ms}`,
-    `${text ? text.health_cost : "Costo medio por llamada"}: ${cost}`,
+    `${text ? text.health_p50 : "Latencia p50"}: ${formatMs(health.latency_p50_ms)}`,
+    `${text ? text.health_p95 : "Latencia p95"}: ${formatMs(health.latency_p95_ms)}`,
+    `${text ? text.health_cost : "Costo medio por llamada"}: ${formatUsd(health.mean_cost_per_call_usd)}`,
   ].join(" · ");
   node.appendChild(line);
 }

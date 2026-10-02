@@ -66,11 +66,11 @@ def test_pending_and_reversed_use_the_rule_sentence() -> None:
         t_low=1,
         high_value=30,
     )
-    assert line == "Pendiente/Revertido → explicación por regla"
+    assert line == "Pendiente/Reversado → explicación por regla"
     portuguese = score_line(
         "pt", "out_of_scope", model_risk_score=None, fraud_score=None, t_low=1, high_value=30
     )
-    assert portuguese == "Pendente/Revertido → explicação por regra"
+    assert portuguese == "Pendente/Estornado → explicação por regra"
 
 
 def test_missing_model_score_does_not_invent_a_multiplier() -> None:

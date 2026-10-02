@@ -67,7 +67,13 @@ Enviar entrega ese mensaje al asistente.
 
 PT: Enviar entrega essa mensagem ao assistente.
 
-### 10. `details.why summary`
+### 10. `#break-it`
+
+Intenta romperlo envía un ataque de demostración y muestra la protección.
+
+PT: Tente quebrá-lo envia um ataque de demonstração e mostra a proteção.
+
+### 11. `details.why summary`
 
 ¿Por qué? muestra la hora local, la banda y el motivo.
 
@@ -75,7 +81,7 @@ PT: Por quê? mostra a hora local, a faixa e o motivo.
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 11. `#thread [data-action="confirm_block"]`
+### 12. `#thread [data-action="confirm_block"]`
 
 Puntaje de fraude mayor a 30. Se bloquea la tarjeta y el caso pasa a una persona.
 
@@ -83,7 +89,7 @@ PT: Pontuação de fraude maior que 30. O cartão é bloqueado e o caso passa a 
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 12. `#thread [data-action="decline_block"]`
+### 13. `#thread [data-action="decline_block"]`
 
 Si no confirma, la tarjeta no se bloquea.
 
@@ -91,7 +97,7 @@ PT: Se não confirmar, o cartão não é bloqueado.
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 13. `#thread [data-action="contest"]`
+### 14. `#thread [data-action="contest"]`
 
 Este botón pide que una persona revise un cargo pendiente o revertido.
 
@@ -99,7 +105,7 @@ PT: Este botão pede que uma pessoa revise uma cobrança pendente ou revertida.
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 14. `#thread [data-action="recognize"]`
+### 15. `#thread [data-action="recognize"]`
 
 Este botón indica que el cliente reconoce el cargo.
 
@@ -107,7 +113,7 @@ PT: Este botão indica que o cliente reconhece a cobrança.
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 15. `#thread [data-action="open_dispute"]`
+### 16. `#thread [data-action="open_dispute"]`
 
 Riesgo bajo. El sistema explica el cargo, y el cliente puede pedir hablar con una persona.
 
@@ -115,7 +121,7 @@ PT: Risco baixo. O sistema explica a cobrança, e o cliente pode pedir para fala
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 16. `#thread [data-band="review"]`
+### 17. `#thread [data-band="review"]`
 
 El modelo no puede descartar fraude, así que una persona revisa el cargo.
 
@@ -261,7 +267,13 @@ PT: Este cartão conta os casos de avaliação que ficaram fora destas cifras.
 
 Dinámico. Si no está en pantalla: aparece cuando hay casos
 
-### 11. `#raw`
+### 11. `#health`
+
+Salud del sistema muestra las llamadas, la latencia y el costo.
+
+PT: Saúde do sistema mostra as chamadas, a latência e o custo.
+
+### 12. `#raw`
 
 Este bloque es el mismo cálculo en JSON, para leer el detalle.
 

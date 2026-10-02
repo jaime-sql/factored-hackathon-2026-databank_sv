@@ -74,7 +74,12 @@ const PACKET_LABELS = {
       "contest not_applicable": "Impugnación registrada",
       "open_dispute not_applicable": "Disputa abierta",
     },
-    decisions: { handoff: "Traspaso", abandoned: "Abandonado" },
+    decisions: {
+      handoff: "Traspaso",
+      abandoned: "Abandonado",
+      reply_draft: "Borrador",
+      reply_sent: "Respuesta enviada",
+    },
   },
   pt: {
     bands: { high: "Alto", low: "Baixo", review: "Revisão", out_of_scope: "Fora de escopo" },
@@ -87,7 +92,12 @@ const PACKET_LABELS = {
       "contest not_applicable": "Contestação registrada",
       "open_dispute not_applicable": "Disputa aberta",
     },
-    decisions: { handoff: "Repasse", abandoned: "Abandonado" },
+    decisions: {
+      handoff: "Repasse",
+      abandoned: "Abandonado",
+      reply_draft: "Rascunho",
+      reply_sent: "Resposta enviada",
+    },
   },
 };
 
@@ -144,17 +154,43 @@ function fieldLabel(key) {
 }
 
 function scoreTooltip(view) {
+  const pt = packetLanguage() === "pt";
   if (
     (view.band === "low" || view.band === "review") &&
     view.model_risk_score != null &&
     view.t_low != null
   ) {
-    return `${view.model_risk_score} · t_low ${view.t_low}`;
+    const name = pt ? "limiar" : "umbral";
+    return `${view.model_risk_score} · ${name} ${view.t_low}`;
   }
   if (view.band === "high" && view.fraud_score != null && view.high_value != null) {
-    return `${view.fraud_score} · ${view.high_value}`;
+    const name = pt ? "pontuação de fraude" : "puntaje de fraude";
+    return `${name} ${view.fraud_score} > ${view.high_value}`;
+  }
+  if (view.band === "out_of_scope") {
+    return pt ? "Pendente/Estornado" : "Pendiente/Reversado";
   }
   return "";
+}
+
+function displayThreshold(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const pt = packetLanguage() === "pt";
+  if (text === "Pending/Reversed") return pt ? "Pendente/Estornado" : "Pendiente/Reversado";
+  const fraud = /^fraud_score > (\S+)(.*)$/.exec(text);
+  if (fraud) {
+    const label = pt ? "pontuação de fraude" : "puntaje de fraude";
+    return `${label} > ${fraud[1]}${fraud[2]}`;
+  }
+  const name = pt ? "limiar" : "umbral";
+  const score = /^score (>=|<) (\S+)$/.exec(text);
+  if (score) {
+    const label = pt ? "pontuação" : "puntaje";
+    const op = score[1] === ">=" ? "≥" : "<";
+    return `${label} ${op} ${score[2].replaceAll("t_low", name)}`;
+  }
+  return text.replaceAll("t_low", name);
 }
 
 function cardTitle(item) {
@@ -247,7 +283,7 @@ function trailLine(step) {
     step.at,
     step.rule_or_model,
     bandLabel(step.band),
-    step.threshold,
+    displayThreshold(step.threshold),
     flags,
     decisionLabel(step.handoff),
     step.reason_label,
@@ -352,12 +388,40 @@ function appendDraft(panel, view) {
   const send = document.createElement("button");
   send.type = "submit";
   send.textContent = ui("send_reply", "Revisar y enviar (agente humano)");
+  const facts = document.createElement("ul");
+  facts.className = "unsupported";
   const note = document.createElement("p");
   note.className = "meta";
-  if (view.reply_sent) note.textContent = ui("reply_sent_label", "Respuesta registrada");
+  function showFacts(items) {
+    if (typeof facts.replaceChildren === "function") facts.replaceChildren();
+    else facts.children = [];
+    for (const item of items || []) {
+      const row = document.createElement("li");
+      row.textContent = String(item);
+      facts.appendChild(row);
+    }
+  }
+  function paintCheck(checked) {
+    const ok = Boolean(checked && checked.ok);
+    badge.dataset.grounded = ok ? "1" : "0";
+    badge.textContent = ok ? ui("grounded_ok", "Fundamentado") : ui("grounded_bad", "Sin fundamento");
+    showFacts(ok ? [] : (checked && checked.unsupported_facts) || []);
+  }
+  function lockComposer() {
+    area.disabled = true;
+    send.disabled = true;
+  }
+  if (view.reply_sent) {
+    note.textContent = ui("reply_sent_label", "Respuesta registrada");
+    lockComposer();
+  }
+  paintCheck({
+    ok: Boolean(view.reply_grounded),
+    unsupported_facts: view.reply_unsupported || [],
+  });
   let draftTimer = 0;
   area.addEventListener("input", () => {
-    if (!caseId) return;
+    if (!caseId || area.disabled) return;
     if (draftTimer && typeof clearTimeout === "function") clearTimeout(draftTimer);
     const run = async () => {
       const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/draft-check`, {
@@ -369,18 +433,15 @@ function appendDraft(panel, view) {
         body: JSON.stringify({ text: area.value }),
       });
       if (!response.ok) return;
-      const checked = await response.json();
-      badge.dataset.grounded = checked.ok ? "1" : "0";
-      badge.textContent = checked.ok
-        ? ui("grounded_ok", "Fundamentado")
-        : ui("grounded_bad", "Sin fundamento");
+      paintCheck(await response.json());
     };
     if (typeof setTimeout === "function") draftTimer = setTimeout(run, 400);
     else run();
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!caseId) return;
+    if (!caseId || send.disabled) return;
+    send.disabled = true;
     const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/reply`, {
       method: "POST",
       headers: {
@@ -389,15 +450,15 @@ function appendDraft(panel, view) {
       },
       body: JSON.stringify({ text: area.value }),
     });
-    if (!response.ok) return;
+    if (response.status !== 409 && !response.ok) {
+      send.disabled = false;
+      return;
+    }
+    lockComposer();
     note.textContent = ui("reply_sent_label", "Respuesta registrada");
-    const checked = await response.json();
-    badge.dataset.grounded = checked.ok ? "1" : "0";
-    badge.textContent = checked.ok
-      ? ui("grounded_ok", "Fundamentado")
-      : ui("grounded_bad", "Sin fundamento");
+    if (response.ok) paintCheck(await response.json());
   });
-  form.append(label, badge, area, send, note);
+  form.append(label, badge, facts, area, send, note);
   panel.appendChild(form);
 }
 

@@ -185,8 +185,18 @@ _ACTION_PHRASES = {
     },
 }
 _DECISIONS = {
-    "es": {"handoff": "Traspaso", "abandoned": "Abandonado"},
-    "pt": {"handoff": "Repasse", "abandoned": "Abandonado"},
+    "es": {
+        "handoff": "Traspaso",
+        "abandoned": "Abandonado",
+        "reply_draft": "Borrador",
+        "reply_sent": "Respuesta enviada",
+    },
+    "pt": {
+        "handoff": "Repasse",
+        "abandoned": "Abandonado",
+        "reply_draft": "Rascunho",
+        "reply_sent": "Resposta enviada",
+    },
 }
 
 
@@ -419,20 +429,23 @@ def reply_low(
     transaction_type: str = "",
 ) -> str:
     label = merchant_label(language, merchant, category, transaction_type)
+    shown_category = category_label(language, category)
     if language == "pt":
         if (merchant or "").strip():
-            found = f"Encontrei {merchant} ({category}) em {city}, {when}, por {amount}."
+            extra = f" ({shown_category})" if shown_category else ""
+            found = f"Encontrei {merchant.strip()}{extra} em {city}, {when}, por {amount}."
         elif label:
             found = f"Encontrei um comércio ({label}) em {city}, {when}, por {amount}."
         else:
-            found = f"Encontrei um cargo em {city}, {when}, por {amount}."
+            found = f"Encontrei uma cobrança em {city}, {when}, por {amount}."
         return (
             f"{found} "
             "Está no seu histórico. Se agora reconhece o comércio, fechamos o caso. "
             "Se não, uma pessoa revisa. Nenhum dinheiro foi movido."
         )
     if (merchant or "").strip():
-        found = f"Encontré {merchant} ({category}) en {city}, el {when}, por {amount}."
+        extra = f" ({shown_category})" if shown_category else ""
+        found = f"Encontré {merchant.strip()}{extra} en {city}, el {when}, por {amount}."
     elif label:
         found = f"Encontré un comercio ({label}) en {city}, el {when}, por {amount}."
     else:
@@ -768,8 +781,8 @@ def score_line(
         return f"{prefix} {_count_text(shown, lang)} > {_count_text(high_value, lang)} → {action}"
     if band not in {"low", "review"}:
         if lang == "pt":
-            return "Pendente/Revertido → explicação por regra"
-        return "Pendiente/Revertido → explicación por regla"
+            return "Pendente/Estornado → explicação por regra"
+        return "Pendiente/Reversado → explicación por regla"
     score = _finite(model_risk_score)
     marker = None if score is None else _ratio_text(score, t_low, lang)
     if score is None or marker is None:

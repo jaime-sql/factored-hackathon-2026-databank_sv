@@ -101,6 +101,13 @@ def test_handoff_draft_is_grounded_and_unsent(client: TestClient) -> None:
     assert sent.status_code == 200, sent.text
     assert sent.json()["status"] == "reply_sent"
     assert sent.json()["ok"] is True
+    again = client.post(
+        f"/api/handoff/{opened['case_id']}/reply",
+        headers=ADMIN,
+        json={"text": view["reply_draft"]},
+    )
+    assert again.status_code == 409, again.text
+    assert again.json()["error"] == "reply_already_sent"
     after = client.app.state.ops.get_case(opened["case_id"])
     assert after["state"] == "handed_off"
     assert after["reply_sent"] == view["reply_draft"]

@@ -104,6 +104,12 @@ function applyLanguage() {
   if (testTokenLabel && copy.test_token) testTokenLabel.textContent = copy.test_token;
   const breakIt = document.getElementById("break-it");
   if (breakIt && copy.break_it) breakIt.textContent = copy.break_it;
+  for (const item of document.querySelectorAll("details.why li")) {
+    if (!item.dataset) continue;
+    item.textContent = [item.dataset.at, bandText(item.dataset.band), item.dataset.reason]
+      .filter(Boolean)
+      .join(" · ");
+  }
   revealCopy();
   notifyLanguage();
   for (const button of document.querySelectorAll('#charges [data-action="select-charge"]')) {
@@ -389,7 +395,12 @@ async function attachWhy(card, caseId, flags) {
   const list = document.createElement("ol");
   for (const step of body.steps || []) {
     const item = document.createElement("li");
-    item.textContent = [step.at, bandText(step.band), step.reason].filter(Boolean).join(" · ");
+    item.dataset.at = step.at || "";
+    item.dataset.band = step.band || "";
+    item.dataset.reason = step.reason || "";
+    item.textContent = [item.dataset.at, bandText(item.dataset.band), item.dataset.reason]
+      .filter(Boolean)
+      .join(" · ");
     list.appendChild(item);
   }
   details.appendChild(list);

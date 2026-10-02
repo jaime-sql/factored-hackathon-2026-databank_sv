@@ -393,6 +393,36 @@ function englishWord(word) {
   return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "u");
 }
 
+const RAW_ENUMS = [
+  "fraud_score",
+  "t_low",
+  "abandoned",
+  "reply_sent",
+  "reply_draft",
+  "Pending/Reversed",
+  "out_of_scope",
+  "prompt_injection",
+  "pii_masked",
+  "Food",
+];
+
+function assertNoRawEnums(text, label) {
+  for (const token of RAW_ENUMS) {
+    assert.equal(text.includes(token), false, `${label} still shows ${token}`);
+  }
+  for (const word of ["high", "low", "review"]) {
+    assert.equal(englishWord(word).test(text), false, `${label} still shows ${word}`);
+  }
+}
+
+function renderedText(document) {
+  const why = [...document.querySelectorAll("details.why li")].map((item) => item.textContent);
+  const trail = [...document.querySelectorAll(".why-trail, .score-line")].map((item) =>
+    [item.textContent, item.title || ""].join(" "),
+  );
+  return [blob(document), ...why, ...trail].join("\n");
+}
+
 function assertNoEnglish(text, label, extra = []) {
   for (const word of [...ENGLISH, ...extra]) {
     assert.equal(englishWord(word).test(text), false, `${label} still shows ${word}`);
@@ -435,7 +465,9 @@ for (const file of ["static/index.html", "static/agent.html", "static/metrics.ht
   assert.ok(html.includes("i18n-pending"), file);
   assert.ok(html.includes("visibility:hidden"), file);
   assert.ok(html.includes('src="/static/js/catalog.js"'), file);
-  assert.equal(html.includes("setTimeout"), false, file);
+  assert.ok(html.includes("setTimeout"), file);
+  assert.ok(html.includes("1200"), file);
+  assert.ok(html.includes('classList.remove("i18n-pending")'), file);
   assert.equal(html.includes("/api/i18n"), false, file);
 }
 for (const file of ["static/js/desk.js", "static/js/agent.js", "static/js/metrics.js"]) {
@@ -503,7 +535,13 @@ async function testClient() {
       });
     }
     if (href.includes("/trail")) {
-      return jsonResponse(200, { steps: [{ at: "15 ene 2026", band: "low", reason: "Explicación del comercio" }] });
+      return jsonResponse(200, {
+        steps: [
+          { at: "15 ene 2026", band: "low", reason: "Explicación del comercio" },
+          { at: "15 ene 2026", band: "high", reason: "Bloqueo de tarjeta" },
+          { at: "15 ene 2026", band: "review", reason: "Revisión humana" },
+        ],
+      });
     }
     return jsonResponse(404, {});
   };
@@ -530,6 +568,11 @@ async function testClient() {
   assert.ok(text.includes(catalog.es.types.Payment), text);
   assert.ok(text.includes("1.645,60"), text);
   assert.equal(text.includes("· ·"), false, text);
+  const whyEs = [...document.querySelectorAll("details.why li")].map((item) => item.textContent).join("\n");
+  assert.ok(whyEs.includes("Bajo"), whyEs);
+  assert.ok(whyEs.includes("Alto"), whyEs);
+  assert.ok(whyEs.includes("Revisión"), whyEs);
+  assertNoRawEnums(renderedText(document), "client es");
   const tourButton = document.getElementById("tour");
   tourButton.listeners.click.forEach((fn) => fn());
   const tip = document.querySelector(".tour-tip");
@@ -550,6 +593,12 @@ async function testClient() {
   text = blob(document);
   assert.equal(document.querySelector(".reply").textContent, reply);
   assert.ok(text.includes(catalog.pt.dispute), text);
+  const whyPt = [...document.querySelectorAll("details.why li")].map((item) => item.textContent).join("\n");
+  assert.ok(whyPt.includes("Baixo"), whyPt);
+  assert.ok(whyPt.includes("Alto"), whyPt);
+  assert.ok(whyPt.includes("Revisão"), whyPt);
+  assert.equal(whyPt.includes("Bajo"), false, whyPt);
+  assertNoRawEnums(renderedText(document), "client pt");
   assert.ok(text.includes(catalog.pt.client_lede), text);
   assert.ok(text.includes(" mai "), text);
   assert.ok(text.includes(" jan "), text);
@@ -660,12 +709,14 @@ async function testAgent() {
   assert.ok(text.includes(catalog.pt.open_packet), text);
   assert.ok(text.includes(" mai "), text);
   assertAbsent(text, [catalog.es.open_packet, " may "], "agent card pt");
+  assertNoRawEnums(renderedText(document), "agent pt");
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
   text = blob(document);
   assert.ok(text.includes(catalog.es.open_packet), text);
   assert.ok(text.includes(" may "), text);
   assertAbsent(text, [catalog.pt.open_packet, " mai "], "agent card es");
+  assertNoRawEnums(renderedText(document), "agent es");
 }
 
 async function testMetrics() {
@@ -679,9 +730,12 @@ async function testMetrics() {
   evalLabel.textContent = catalog.es.eval_toggle;
   const tiles = document.createElement("div");
   tiles.id = "tiles";
+  const health = document.createElement("section");
+  health.id = "health";
+  health.hidden = true;
   const raw = document.createElement("pre");
   raw.id = "raw";
-  document.body.append(toggle, evalLabel, tiles, raw);
+  document.body.append(toggle, evalLabel, tiles, health, raw);
   let metricsCalls = 0;
   let releaseMetrics = () => {};
   const fetchImpl = async (url) => {
@@ -701,6 +755,12 @@ async function testMetrics() {
         k1_volume: { total: 1 },
         k5_handoff: { display: "0 / 1" },
         k6_containment: { display: "1 / 1" },
+        health: {
+          llm_calls: 4,
+          latency_p50_ms: 120,
+          latency_p95_ms: 340,
+          mean_cost_per_call_usd: 0.0012,
+        },
       });
     }
     return jsonResponse(404, {});
@@ -713,6 +773,11 @@ async function testMetrics() {
   assert.ok(text.includes(catalog.es.eval_toggle), text);
   assertAbsent(text, ["Demo sample", catalog.pt.tile_containment, catalog.pt.metrics_lede], "metrics es");
   assertNoEnglish(text, "metrics es", ["Console"]);
+  const healthEs = document.getElementById("health").textContent;
+  assert.ok(healthEs.includes("120 ms"), healthEs);
+  assert.ok(healthEs.includes("340 ms"), healthEs);
+  assert.ok(healthEs.includes("US$0.0012"), healthEs);
+  assertNoRawEnums(renderedText(document), "metrics es");
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
   assert.ok(
@@ -730,6 +795,11 @@ async function testMetrics() {
   assert.ok(text.includes("Como funciona?"), text);
   assertAbsent(text, esOnly, "metrics pt");
   assertNoEnglish(text, "metrics pt", ["Consola"]);
+  const healthPt = document.getElementById("health").textContent;
+  assert.ok(healthPt.includes("120 ms"), healthPt);
+  assert.ok(healthPt.includes("US$0.0012"), healthPt);
+  assert.ok(healthPt.includes(catalog.pt.health_p50), healthPt);
+  assertNoRawEnums(renderedText(document), "metrics pt");
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
   text = blob(document);
@@ -1108,9 +1178,142 @@ async function testSimulatorSlider() {
   assert.ok(fairness.textContent.includes(catalog.es.fair_small), fairness.textContent);
   assert.ok(fairness.textContent.includes("MX: 40"), fairness.textContent);
   assert.equal(fairness.textContent.includes("AR: 4"), false, fairness.textContent);
+  assertNoRawEnums(`${simulator.textContent}\n${fairness.textContent}`, "simulator es");
 }
 
-testClient()
+function taggedText(html, id) {
+  const match = html.match(new RegExp(`id="${id}"[^>]*>([^<]*)`));
+  return match ? match[1] : "";
+}
+
+async function testCatalogFallback() {
+  memoryStore.set("hd_lang", "es");
+  const pages = [
+    {
+      file: "static/index.html",
+      script: "static/js/desk.js",
+      page: "client",
+      markers: ["Un cargo a la vez", "Intenta romperlo"],
+      absent: catalog.pt.client_lede,
+    },
+    {
+      file: "static/agent.html",
+      script: "static/js/agent.js",
+      page: "agent",
+      markers: ["Cola de casos con el paquete verificado", "Ver cola"],
+      absent: catalog.pt.agent_lede,
+    },
+    {
+      file: "static/metrics.html",
+      script: "static/js/metrics.js",
+      page: "metrics",
+      markers: ["El tablero deja fuera"],
+      absent: catalog.pt.metrics_lede,
+    },
+  ];
+  for (const page of pages) {
+    const html = fs.readFileSync(page.file, "utf8");
+    const document = makeDocument(page.page);
+    header(document, taggedText(html, "page-title") || "Harbor Desk", taggedText(html, "lede"));
+    const composer = document.createElement("form");
+    composer.id = "composer";
+    const message = document.createElement("input");
+    message.id = "message";
+    const send = document.createElement("button");
+    send.id = "send";
+    composer.append(message, send);
+    const breakIt = document.createElement("button");
+    breakIt.id = "break-it";
+    breakIt.textContent = taggedText(html, "break-it") || "Intenta romperlo";
+    const load = document.createElement("button");
+    load.id = "load";
+    load.textContent = taggedText(html, "load") || "Ver cola";
+    const token = document.createElement("input");
+    token.id = "token";
+    const queue = document.createElement("section");
+    queue.id = "queue";
+    const toggle = document.createElement("input");
+    toggle.id = "include-eval";
+    const evalLabel = document.createElement("span");
+    evalLabel.id = "eval-label";
+    const tiles = document.createElement("div");
+    tiles.id = "tiles";
+    const raw = document.createElement("pre");
+    raw.id = "raw";
+    const personas = document.createElement("section");
+    personas.id = "personas";
+    const charges = document.createElement("section");
+    charges.id = "charges";
+    document.body.append(
+      personas,
+      charges,
+      composer,
+      breakIt,
+      load,
+      token,
+      queue,
+      toggle,
+      evalLabel,
+      tiles,
+      raw,
+    );
+    const timers = [];
+    const context = {
+      console,
+      document,
+      fetch: async () =>
+        jsonResponse(200, {
+          personas: [],
+          is_test: false,
+          eval_toggle_label: "Evaluación excluida",
+          excluded_eval_cases: 0,
+          excluded_test_cases: 0,
+          k1_volume: { total: 1 },
+          k5_handoff: { display: "0 / 1" },
+          k6_containment: { display: "1 / 1" },
+        }),
+      setTimeout(fn, ms) {
+        timers.push({ fn, ms });
+        return timers.length;
+      },
+      clearTimeout() {},
+      localStorage,
+      Event: DomEvent,
+      URL,
+      URLSearchParams,
+    };
+    context.window = context;
+    context.globalThis = context;
+    context.addEventListener = () => {};
+    const inline = html.match(/<script>([\s\S]*?)<\/script>/);
+    assert.ok(inline, page.file);
+    vm.runInNewContext(inline[1], context, { filename: `${page.file}#head` });
+    assert.throws(() => vm.runInNewContext("globalThis.HD_CATALOG = ;", context));
+    assert.equal(context.HD_CATALOG, undefined, `${page.file} catalog.js blocked`);
+    assert.ok(document.documentElement.className.includes("i18n-pending"), page.file);
+    const safety = timers.find((timer) => timer.ms === 1200);
+    assert.ok(safety, page.file);
+    vm.runInNewContext(fs.readFileSync(page.script, "utf8"), context, { filename: page.script });
+    await flush();
+    assert.equal(context.HD_CATALOG, undefined, page.file);
+    assert.ok(document.documentElement.className.includes("i18n-pending"), `${page.file} stayed hidden`);
+    for (const marker of page.markers) {
+      assert.ok(html.includes(marker), marker);
+      assert.ok(blob(document).includes(marker), `${page.file} lost ${marker}`);
+    }
+    safety.fn();
+    assert.equal(document.documentElement.className.includes("i18n-pending"), false, page.file);
+    const shown = blob(document);
+    for (const marker of page.markers) {
+      assert.ok(shown.includes(marker), `${page.file} hid ${marker}`);
+    }
+    assert.equal(shown.includes(page.absent), false, page.file);
+    assertNoRawEnums(shown, `${page.file} fallback`);
+  }
+}
+
+testCatalogFallback()
+  .then(() => testClient())
   .then(() => testAgent())
   .then(() => testMetrics())
   .then(() => testLanguagePersists())

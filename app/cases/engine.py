@@ -959,6 +959,8 @@ class Engine:
         case = self.ops.get_case(case_id)
         if case is None or self.ops.get_handoff(case_id) is None:
             raise APIError(404, "not_found", "Handoff not found")
+        if str(case.get("reply_sent") or "").strip():
+            raise APIError(409, "reply_already_sent", "A reply was already sent for this case")
         customer = self._customer(str(case["customer_key"]))
         now = datetime.now(UTC)
         self.ops.update_case(case_id, {"reply_sent": text, "updated_at": now})

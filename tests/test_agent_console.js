@@ -2,6 +2,29 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 
+const RAW_ENUMS = [
+  "fraud_score",
+  "t_low",
+  "abandoned",
+  "reply_sent",
+  "reply_draft",
+  "Pending/Reversed",
+  "out_of_scope",
+  "prompt_injection",
+  "pii_masked",
+  "Food",
+];
+
+function assertNoRawEnums(text, label) {
+  for (const token of RAW_ENUMS) {
+    assert.equal(text.includes(token), false, `${label} still shows ${token}`);
+  }
+  for (const word of ["high", "low", "review"]) {
+    const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${word}(?![\\p{L}\\p{N}_])`, "u");
+    assert.equal(pattern.test(text), false, `${label} still shows ${word}`);
+  }
+}
+
 const source = fs.readFileSync("static/js/agent.js", "utf8");
 assert.equal(source.includes("onclick="), false);
 assert.match(source, /authorization: `Bearer \$\{agentToken\(\)\}`/);
@@ -110,7 +133,9 @@ assert.ok(withTrail.textContent.includes("fraud rate in this band on val 1.2%"))
 assert.ok(withTrail.textContent.includes("lgbm:v"));
 assert.ok(withTrail.textContent.includes("Puntaje vs umbral: 1.02× umbral · encima → revisión"));
 assert.equal(withTrail.textContent.includes("Puntaje: 1.02×"), false);
-assert.ok(withTrail.textContent.includes("score >= 0.0002756"));
+assert.ok(withTrail.textContent.includes("puntaje ≥ 0.0002756"));
+assert.equal(withTrail.textContent.includes("score >= 0.0002756"), false);
+assert.equal(withTrail.textContent.includes("t_low"), false);
 assert.ok(withTrail.textContent.includes("Traspaso verificado"));
 assert.equal(withTrail.textContent.includes("handoff verified"), false);
 assert.ok(withTrail.textContent.includes("Revisión"));
@@ -135,6 +160,21 @@ context.renderPacket(
   {
     steps: [
       { kind: "action", at: "15 jan 2026, 12:01 CST", action: "handoff", verification: "verified" },
+      {
+        kind: "decision",
+        at: "15 jan 2026, 12:02 CST",
+        band: "low",
+        threshold: "score < t_low",
+        handoff: "reply_sent",
+        reason_label: "Cliente pediu uma pessoa",
+      },
+      {
+        kind: "decision",
+        at: "15 jan 2026, 12:03 CST",
+        band: "out_of_scope",
+        threshold: "Pending/Reversed",
+        handoff: "abandoned",
+      },
     ],
   },
 );
@@ -146,10 +186,19 @@ assert.ok(portuguese.textContent.includes("Comércio mascarado: U•••"));
 assert.ok(portuguese.textContent.includes("Horário local: 15 jan 2026, 12:00 CST"));
 assert.ok(portuguese.textContent.includes("Próximo passo: Revisar"));
 assert.equal(portuguese.textContent.includes("score < 0.0002756"), false);
+assert.ok(portuguese.textContent.includes("pontuação < limiar"));
+assert.ok(portuguese.textContent.includes("Resposta enviada"));
+assert.ok(portuguese.textContent.includes("Pendente/Estornado"));
+assert.ok(portuguese.textContent.includes("Abandonado"));
+assert.equal(portuguese.textContent.includes("t_low"), false);
+assert.equal(portuguese.textContent.includes("reply_sent"), false);
+assert.equal(portuguese.textContent.includes("abandoned"), false);
+assert.equal(portuguese.textContent.includes("Pending/Reversed"), false);
 assert.ok(portuguese.textContent.includes("Bloqueio de cartão verificado"));
 assert.ok(portuguese.textContent.includes("Repasse verificado"));
 assert.equal(portuguese.textContent.includes("block_card"), false);
 assert.equal(portuguese.textContent.includes("handoff verified"), false);
+assertNoRawEnums(portuguese.textContent, "packet pt");
 context.consoleState.language = "es";
 
 const guarded = { textContent: "", hidden: true, dataset: {} };
@@ -168,8 +217,16 @@ context.renderPacket(
         kind: "decision",
         at: "15 ene 2026, 12:00 CST",
         band: "out_of_scope",
+        threshold: "fraud_score > 30 (45)",
         guardrail_flags: ["prompt_injection", "pii_masked"],
         handoff: "abandoned",
+      },
+      {
+        kind: "decision",
+        at: "15 ene 2026, 12:02 CST",
+        band: "out_of_scope",
+        threshold: "Pending/Reversed",
+        handoff: "reply_sent",
       },
     ],
   },
@@ -178,10 +235,19 @@ assert.ok(guarded.textContent.includes("Fuera de alcance"));
 assert.ok(guarded.textContent.includes("Inyección bloqueada"));
 assert.ok(guarded.textContent.includes("Datos enmascarados"));
 assert.ok(guarded.textContent.includes("Abandonado"));
+assert.ok(guarded.textContent.includes("puntaje de fraude > 30 (45)"));
+assert.ok(guarded.textContent.includes("Pendiente/Reversado"));
+assert.ok(guarded.textContent.includes("Respuesta enviada"));
+assert.equal(guarded.textContent.includes("fraud_score"), false);
+assert.equal(guarded.textContent.includes("t_low"), false);
+assert.equal(guarded.textContent.includes("abandoned"), false);
+assert.equal(guarded.textContent.includes("reply_sent"), false);
+assert.equal(guarded.textContent.includes("Pending/Reversed"), false);
 assert.equal(guarded.textContent.includes("out_of_scope"), false);
 assert.equal(guarded.textContent.includes("prompt_injection"), false);
 assert.equal(guarded.textContent.includes("pii_masked"), false);
 assert.ok(guarded.textContent.includes("Bloqueado por guardrail · sin puntaje"));
+assertNoRawEnums(guarded.textContent, "packet es");
 
 function fakeElement() {
   return {
@@ -251,7 +317,7 @@ context.renderPacket(boundary, {
 const boundaryScore = findScore(boundary);
 assert.equal(boundaryScore.dataset.band, "review");
 assert.equal(boundaryScore.textContent, "≥1.00× umbral · encima → revisión");
-assert.equal(boundaryScore.title, "1 · t_low 1");
+assert.equal(boundaryScore.title, "1 · umbral 1");
 
 const belowRounded = fakeElement();
 context.renderPacket(belowRounded, {
@@ -266,7 +332,7 @@ context.renderPacket(belowRounded, {
 const belowScore = findScore(belowRounded);
 assert.equal(belowScore.dataset.band, "low");
 assert.equal(belowScore.textContent, "<1.00× umbral · debajo → automático");
-assert.equal(belowScore.title, "0.995 · t_low 1");
+assert.equal(belowScore.title, "0.995 · umbral 1");
 
 const highDom = fakeElement();
 context.renderPacket(highDom, {
@@ -281,20 +347,40 @@ context.renderPacket(highDom, {
 const highScore = findScore(highDom);
 assert.equal(highScore.dataset.band, "high");
 assert.equal(highScore.textContent, "Puntaje de fraude 45 > 30 → bloqueo");
-assert.equal(highScore.title, "45 · 30");
+assert.equal(highScore.title, "puntaje de fraude 45 > 30");
 
 const pendingDom = fakeElement();
 context.renderPacket(pendingDom, {
   band: "out_of_scope",
-  score_line: "Pendiente/Revertido → explicación por regla",
+  score_line: "Pendiente/Reversado → explicación por regla",
   amount: "1",
   merchant: "M",
   recommended_next_step: "Explicar",
 });
 const pendingScore = findScore(pendingDom);
 assert.equal(pendingScore.dataset.band, "out_of_scope");
-assert.equal(pendingScore.textContent, "Pendiente/Revertido → explicación por regla");
-assert.equal(pendingScore.title, "");
+assert.equal(pendingScore.textContent, "Pendiente/Reversado → explicación por regla");
+assert.equal(pendingScore.title, "Pendiente/Reversado");
+assertNoRawEnums(
+  [boundaryScore.title, belowScore.title, highScore.title, pendingScore.title, pendingScore.textContent].join("\n"),
+  "score tooltip es",
+);
+
+context.consoleState.language = "pt";
+const ptScoreHost = fakeElement();
+context.renderPacket(ptScoreHost, {
+  band: "high",
+  fraud_score: 45,
+  high_value: 30,
+  score_line: "Pontuação de fraude 45 > 30 → bloqueio",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Bloquear",
+});
+const ptScore = findScore(ptScoreHost);
+assert.equal(ptScore.title, "pontuação de fraude 45 > 30");
+assertNoRawEnums(ptScore.title, "score tooltip pt");
+context.consoleState.language = "es";
 
 function walkTags(node, found) {
   found.push(node);
@@ -376,7 +462,40 @@ assert.equal(scheduled.ms, 400);
 scheduled.fn();
 assert.equal(checks, 1);
 
-delete context.document;
+async function checkDraftFactsAndSend() {
+  const factsList = draft.children.find((node) => node.className === "unsupported");
+  context.fetch = async (url) => {
+    if (String(url).includes("/draft-check")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: false, unsupported_facts: ["monto inventado", "fecha"] }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, status: "reply_sent" }) };
+  };
+  area.listeners.input[0]();
+  await scheduled.fn();
+  assert.deepEqual(
+    factsList.children.map((row) => row.textContent),
+    ["monto inventado", "fecha"],
+  );
+  assert.equal(Boolean(send.disabled), false);
+  let sends = 0;
+  context.fetch = async () => {
+    sends += 1;
+    return { ok: false, status: 409, json: async () => ({ error: "reply_already_sent", message: "A reply was already sent for this case" }) };
+  };
+  await draft.listeners.submit[0]({ preventDefault() {} });
+  assert.equal(sends, 1);
+  assert.equal(send.disabled, true);
+  assert.equal(area.disabled, true);
+  const note = draft.children.find((node) => node.className === "meta");
+  assert.equal(note.textContent, "Respuesta registrada");
+  assert.equal(note.textContent.includes("already"), false);
+  await draft.listeners.submit[0]({ preventDefault() {} });
+  assert.equal(sends, 1);
+}
 
 assert.match(source, /\/api\/cases\/\$\{encodeURIComponent\(caseId\)\}\/trail/);
 const desk = fs.readFileSync("static/js/desk.js", "utf8");
@@ -404,6 +523,7 @@ assert.equal(context.queueNotice(0, null, "es").text, "No se pudo leer la cola."
 assert.equal(context.queueNotice(200, { queue: [{ case_id: "x" }] }, "es").kind, "cards");
 
 async function checkLoadQueue() {
+  delete context.document;
   const box = {
     kids: [],
     replaceChildren() {
@@ -548,7 +668,8 @@ async function checkLoadQueue() {
   assert.equal(titleTexts.includes(full), false);
 }
 
-checkLoadQueue()
+checkDraftFactsAndSend()
+  .then(() => checkLoadQueue())
   .then(() => console.log("agent console js ok"))
   .catch((error) => {
     console.error(error);

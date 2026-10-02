@@ -67,6 +67,12 @@ const GUIDE = {
         pt: "Enviar entrega essa mensagem ao assistente.",
       },
       {
+        selector: "#break-it",
+        es: "Intenta romperlo envía un ataque de demostración y muestra la protección.",
+        pt: "Tente quebrá-lo envia um ataque de demonstração e mostra a proteção.",
+        label: { es: "Intenta romperlo", pt: "Tente quebrá-lo" },
+      },
+      {
         selector: "details.why summary",
         es: "¿Por qué? muestra la hora local, la banda y el motivo.",
         pt: "Por quê? mostra a hora local, a faixa e o motivo.",
@@ -220,6 +226,11 @@ const GUIDE = {
         es: "Esta ficha cuenta los casos de evaluación que quedaron fuera de estas cifras.",
         pt: "Este cartão conta os casos de avaliação que ficaram fora destas cifras.",
         dynamic: true,
+      },
+      {
+        selector: "#health",
+        es: "Salud del sistema muestra las llamadas, la latencia y el costo.",
+        pt: "Saúde do sistema mostra as chamadas, a latência e o custo.",
       },
       {
         selector: "#raw",
