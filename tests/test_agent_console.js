@@ -108,7 +108,8 @@ context.renderPacket(
 );
 assert.ok(withTrail.textContent.includes("fraud rate in this band on val 1.2%"));
 assert.ok(withTrail.textContent.includes("lgbm:v"));
-assert.ok(withTrail.textContent.includes("Puntaje: 1.02× umbral · encima → revisión"));
+assert.ok(withTrail.textContent.includes("Puntaje vs umbral: 1.02× umbral · encima → revisión"));
+assert.equal(withTrail.textContent.includes("Puntaje: 1.02×"), false);
 assert.ok(withTrail.textContent.includes("score >= 0.0002756"));
 assert.ok(withTrail.textContent.includes("Traspaso verificado"));
 assert.equal(withTrail.textContent.includes("handoff verified"), false);
@@ -138,7 +139,8 @@ context.renderPacket(
   },
 );
 assert.ok(portuguese.textContent.includes("Faixa: Baixo"));
-assert.ok(portuguese.textContent.includes("Pontuação vs limiar: Pontuação: 0,85× limiar · abaixo → automático"));
+assert.ok(portuguese.textContent.includes("Pontuação vs limiar: 0,85× limiar · abaixo → automático"));
+assert.equal(portuguese.textContent.includes("Pontuação: 0,85×"), false);
 assert.ok(portuguese.textContent.includes("Valor: 10.00 MXN"));
 assert.ok(portuguese.textContent.includes("Comércio mascarado: U•••"));
 assert.ok(portuguese.textContent.includes("Horário local: 15 jan 2026, 12:00 CST"));
@@ -194,7 +196,7 @@ context.renderPacket(boundary, {
 });
 const boundaryScore = findScore(boundary);
 assert.equal(boundaryScore.dataset.band, "review");
-assert.equal(boundaryScore.textContent, "Puntaje: ≥1.00× umbral · encima → revisión");
+assert.equal(boundaryScore.textContent, "≥1.00× umbral · encima → revisión");
 assert.equal(boundaryScore.title, "1 · t_low 1");
 
 const belowRounded = fakeElement();
@@ -209,7 +211,7 @@ context.renderPacket(belowRounded, {
 });
 const belowScore = findScore(belowRounded);
 assert.equal(belowScore.dataset.band, "low");
-assert.equal(belowScore.textContent, "Puntaje: <1.00× umbral · debajo → automático");
+assert.equal(belowScore.textContent, "<1.00× umbral · debajo → automático");
 assert.equal(belowScore.title, "0.995 · t_low 1");
 
 const highDom = fakeElement();
@@ -224,6 +226,7 @@ context.renderPacket(highDom, {
 });
 const highScore = findScore(highDom);
 assert.equal(highScore.dataset.band, "high");
+assert.equal(highScore.textContent, "Puntaje de fraude 45 > 30 → bloqueo");
 assert.equal(highScore.title, "45 · 30");
 
 const pendingDom = fakeElement();

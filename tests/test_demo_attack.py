@@ -27,6 +27,7 @@ def test_break_it_abandons_and_stays_out_of_metrics(client: TestClient) -> None:
     assert body["protected"] is True
     assert body["money_movement"] == "none"
     assert body["demo_attack"] is True
+    assert body["is_test"] is False
     assert body["language"] == "es"
     assert "4111 1111 1111 1111" not in body["reply"]
     assert "4111 1111 1111 1111" not in body["masked_message"]
@@ -74,6 +75,8 @@ def test_break_it_sets_is_test_only_in_test_mode(tmp_path: Path) -> None:
             headers=headers,
             json={"demo_attack": True, "language": "pt"},
         ).json()
+        assert opened["demo_attack"] is True
+        assert opened["is_test"] is True
         stored = client.app.state.ops.get_case(opened["case_id"])
         assert stored["demo_attack"] is True
         assert stored["is_test"] is True

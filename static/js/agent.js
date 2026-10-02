@@ -202,6 +202,10 @@ function showQueueStatus(box, kind, text) {
   box.appendChild(note);
 }
 
+function scoreFieldValue(line) {
+  return String(line || "").replace(/^(?:Puntaje|Pontuação):\s*/, "");
+}
+
 function packetLines(view, trail) {
   const actions = (view.actions_taken || [])
     .map((action) => actionLabel(action.name, action.verification_status))
@@ -211,10 +215,11 @@ function packetLines(view, trail) {
   if (view.is_test) lines.push({ text: ui("test_chip", "Prueba") });
   lines.push({ text: `${fieldLabel("field_band")}: ${bandLabel(view.band)}` });
   if (view.model_version) lines.push({ text: view.model_version });
+  const scoreText = scoreFieldValue(view.score_line);
   lines.push({
-    text: `${fieldLabel("field_score")}: ${view.score_line || ""}`,
+    text: `${fieldLabel("field_score")}: ${scoreText}`,
     score: true,
-    value: view.score_line || "",
+    value: scoreText,
   });
   lines.push({ text: `${fieldLabel("field_amount")}: ${view.amount || ""}` });
   lines.push({ text: `${fieldLabel("field_merchant")}: ${view.merchant || ""}` });

@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     environment: str = "local"
     port: int = 8091
     log_level: str = "INFO"
+    bank_display_name: str = "Harbor Desk"
 
     llm_provider: str = ""
     openai_api_key: str = ""

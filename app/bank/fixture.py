@@ -77,6 +77,19 @@ PERSONAS: tuple[dict[str, str], ...] = (
 )
 
 
+def persona_first_name(customer_key: str) -> str:
+    """First token of a demo persona label, or empty when the key is not a persona."""
+    for row in PERSONAS:
+        if customer_key not in {row["customer_key"], row["bank_customer_key"]}:
+            continue
+        label = row["label"].split("·", 1)[0].strip()
+        token = label.split()[0] if label else ""
+        if token and "[" not in token and "]" not in token:
+            return token
+        return ""
+    return ""
+
+
 def _features(tx: dict[str, object], customer: dict[str, str]) -> dict[str, object]:
     amount = float(str(tx["amount"]))
     local = datetime(2026, 1, 15, 18, 0, tzinfo=UTC)

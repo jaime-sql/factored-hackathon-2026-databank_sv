@@ -49,7 +49,7 @@ Eval runs are unchanged and never set `is_test`, even if the test header is also
 
 `/api/metrics` and `GET /audit/export` read `app.audit_live` by default. That view leaves out insert-time `is_test` rows, case ids listed in `app.test_cases`, and tips whose `eval_run_id` is set. An admin token with `include_test=1` or `include_eval=1` reads `app.audit_current` and applies only the filters that were not requested. The export adds an `is_test` column. A judge token cannot bring those rows back.
 
-If `is_test`, `app.test_cases`, or `app.audit_live` is missing, the process keeps serving. Case inserts omit `is_test`, test marks are ignored, and metrics and the export read `audit_current`. `GET /health` and `GET /healthz` include `migrations_ok`.
+If `is_test`, `app.test_cases`, or `app.audit_live` is missing, ordinary cases still open and metrics read `audit_current`. A test-mode case is refused with `test_schema_missing` until `is_test` can be stored; it is not written without the flag. A failed schema check is retried at most every 30 seconds, and a successful check stays cached. `GET /health` and `GET /healthz` include `migrations_ok`.
 
 To mark older demo case ids after the fact, insert them into `app.test_cases`. The script does not change audit rows and it is not run on startup. `--before` skips cases that have an `eval_run_id`. The printed count is how many rows this run inserted:
 

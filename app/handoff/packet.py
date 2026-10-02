@@ -46,6 +46,7 @@ class HandoffPacket(BaseModel):
 
     case_id: str
     customer_key: str
+    customer_first_name: str = ""
     language: Literal["es", "pt", "other"]
     transaction: TransactionFacts
     verified_facts: list[str]

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -26,6 +27,9 @@ from app.timeutil import present_time
 
 logger = logging.getLogger(__name__)
 
+_PLACEHOLDER = re.compile(r"\[[^\[\]]+\]")
+_DEFAULT_BANK = "Harbor Desk"
+
 
 @dataclass(frozen=True)
 class DraftResult:
@@ -39,8 +43,13 @@ class DraftResult:
     status: str
 
 
+def has_placeholder(text: str) -> bool:
+    """True when the draft still contains a square-bracket token such as [Nombre]."""
+    return _PLACEHOLDER.search(text or "") is not None
+
+
 def compose_draft(packet: HandoffPacket, country: str, settings: Settings) -> DraftResult:
-    facts = fact_sheet(packet, country)
+    facts = fact_sheet(packet, country, settings)
     template = _template(facts)
     provider = settings.resolved_llm_provider()
     if provider == "template":
@@ -51,14 +60,16 @@ def compose_draft(packet: HandoffPacket, country: str, settings: Settings) -> Dr
         logger.warning("reply draft fell back to template (%s)", type(exc).__name__)
         return DraftResult(template, facts, True, _model_name(settings, provider), 0, 0, 0, "error")
     cleaned = (text or "").strip()
-    if not cleaned:
+    if not cleaned or has_placeholder(cleaned):
+        if has_placeholder(cleaned):
+            logger.warning("reply draft had a placeholder and fell back to the template")
         return DraftResult(
             template, facts, True, _model_name(settings, provider), latency_ms, 0, 0, "error"
         )
     return DraftResult(cleaned, facts, True, model, latency_ms, input_tokens, output_tokens, "ok")
 
 
-def fact_sheet(packet: HandoffPacket, country: str) -> dict[str, str]:
+def fact_sheet(packet: HandoffPacket, country: str, settings: Settings) -> dict[str, str]:
     language = packet.language if packet.language in {"es", "pt"} else "es"
     transaction = packet.transaction
     try:
@@ -78,6 +89,8 @@ def fact_sheet(packet: HandoffPacket, country: str) -> dict[str, str]:
     reason = "fraud_rule" if blocked else "fraud_model"
     return {
         "language": language,
+        "bank": _bank_name(settings),
+        "first_name": _plain_name(packet.customer_first_name),
         "amount": money(transaction.amount, transaction.currency, country),
         "date": date,
         "merchant": merchant,
@@ -89,15 +102,38 @@ def fact_sheet(packet: HandoffPacket, country: str) -> dict[str, str]:
     }
 
 
+def _bank_name(settings: Settings) -> str:
+    name = settings.bank_display_name.strip()
+    if not name or "[" in name or "]" in name:
+        return _DEFAULT_BANK
+    return name
+
+
+def _plain_name(value: str) -> str:
+    name = value.strip()
+    if not name or "[" in name or "]" in name:
+        return ""
+    return name.split()[0]
+
+
+def _greeting(facts: dict[str, str]) -> str:
+    name = facts.get("first_name", "").strip()
+    if facts["language"] == "pt":
+        return f"Olá, {name}." if name else "Olá."
+    return f"Hola, {name}." if name else "Hola."
+
+
 def _template(facts: dict[str, str]) -> str:
+    greeting = _greeting(facts)
+    bank = facts["bank"]
     if facts["language"] == "pt":
         return (
-            f"Olá. Vimos a cobrança de {facts['amount']} em {facts['date']} "
+            f"{greeting} {bank} viu a cobrança de {facts['amount']} em {facts['date']} "
             f"em {facts['merchant']}. O estado é {facts['status']}. "
             f"{facts['action']} {facts['next_step']}"
         )
     return (
-        f"Hola. Vimos el cargo de {facts['amount']} del {facts['date']} "
+        f"{greeting} {bank} vio el cargo de {facts['amount']} del {facts['date']} "
         f"en {facts['merchant']}. El estado es {facts['status']}. "
         f"{facts['action']} {facts['next_step']}"
     )
@@ -138,7 +174,11 @@ def _complete(
     prompt = (
         "Write one short reply to the customer in "
         f"{language}. Use only these facts. Do not add an amount, date, or merchant "
-        "that is not listed.\n"
+        "that is not listed. Use the bank name exactly as given. "
+        "Start with the greeting exactly as given. "
+        "Never write square brackets or placeholder tokens.\n"
+        f"bank: {facts['bank']}\n"
+        f"greeting: {_greeting(facts)}\n"
         f"amount: {facts['amount']}\n"
         f"date: {facts['date']}\n"
         f"merchant: {facts['merchant']}\n"

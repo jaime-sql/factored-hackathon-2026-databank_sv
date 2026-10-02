@@ -446,7 +446,7 @@ def _reply_facts(request: Request, case_id: str) -> dict[str, str]:
     packet = HandoffPacket.model_validate(row["packet"])
     customer = request.app.state.engine.bank.get_customer(packet.customer_key)
     country = customer.customer_country if customer is not None else ""
-    return fact_sheet(packet, country)
+    return fact_sheet(packet, country, _settings(request))
 
 
 def _attach_reply(request: Request, case_id: str, view: dict[str, Any]) -> None:

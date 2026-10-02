@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.bank.fixture import persona_first_name
 from app.bank.models import Customer, Transaction
 from app.bank.repository import BankRepository, synthetic_pair_sibling
 from app.config import Settings
@@ -121,6 +122,7 @@ class CaseResult:
     guardrail_flags: list[str] = field(default_factory=list)
     demo_attack: bool = False
     masked_message: str = ""
+    is_test: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -136,9 +138,10 @@ class CaseResult:
             "case_source": self.case_source,
             "money_movement": "none",
             "protected": "prompt_injection" in self.guardrail_flags,
+            "is_test": self.is_test,
+            "demo_attack": self.demo_attack,
         }
         if self.demo_attack:
-            payload["demo_attack"] = True
             payload["masked_message"] = self.masked_message
             payload["audit"] = {
                 "decision": "abandoned",
@@ -407,6 +410,8 @@ class Engine:
             eval_run_id,
             case_source,
             flags,
+            demo_attack=demo_attack,
+            is_test=is_test and not is_eval,
         )
 
     def _opening(
@@ -970,6 +975,7 @@ class Engine:
         return HandoffPacket(
             case_id=case_id,
             customer_key=customer.customer_key,
+            customer_first_name=persona_first_name(customer.customer_key),
             language=language,  # type: ignore[arg-type]
             transaction=TransactionFacts(
                 transaction_key=tx.transaction_key,
@@ -1177,7 +1183,7 @@ class Engine:
             {"message": redact(redacted_message)},
             "verified",
         )
-        result = CaseResult(
+        return CaseResult(
             case_id,
             reply_injection(lang),
             lang,
@@ -1189,11 +1195,10 @@ class Engine:
             eval_run_id,
             case_source,
             flags,
+            demo_attack=demo_attack,
+            masked_message=redacted_message if demo_attack else "",
+            is_test=is_test and not is_eval,
         )
-        if demo_attack:
-            result.demo_attack = True
-            result.masked_message = redacted_message
-        return result
 
     def _clarify(
         self,
@@ -1267,6 +1272,8 @@ class Engine:
             eval_run_id,
             case_source,
             flags,
+            demo_attack=demo_attack,
+            is_test=is_test and not is_eval,
         )
 
     def _result(
@@ -1291,6 +1298,8 @@ class Engine:
             str(case["state"]),
             case.get("eval_run_id"),
             case.get("case_source"),
+            demo_attack=bool(case.get("demo_attack")),
+            is_test=bool(case.get("is_test")),
         )
 
     def _own_case(self, customer_key: str, case_id: str) -> dict[str, Any]:

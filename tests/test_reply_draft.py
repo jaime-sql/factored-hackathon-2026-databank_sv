@@ -8,7 +8,10 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import Settings
 from app.guardrails.draft_check import grounded as app_grounded
+from app.handoff.packet import HandoffPacket
+from app.reply.draft import compose_draft, has_placeholder
 from evals.draft_check import grounded
 from tests.conftest import login
 
@@ -56,6 +59,11 @@ def test_handoff_draft_is_grounded_and_unsent(client: TestClient) -> None:
     assert packet.status_code == 200, packet.text
     view = packet.json()["view"]
     assert view["reply_draft"]
+    assert view["reply_draft"].startswith("Hola, María.")
+    assert "Harbor Desk" in view["reply_draft"]
+    assert "[" not in view["reply_draft"] and "]" not in view["reply_draft"]
+    stored_packet = client.app.state.ops.get_handoff(opened["case_id"])
+    assert stored_packet["packet"]["customer_first_name"] == "María"
     assert "Borrador" not in view["reply_draft"]
     assert view["reply_grounded"] is True
     assert view["reply_unsupported"] == []
@@ -135,3 +143,100 @@ def test_missing_reply_columns_skip_the_draft_without_a_500(
     )
     assert sent.status_code == 200, sent.text
     assert sent.json()["status"] == "reply_sent"
+
+
+def _draft_packet(*, language: str = "es", first_name: str = "") -> HandoffPacket:
+    return HandoffPacket.model_validate(
+        {
+            "case_id": "case-draft",
+            "customer_key": "ck_other",
+            "customer_first_name": first_name,
+            "language": language,
+            "transaction": {
+                "transaction_key": "tx-1",
+                "product_key": "card",
+                "merchant_name": "Tienda",
+                "merchant_category": "Food",
+                "transaction_city": "Ciudad de México",
+                "transaction_country": "Mexico",
+                "transaction_status": "Approved",
+                "amount": 10,
+                "currency": "MXN",
+                "transaction_ts_utc": "2026-01-15T18:00:00+00:00",
+                "customer_tz": "America/Mexico_City",
+                "transaction_ts_customer_local": "15 ene 2026, 12:00",
+                "local_time_abbreviation": "CST",
+            },
+            "verified_facts": ["merchant=Tienda"],
+            "triage": {
+                "band": "review",
+                "fraud_score": 12,
+                "model_risk_score": 0.01,
+                "model_version": "lgbm:test",
+            },
+            "actions_taken": [],
+            "recommended_next_step": "Una persona revisa el caso.",
+        }
+    )
+
+
+def test_template_uses_the_bank_name_and_a_neutral_greeting_without_a_first_name() -> None:
+    settings = Settings(bank_display_name="North Pier")
+    draft = compose_draft(_draft_packet(), "Mexico", settings)
+    assert draft.status == "template"
+    assert draft.text.startswith("Hola.")
+    assert not draft.text.startswith("Hola,")
+    assert "North Pier" in draft.text
+    assert "[" not in draft.text
+    portuguese = compose_draft(_draft_packet(language="pt", first_name="Ana"), "Brazil", settings)
+    assert portuguese.text.startswith("Olá, Ana.")
+    assert "North Pier" in portuguese.text
+    named = compose_draft(_draft_packet(first_name="María"), "Mexico", Settings())
+    assert named.text.startswith("Hola, María.")
+    assert "Harbor Desk" in named.text
+    blank = compose_draft(_draft_packet(first_name="[María]"), "Mexico", Settings())
+    assert blank.text.startswith("Hola.")
+    assert "[" not in blank.text
+    placeholder_bank = compose_draft(
+        _draft_packet(first_name="Teo"),
+        "Mexico",
+        Settings(bank_display_name="[Nombre del Banco]"),
+    )
+    assert "Harbor Desk" in placeholder_bank.text
+    assert "[" not in placeholder_bank.text
+
+
+def test_placeholder_draft_falls_back_to_the_template(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    assert has_placeholder("Hola [Nombre del Banco].")
+    assert has_placeholder("Vimos [el comercio].")
+    assert has_placeholder("Hola, María. Harbor Desk vio el cargo.") is False
+
+    def fake_complete(
+        settings: Settings, provider: str, facts: dict[str, str]
+    ) -> tuple[str, str, int, int, int]:
+        del settings, provider, facts
+        return ("Hola [Nombre del Banco], vimos el cargo.", "gpt-4o-mini", 4, 2, 2)
+
+    monkeypatch.setattr("app.reply.draft._complete", fake_complete)
+    settings = Settings(llm_provider="openai", openai_api_key="sk-test")
+    with caplog.at_level(logging.WARNING, logger="app.reply.draft"):
+        draft = compose_draft(_draft_packet(first_name="María"), "Mexico", settings)
+    assert draft.status == "error"
+    assert draft.used_model is True
+    assert draft.text.startswith("Hola, María.")
+    assert "Harbor Desk" in draft.text
+    assert "[" not in draft.text
+    assert "placeholder" in caplog.text
+
+    def clean_complete(
+        settings: Settings, provider: str, facts: dict[str, str]
+    ) -> tuple[str, str, int, int, int]:
+        del settings, provider, facts
+        return ("Hola, María. Harbor Desk vio el cargo.", "gpt-4o-mini", 4, 2, 2)
+
+    monkeypatch.setattr("app.reply.draft._complete", clean_complete)
+    kept = compose_draft(_draft_packet(first_name="María"), "Mexico", settings)
+    assert kept.status == "ok"
+    assert kept.text == "Hola, María. Harbor Desk vio el cargo."

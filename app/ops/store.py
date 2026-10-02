@@ -12,18 +12,28 @@ import json
 import logging
 import re
 import sqlite3
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.errors import APIError
 from app.ops.guard import assert_statement_allowed
 
 logger = logging.getLogger(__name__)
 
+_SCHEMA_RETRY_SECONDS = 30.0
+
 _SCHEMA_WARNING = (
     "test-traffic schema is missing (is_test, test_cases, or audit_live); "
     "run migrations/002_is_test.sql as the database owner. "
-    "Case inserts omit is_test, test marks are ignored, and metrics read audit_current."
+    "Test-mode cases are refused until is_test can be stored. "
+    "Other case inserts omit is_test, and metrics read audit_current."
+)
+
+_TEST_SCHEMA_MESSAGE = (
+    "Test mode cannot be stored until migrations/002_is_test.sql is applied. "
+    "The case was not opened."
 )
 
 _PRICES = (
@@ -67,7 +77,8 @@ class OpsStore:
         self.path = path
         self.dsn = dsn
         self.readback_tamper: Any = None
-        self.migrations_ok = True
+        self._migrations_ok = False
+        self._schema_checked_at = 0.0
         self._schema_warned = False
         if backend == "sqlite":
             self._init_sqlite()
@@ -135,20 +146,31 @@ class OpsStore:
             conn.commit()
             return int(cursor.rowcount)
 
+    @property
+    def migrations_ok(self) -> bool:
+        """True once the test schema has been seen. A miss is retried every 30s."""
+        if self._migrations_ok:
+            return True
+        if time.monotonic() - self._schema_checked_at < _SCHEMA_RETRY_SECONDS:
+            return False
+        return self.refresh_test_schema()
+
     def refresh_test_schema(self) -> bool:
-        """True when is_test, test_cases, and audit_live are all present."""
+        """Probe is_test, test_cases, and audit_live. A hit stays cached."""
+        self._schema_checked_at = time.monotonic()
         try:
             present = self._probe_test_schema()
         except Exception:
             present = False
         if present:
-            self.migrations_ok = True
+            self._migrations_ok = True
             return True
         self._mark_migrations_missing()
         return False
 
     def _mark_migrations_missing(self) -> None:
-        self.migrations_ok = False
+        self._migrations_ok = False
+        self._schema_checked_at = time.monotonic()
         if self._schema_warned:
             return
         self._schema_warned = True
@@ -189,10 +211,14 @@ class OpsStore:
             f"INSERT INTO {self._table(table)} ({columns}) VALUES ({_placeholders(len(params))})"
         )
         if not self.migrations_ok:
+            if is_test:
+                _refuse_unstored_test_case()
             self._write(without, params)
             return
         optional = (("is_test", is_test),) + extras
-        for count in range(len(optional), -1, -1):
+        # Keep is_test in every attempt. Dropping it would store an unmarked test case.
+        floor = 0 if is_test else -1
+        for count in range(len(optional), floor, -1):
             chosen = optional[:count]
             names = ", ".join(name for name, _value in chosen)
             values = params + tuple(value for _name, value in chosen)
@@ -207,8 +233,12 @@ class OpsStore:
             except Exception as exc:
                 if not _missing_added_column(exc):
                     raise
-                if "is_test" in str(exc).lower():
+                if is_test and "is_test" in str(exc).lower():
                     self._mark_migrations_missing()
+                    _refuse_unstored_test_case()
+        if is_test:
+            self._mark_migrations_missing()
+            _refuse_unstored_test_case()
         self._write(without, params)
 
     def _init_sqlite(self) -> None:
@@ -952,6 +982,10 @@ def _privileges_are_select_only(found: dict[str, set[str]]) -> bool:
     if set(found) != set(_AUDIT_VIEWS):
         return False
     return all(privileges == {"SELECT"} for privileges in found.values())
+
+
+def _refuse_unstored_test_case() -> None:
+    raise APIError(503, "test_schema_missing", _TEST_SCHEMA_MESSAGE)
 
 
 def _placeholders(count: int) -> str:
