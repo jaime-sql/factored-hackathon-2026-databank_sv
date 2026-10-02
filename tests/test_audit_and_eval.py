@@ -334,6 +334,32 @@ def test_migration_005_makes_reference_tables_select_only() -> None:
     assert "005_readonly_reference.sql" not in store
 
 
+def test_migration_006_appends_source_and_leaves_audit_grants() -> None:
+    sql = (ROOT / "migrations" / "006_judge_source.sql").read_text(encoding="utf-8")
+    assert "ADD COLUMN IF NOT EXISTS source text DEFAULT NULL" in sql
+    assert "NOT NULL" not in sql
+    assert "DROP VIEW" not in sql.upper()
+    assert "CREATE OR REPLACE VIEW app.audit_current" not in sql
+    assert "CREATE OR REPLACE VIEW app.audit_live" in sql
+    view = sql[sql.index("CREATE OR REPLACE VIEW app.audit_live") : sql.index("REVOKE")]
+    assert view.index("cur.*") < view.index("AS demo_attack") < view.index("AS source")
+    assert "judge" not in view.lower()
+    assert "GRANT SELECT ON app.audit_live TO app_rw" in sql
+    assert "REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.audit_live FROM app_rw" in sql
+    for phrase in (
+        "ON app.audit_case",
+        "ON app.audit_llm_call",
+        "ON app.audit_event",
+        "ON app.audit_current",
+        "GRANT INSERT",
+        "GRANT UPDATE",
+        "GRANT DELETE",
+    ):
+        assert phrase not in sql, phrase
+    store = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
+    assert "006_judge_source.sql" not in store
+
+
 def test_app_code_does_not_write_reference_tables() -> None:
     """Postgres app_rw only selects these tables.
 

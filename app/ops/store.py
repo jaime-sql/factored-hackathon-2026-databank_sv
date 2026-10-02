@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from app.errors import APIError
+from app.ops.console_action import is_console_decision
 from app.ops.guard import assert_statement_allowed
 
 logger = logging.getLogger(__name__)
@@ -290,7 +291,8 @@ class OpsStore:
                   eval_run_id TEXT,
                   case_source TEXT,
                   is_test INTEGER NOT NULL DEFAULT 0,
-                  demo_attack INTEGER NOT NULL DEFAULT 0
+                  demo_attack INTEGER NOT NULL DEFAULT 0,
+                  source TEXT
                 );
                 CREATE TABLE IF NOT EXISTS audit_llm_call (
                   audit_id TEXT PRIMARY KEY,
@@ -641,20 +643,28 @@ class OpsStore:
                 row.get("case_source"),
             ),
             is_test=bool(row.get("is_test")),
-            extras=(("demo_attack", bool(row.get("demo_attack"))),),
+            extras=(
+                ("demo_attack", bool(row.get("demo_attack"))),
+                ("source", row.get("source")),
+            ),
         )
         return str(row["audit_id"])
 
     def current_audit_cases(self) -> list[dict[str, Any]]:
-        """Tips from audit_current. is_test comes from cases and test_cases.
+        """Routing tips from audit_current. is_test comes from cases and test_cases.
 
         audit_current keeps the column list it had when it was created, so a
         later is_test column on audit_case is not on the view. The queue, the
         packet, and the admin include filters read the flag from cases and
-        from test_cases membership instead.
+        from test_cases membership instead. Console action tips stay in the
+        SQL view and in audit_live; this read keeps the customer decision.
         """
         raw = self.execute(f"SELECT * FROM {self._table('audit_current')}")
-        rows = [_normalize_audit(row) for row in raw]
+        rows = [
+            row
+            for row in (_normalize_audit(row) for row in raw)
+            if not is_console_decision(row.get("decision"))
+        ]
         if not rows:
             return rows
         cases = self.list_cases()
@@ -696,7 +706,10 @@ class OpsStore:
         )
         found: dict[str, dict[str, Any]] = {}
         for tip in tips:
-            self._walk_supersedes(_normalize_audit(tip), found, 0)
+            normalized = _normalize_audit(tip)
+            if is_console_decision(normalized.get("decision")):
+                continue
+            self._walk_supersedes(normalized, found, 0)
         return list(found.values())
 
     def _walk_supersedes(
@@ -931,6 +944,9 @@ def _add_sqlite_judge(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE cases ADD COLUMN reply_draft TEXT")
     if "reply_sent" not in case_columns:
         conn.execute("ALTER TABLE cases ADD COLUMN reply_sent TEXT")
+    audit_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(audit_case)")}
+    if "source" not in audit_columns:
+        conn.execute("ALTER TABLE audit_case ADD COLUMN source TEXT")
 
 
 def _sql_statements(path: Path) -> list[str]:

@@ -59,6 +59,7 @@ from app.i18n import (
     reply_review,
 )
 from app.ids import new_case_id, new_id
+from app.ops.console_action import CONSOLE_ACTIONS
 from app.ops.store import OpsStore
 from app.thresholds_loader import ThresholdSource, preliminary_route
 from app.timeutil import present_time
@@ -909,7 +910,52 @@ class Engine:
         except Exception as exc:
             logger.warning("reply draft was not stored (%s)", type(exc).__name__)
 
-    def record_reply_sent(self, case_id: str, text: str) -> None:
+    def record_console_action(self, case_id: str, action: str, source: str | None) -> None:
+        """Append a console tip. It does not supersede the routing decision."""
+        if action not in CONSOLE_ACTIONS:
+            raise ValueError(f"unknown console action: {action}")
+        case = self.ops.get_case(case_id)
+        if case is None:
+            return
+        customer = self.bank.get_customer(str(case["customer_key"]))
+        if customer is None:
+            return
+        previous = self._current(case_id)
+        version = RULE_VERSION
+        fraud_score = None
+        prob = None
+        if previous is not None:
+            version = str(previous.get("rule_or_model_version") or RULE_VERSION)
+            fraud_score = _float(previous.get("fraud_score"))
+            prob = _float(previous.get("model_risk_score"))
+        case_type = str((previous or {}).get("case_type") or case.get("case_type") or "triage")
+        self._audit(
+            case_id=case_id,
+            audit_id=new_case_id(),
+            supersedes=None,
+            case_type=case_type,
+            customer=customer,
+            status=str(case.get("state") or "handed_off"),
+            created=case["created_at"],
+            closed=case.get("closed_at"),
+            decision=f"console_{action}",
+            automation=False,
+            reason=None,
+            packet_complete=None,
+            lang=str(case.get("language") or "es"),
+            version=version,
+            fraud_score=fraud_score,
+            prob=prob,
+            flags=[],
+            is_eval=bool(case.get("is_eval_case")),
+            eval_run_id=case.get("eval_run_id"),
+            case_source=case.get("case_source"),
+            is_test=bool(case.get("is_test")) and not bool(case.get("is_eval_case")),
+            demo_attack=bool(case.get("demo_attack")),
+            source="judge" if source == "judge" else None,
+        )
+
+    def record_reply_sent(self, case_id: str, text: str, *, source: str | None = None) -> None:
         case = self.ops.get_case(case_id)
         if case is None or self.ops.get_handoff(case_id) is None:
             raise APIError(404, "not_found", "Handoff not found")
@@ -941,6 +987,7 @@ class Engine:
             is_test=bool(case.get("is_test")) and not bool(case.get("is_eval_case")),
             demo_attack=bool(case.get("demo_attack")),
             side=True,
+            source="judge" if source == "judge" else None,
         )
 
     def _packet(
@@ -1084,6 +1131,7 @@ class Engine:
         is_test: bool = False,
         demo_attack: bool = False,
         side: bool = False,
+        source: str | None = None,
     ) -> None:
         self.ops.append_audit_case(
             {
@@ -1113,6 +1161,7 @@ class Engine:
                 "case_source": case_source,
                 "is_test": bool(is_test) and not is_eval,
                 "demo_attack": bool(demo_attack),
+                "source": source,
             }
         )
 

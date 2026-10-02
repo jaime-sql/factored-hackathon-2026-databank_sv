@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from app.eval_access import DEMO_SAMPLE_LABEL
+from app.ops.console_action import is_console_decision
 
 
 def _eval_traffic(row: dict[str, Any]) -> bool:
@@ -76,6 +77,8 @@ def compute_metrics(
         )
     else:
         chosen = list(cases)
+    # Console tips stay in audit_live. Volume and rates stay on the routing tip.
+    chosen = [row for row in chosen if not is_console_decision(row.get("decision"))]
     chosen_ids = {row["case_id"] for row in chosen}
     chosen_calls = [row for row in calls if row.get("case_id") in chosen_ids]
     closed = [row for row in chosen if row.get("decision")]

@@ -127,6 +127,16 @@ def _bearer(request: Request) -> str:
     return ""
 
 
+def _console_source(request: Request) -> str | None:
+    if agent_role(_settings(request), _bearer(request)) == "judge":
+        return "judge"
+    return None
+
+
+def _record_console(request: Request, case_id: str, action: str) -> None:
+    request.app.state.engine.record_console_action(case_id, action, _console_source(request))
+
+
 def _agent(request: Request, *, admin_only: bool = False) -> str:
     role = agent_role(_settings(request), _bearer(request))
     if role is None:
@@ -410,6 +420,8 @@ def handoff_queue(request: Request, language: str | None = None) -> dict[str, An
         queue_card(row, audits.get(row["case_id"]), display_language=lang)
         for row in request.app.state.ops.list_handoffs()
     ]
+    for item in items:
+        _record_console(request, str(item["case_id"]), "list")
     return {"queue": items}
 
 
@@ -441,6 +453,7 @@ def handoff_case(case_id: str, request: Request, language: str | None = None) ->
     if evidence:
         view["band_evidence"] = evidence
     _attach_reply(request, case_id, view)
+    _record_console(request, case_id, "open")
     return {
         "handoff": row,
         "events": safe_events,
@@ -476,7 +489,9 @@ def _attach_reply(request: Request, case_id: str, view: dict[str, Any]) -> None:
 @router.post("/api/handoff/{case_id}/draft-check")
 def draft_check(case_id: str, body: ReplyIn, request: Request) -> dict[str, Any]:
     _agent(request)
-    return grounded(body.text, _reply_facts(request, case_id))
+    checked = grounded(body.text, _reply_facts(request, case_id))
+    _record_console(request, case_id, "draft")
+    return checked
 
 
 @router.post("/api/handoff/{case_id}/reply")
@@ -485,7 +500,7 @@ def send_reply(case_id: str, body: ReplyIn, request: Request) -> dict[str, Any]:
     text = body.text.strip()
     if not text:
         raise APIError(400, "empty_reply", "Reply text is required")
-    request.app.state.engine.record_reply_sent(case_id, text)
+    request.app.state.engine.record_reply_sent(case_id, text, source=_console_source(request))
     checked = grounded(text, _reply_facts(request, case_id))
     return {
         "status": "reply_sent",
@@ -527,6 +542,7 @@ def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str
             "updated_at": datetime.now(UTC),
         },
     )
+    _record_console(request, case_id, "resolve")
     return {"status": "resolved"}
 
 
