@@ -1,0 +1,51 @@
+{
+  "test_fixture": true,
+  "note": "SYNTHETIC test fixture for tests/test_analytics_simulator.py only. Not data. Never ship.",
+  "split": "validation",
+  "model_version": "synthetic-test-fixture",
+  "t_low_default": 0.000275603870032301,
+  "n_charges": 100,
+  "n_fraud": 10,
+  "n_high": 10,
+  "n_rule": 10,
+  "fraud_in_high": 3,
+  "fraud_in_rule": 1,
+  "points": [
+    {
+      "t_low": 0.0001,
+      "is_default": false,
+      "n_low": 0,
+      "n_review": 80,
+      "automation_rate": 0.1,
+      "missed_fraud_n": 0,
+      "missed_fraud_rate": 0.0,
+      "missed_fraud_ci_lo": 0.0,
+      "missed_fraud_ci_hi": 0.2775327998628892,
+      "wrongful_autoclose_per_10k": 0.0
+    },
+    {
+      "t_low": 0.000275603870032301,
+      "is_default": true,
+      "n_low": 40,
+      "n_review": 40,
+      "automation_rate": 0.5,
+      "missed_fraud_n": 1,
+      "missed_fraud_rate": 0.1,
+      "missed_fraud_ci_lo": 0.017876213095072896,
+      "missed_fraud_ci_hi": 0.4041500267952385,
+      "wrongful_autoclose_per_10k": 100.0
+    },
+    {
+      "t_low": 0.001,
+      "is_default": false,
+      "n_low": 80,
+      "n_review": 0,
+      "automation_rate": 0.9,
+      "missed_fraud_n": 3,
+      "missed_fraud_rate": 0.3,
+      "missed_fraud_ci_lo": 0.10779126740630099,
+      "missed_fraud_ci_hi": 0.6032218525388546,
+      "wrongful_autoclose_per_10k": 300.0
+    }
+  ]
+}
