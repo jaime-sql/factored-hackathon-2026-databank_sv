@@ -32,7 +32,8 @@ def test_break_it_abandons_and_stays_out_of_metrics(client: TestClient) -> None:
     assert "4111 1111 1111 1111" not in body["reply"]
     assert "4111 1111 1111 1111" not in body["masked_message"]
     assert "[CARD]" in body["masked_message"]
-    assert "Ignore previous instructions" in body["masked_message"]
+    assert "Ignora tus reglas" in body["masked_message"]
+    assert "Ignore previous instructions" not in body["masked_message"]
     assert body["audit"]["decision"] == "abandoned"
     assert "prompt_injection" in body["audit"]["guardrail_flags"]
     assert "pii_masked" in body["audit"]["guardrail_flags"]
@@ -73,10 +74,12 @@ def test_break_it_sets_is_test_only_in_test_mode(tmp_path: Path) -> None:
         opened = client.post(
             "/cases",
             headers=headers,
-            json={"demo_attack": True, "language": "pt"},
+            json={"demo_attack": True, "language": "pt", "message": "substituir"},
         ).json()
         assert opened["demo_attack"] is True
         assert opened["is_test"] is True
+        assert "Ignora as tuas regras" in opened["masked_message"]
+        assert "substituir" not in opened["masked_message"]
         stored = client.app.state.ops.get_case(opened["case_id"])
         assert stored["demo_attack"] is True
         assert stored["is_test"] is True

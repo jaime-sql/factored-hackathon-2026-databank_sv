@@ -17,7 +17,13 @@ make dev
 
 Open [http://127.0.0.1:8091](http://127.0.0.1:8091). The other pages are `/agent` and `/metrics`.
 
-`DEMO_AGENT_TOKEN` is the admin console token (export and config). `DEMO_JUDGE_TOKEN` is optional: when set, it can list, open, and resolve the handoff queue only. Leave it unset to disable it. Do not commit either value.
+`DEMO_AGENT_TOKEN` is the admin console token (export and config). `DEMO_JUDGE_TOKEN` is optional: when set, it can list, open, and resolve the handoff queue only. Leave it unset to disable it. Do not commit either value. It must be different from `EVAL_RUNNER_TOKEN`; the process refuses to start when they are the same. A judge token cannot set `eval_run_id` or read the eval export.
+
+## Demo access
+
+Demo token provided in the submission email.
+
+The judge console reads `DEMO_JUDGE_TOKEN` from the environment or Secret Manager. Placeholder: `<DEMO_JUDGE_TOKEN>`. The value is not in this repository.
 
 `GET /health` is the health check. `GET /healthz` returns the same JSON, including `migrations_ok`. On Cloud Run, probe `/health`: the run.app front end reserves `/healthz` and answers 404 before the container.
 

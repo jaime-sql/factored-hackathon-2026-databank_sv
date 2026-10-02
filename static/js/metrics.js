@@ -153,6 +153,7 @@ function renderJudgePanels(body, text) {
   renderTrust(body && body.trust, text);
   renderSimulator(body && body.simulator, text);
   renderFairness(body && body.fairness, text);
+  renderK11(body, text);
 }
 
 function renderHealth(health, text) {
@@ -197,69 +198,70 @@ function renderTrust(rows, text) {
   }
 }
 
+function simLabel(text, key, fallback) {
+  return text && text[key] ? text[key] : fallback;
+}
+
 function renderSimulator(sim, text) {
   const node = clearSection("simulator");
-  if (!node || !sim || !Array.isArray(sim.points)) return;
+  if (!node || !sim || !Array.isArray(sim.points) || !sim.points.length) return;
+  const points = sim.points.filter((point) => point && typeof point === "object");
+  if (!points.length) return;
+  points.sort((left, right) => Number(left.t_low) - Number(right.t_low));
+  let start = points.findIndex((point) => point.is_default);
+  if (start < 0) start = 0;
   node.hidden = false;
   const title = document.createElement("h2");
-  title.textContent = text ? text.sim_title : "Simulador de umbral";
-  node.appendChild(title);
-  const summary = document.createElement("p");
-  summary.className = "meta";
-  summary.textContent = [
-    `${text ? text.sim_split : "Corte"}: ${sim.split || ""}`,
-    `${text ? text.sim_model : "Versión del modelo"}: ${sim.model_version || ""}`,
-    `${text ? text.sim_default : "Umbral habitual"}: ${sim.t_low_default}`,
-    `${text ? text.sim_charges : "Cargos"}: ${sim.n_charges}`,
-    `${text ? text.sim_fraud : "Fraude"}: ${sim.n_fraud}`,
-    `${text ? text.sim_high : "Riesgo alto"}: ${sim.n_high}`,
-    `${text ? text.sim_rule : "Regla"}: ${sim.n_rule}`,
-    `${text ? text.sim_fraud_high : "Fraude en riesgo alto"}: ${sim.fraud_in_high}`,
-    `${text ? text.sim_fraud_rule : "Fraude en la regla"}: ${sim.fraud_in_rule}`,
+  title.textContent = simLabel(text, "sim_title", "Simulador de umbral");
+  const split = document.createElement("p");
+  split.className = "meta";
+  split.textContent = simLabel(text, "sim_validation", "conjunto de validación");
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.className = "sim-slider";
+  slider.min = "0";
+  slider.max = String(points.length - 1);
+  slider.step = "1";
+  slider.value = String(start);
+  slider.setAttribute("type", "range");
+  slider.setAttribute("min", slider.min);
+  slider.setAttribute("max", slider.max);
+  slider.setAttribute("aria-label", split.textContent);
+  const readout = document.createElement("div");
+  readout.className = "sim-readout";
+  const fixed = document.createElement("p");
+  fixed.className = "sim-fixed";
+  fixed.textContent = [
+    `${simLabel(text, "sim_high", "Riesgo alto")}: ${sim.n_high}`,
+    `${simLabel(text, "sim_fraud_high", "Fraude en riesgo alto")}: ${sim.fraud_in_high}`,
+    `${simLabel(text, "sim_rule", "Regla")}: ${sim.n_rule}`,
   ].join(" · ");
-  node.appendChild(summary);
-  const table = document.createElement("table");
-  table.className = "sim-table";
-  const head = document.createElement("tr");
-  const headers = [
-    text ? text.sim_t : "Umbral",
-    text ? text.sim_n_low : "Bajo",
-    text ? text.sim_n_review : "Revisión",
-    text ? text.sim_auto : "Automatización",
-    text ? text.sim_missed_n : "Fraude no visto",
-    text ? text.sim_missed_rate : "Tasa de fraude no visto",
-    text ? text.sim_ci : "Intervalo",
-    text ? text.sim_wrong : "Cierres indebidos por 10 mil",
-  ];
-  if (sim.show_cost) headers.push(text ? text.sim_cost : "Costo por caso");
-  for (const label of headers) {
-    const cell = document.createElement("th");
-    cell.textContent = label;
-    head.appendChild(cell);
-  }
-  table.appendChild(head);
-  for (const point of sim.points) {
-    const row = document.createElement("tr");
-    if (point.is_default) row.className = "is-default";
-    const cells = [
-      point.t_low,
-      point.n_low,
-      point.n_review,
-      point.automation_rate,
-      point.missed_fraud_n,
-      point.missed_fraud_rate,
-      `${point.missed_fraud_ci_lo}–${point.missed_fraud_ci_hi}`,
-      point.wrongful_autoclose_per_10k,
+  const ruleFraud = document.createElement("p");
+  ruleFraud.className = "sim-fixed";
+  ruleFraud.textContent = `${simLabel(text, "sim_fraud_rule", "Fraude en la regla")}: ${sim.fraud_in_rule}`;
+  function paint() {
+    const point = points[Number(slider.value)] || points[start];
+    readout.replaceChildren();
+    const lines = [
+      `${simLabel(text, "sim_t", "Umbral")}: ${point.t_low}`,
+      `${simLabel(text, "sim_n_low", "Bajo")}: ${point.n_low}`,
+      `${simLabel(text, "sim_n_review", "Revisión")}: ${point.n_review}`,
+      `${simLabel(text, "sim_auto", "Automatización")}: ${point.automation_rate}`,
+      `${simLabel(text, "sim_missed_n", "Fraude no visto")}: ${point.missed_fraud_n}`,
+      `${simLabel(text, "sim_missed_rate", "Tasa de fraude no visto")}: ${point.missed_fraud_rate}`,
+      `${simLabel(text, "sim_ci", "Intervalo")}: ${point.missed_fraud_ci_lo}–${point.missed_fraud_ci_hi}`,
+      `${simLabel(text, "sim_wrong", "Cierres indebidos por 10 mil")}: ${point.wrongful_autoclose_per_10k}`,
     ];
-    if (sim.show_cost) cells.push(formatCost(point));
-    for (const value of cells) {
-      const cell = document.createElement("td");
-      cell.textContent = value == null ? "" : String(value);
-      row.appendChild(cell);
+    if (sim.show_cost) lines.push(`${simLabel(text, "sim_cost", "Costo por caso")}: ${formatCost(point)}`);
+    for (const line of lines) {
+      const row = document.createElement("p");
+      row.textContent = line;
+      readout.appendChild(row);
     }
-    table.appendChild(row);
   }
-  node.appendChild(table);
+  slider.addEventListener("input", paint);
+  paint();
+  node.append(title, split, slider, readout, fixed, ruleFraud);
 }
 
 function formatCost(point) {
@@ -308,7 +310,12 @@ function renderFairness(payload, text) {
     head.appendChild(cell);
   }
   table.appendChild(head);
+  let hidden = 0;
   for (const [country, group] of Object.entries(groups)) {
+    if (!sampleOk(group)) {
+      hidden += 1;
+      continue;
+    }
     const row = document.createElement("tr");
     const missed = group.missed_fraud || {};
     const missedText =
@@ -328,6 +335,46 @@ function renderFairness(payload, text) {
     table.appendChild(row);
   }
   node.appendChild(table);
+  if (hidden) node.appendChild(smallSampleNote(text));
+}
+
+function sampleOk(group) {
+  const n = Number(group && group.n);
+  return Number.isFinite(n) && n >= 30;
+}
+
+function smallSampleNote(text) {
+  const note = document.createElement("p");
+  note.className = "small-sample";
+  note.textContent = text && text.fair_small
+    ? text.fair_small
+    : "Los grupos con menos de 30 casos quedan fuera";
+  return note;
+}
+
+function renderK11(body, text) {
+  const node = document.getElementById("fairness");
+  if (!node || !body || !Array.isArray(body.k11_fairness_handoff)) return;
+  let hidden = 0;
+  let shown = 0;
+  for (const slice of body.k11_fairness_handoff) {
+    const groups = Array.isArray(slice && slice.groups) ? slice.groups : [];
+    const kept = [];
+    for (const group of groups) {
+      if (sampleOk(group)) kept.push(group);
+      else hidden += 1;
+    }
+    if (!kept.length) continue;
+    shown += kept.length;
+    const line = document.createElement("p");
+    line.textContent = kept
+      .map((group) => `${group.group}: ${group.n}`)
+      .join(" · ");
+    node.appendChild(line);
+  }
+  if (!shown && !hidden) return;
+  if (hidden) node.appendChild(smallSampleNote(text));
+  node.hidden = false;
 }
 
 function share(value) {

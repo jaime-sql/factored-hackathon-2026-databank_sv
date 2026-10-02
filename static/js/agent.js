@@ -74,7 +74,7 @@ const PACKET_LABELS = {
       "contest not_applicable": "Impugnación registrada",
       "open_dispute not_applicable": "Disputa abierta",
     },
-    decisions: { handoff: "Traspaso" },
+    decisions: { handoff: "Traspaso", abandoned: "Abandonado" },
   },
   pt: {
     bands: { high: "Alto", low: "Baixo", review: "Revisão", out_of_scope: "Fora de escopo" },
@@ -87,7 +87,7 @@ const PACKET_LABELS = {
       "contest not_applicable": "Contestação registrada",
       "open_dispute not_applicable": "Disputa aberta",
     },
-    decisions: { handoff: "Repasse" },
+    decisions: { handoff: "Repasse", abandoned: "Abandonado" },
   },
 };
 
@@ -206,49 +206,64 @@ function scoreFieldValue(line) {
   return String(line || "").replace(/^(?:Puntaje|Pontuação):\s*/, "");
 }
 
-function packetLines(view, trail) {
+function flagLabel(flag) {
+  const key = flag === "prompt_injection" ? "flag_injection" : flag === "pii_masked" ? "flag_pii" : "";
+  if (!key) return "";
+  const fallback = packetLanguage() === "pt"
+    ? { flag_injection: "Injeção bloqueada", flag_pii: "Dados mascarados" }
+    : { flag_injection: "Inyección bloqueada", flag_pii: "Datos enmascarados" };
+  return ui(key, fallback[key]);
+}
+
+function packetRows(view) {
   const actions = (view.actions_taken || [])
     .map((action) => actionLabel(action.name, action.verification_status))
     .filter(Boolean)
     .join(", ");
-  const lines = [];
-  if (view.is_test) lines.push({ text: ui("test_chip", "Prueba") });
-  lines.push({ text: `${fieldLabel("field_band")}: ${bandLabel(view.band)}` });
-  if (view.model_version) lines.push({ text: view.model_version });
+  const rows = [];
+  if (view.is_test) rows.push({ value: ui("test_chip", "Prueba") });
+  rows.push({ label: fieldLabel("field_band"), value: bandLabel(view.band) });
+  if (view.model_version) rows.push({ value: view.model_version });
   const scoreText = scoreFieldValue(view.score_line);
-  lines.push({
-    text: `${fieldLabel("field_score")}: ${scoreText}`,
-    score: true,
-    value: scoreText,
-  });
-  lines.push({ text: `${fieldLabel("field_amount")}: ${view.amount || ""}` });
-  lines.push({ text: `${fieldLabel("field_merchant")}: ${view.merchant || ""}` });
-  lines.push({ text: `${fieldLabel("field_time")}: ${view.local_time || ""}` });
-  if (view.utc) lines.push({ text: view.utc });
-  if (view.customer_tz) lines.push({ text: view.customer_tz });
-  lines.push({ text: actions || ui("no_actions", "ninguna") });
-  if (view.reason_label) lines.push({ text: view.reason_label });
-  lines.push({ text: `${fieldLabel("field_step")}: ${view.recommended_next_step || ""}` });
-  if (view.band_evidence) lines.push({ text: view.band_evidence });
+  rows.push({ label: fieldLabel("field_score"), value: scoreText, score: true });
+  rows.push({ label: fieldLabel("field_amount"), value: view.amount || "" });
+  rows.push({ label: fieldLabel("field_merchant"), value: view.merchant || "" });
+  rows.push({ label: fieldLabel("field_time"), value: view.local_time || "" });
+  if (view.utc) rows.push({ value: view.utc });
+  if (view.customer_tz) rows.push({ value: view.customer_tz });
+  rows.push({ value: actions || ui("no_actions", "ninguna") });
+  if (view.reason_label) rows.push({ value: view.reason_label });
+  rows.push({ label: fieldLabel("field_step"), value: view.recommended_next_step || "" });
+  if (view.band_evidence) rows.push({ value: view.band_evidence });
+  return rows;
+}
+
+function trailLine(step) {
+  if (step.kind === "action") {
+    return [step.at, actionLabel(step.action, step.verification)].filter(Boolean).join(" · ");
+  }
+  const flags = (step.guardrail_flags || []).map(flagLabel).filter(Boolean).join(" · ");
+  return [
+    step.at,
+    step.rule_or_model,
+    bandLabel(step.band),
+    step.threshold,
+    flags,
+    decisionLabel(step.handoff),
+    step.reason_label,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function packetLines(view, trail) {
+  const lines = packetRows(view).map((row) => ({
+    text: row.label ? `${row.label}: ${row.value}` : String(row.value || ""),
+    score: Boolean(row.score),
+    value: row.value,
+  }));
   for (const step of (trail && trail.steps) || []) {
-    if (step.kind === "action") {
-      const action = actionLabel(step.action, step.verification);
-      lines.push({ text: [step.at, action].filter(Boolean).join(" · ") });
-    } else {
-      lines.push({
-        text: [
-          step.at,
-          step.rule_or_model,
-          bandLabel(step.band),
-          step.threshold,
-          (step.guardrail_flags || []).join(","),
-          decisionLabel(step.handoff),
-          step.reason_label,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      });
-    }
+    lines.push({ text: trailLine(step) });
   }
   return lines;
 }
@@ -265,24 +280,52 @@ function renderPacket(panel, view, trail) {
     appendDraft(panel, view);
     return;
   }
-  const nodes = lines.map((line) => {
-    const row = document.createElement("span");
-    row.className = "packet-line";
-    if (!line.score) {
-      row.textContent = line.text;
-      return row;
+  const list = document.createElement("dl");
+  for (const row of packetRows(view)) {
+    if (row.label) {
+      const term = document.createElement("dt");
+      term.textContent = row.label;
+      list.appendChild(term);
     }
-    const name = document.createElement("span");
-    name.textContent = `${fieldLabel("field_score")}: `;
-    const value = document.createElement("span");
-    value.className = "score-line";
-    value.dataset.band = view.band || "";
-    value.textContent = line.value;
-    const tip = scoreTooltip(view);
-    if (tip) value.title = tip;
-    row.append(name, value);
-    return row;
-  });
+    const value = document.createElement("dd");
+    if (!row.score) {
+      value.textContent = row.value == null ? "" : String(row.value);
+    } else {
+      const score = document.createElement("span");
+      score.className = "score-line";
+      score.dataset.band = view.band || "";
+      score.textContent = row.value;
+      const tip = scoreTooltip(view);
+      if (tip) score.title = tip;
+      value.appendChild(score);
+    }
+    list.appendChild(value);
+  }
+  const steps = (trail && trail.steps) || [];
+  const nodes = [list];
+  if (steps.length) {
+    const why = document.createElement("pre");
+    why.className = "why-trail";
+    for (const step of steps) {
+      const line = document.createElement("span");
+      line.className = "packet-line";
+      line.textContent = trailLine({ ...step, guardrail_flags: [] });
+      const flags = step.guardrail_flags || [];
+      if (flags.length) {
+        line.appendChild(document.createTextNode(" "));
+        for (const flag of flags) {
+          const label = flagLabel(flag);
+          if (!label) continue;
+          const chip = document.createElement("span");
+          chip.className = "flag-chip";
+          chip.textContent = label;
+          line.appendChild(chip);
+        }
+      }
+      why.appendChild(line);
+    }
+    nodes.push(why);
+  }
   panel.replaceChildren(...nodes);
   appendDraft(panel, view);
 }
@@ -291,8 +334,11 @@ function appendDraft(panel, view) {
   if (!view.reply_draft || typeof document === "undefined" || !panel.appendChild) return;
   const form = document.createElement("form");
   form.className = "draft";
-  const label = document.createElement("p");
-  label.className = "meta";
+  const caseId = panel.dataset.caseId || "";
+  const areaId = `draft-${caseId || "new"}`;
+  const label = document.createElement("label");
+  label.className = "draft-label";
+  label.setAttribute("for", areaId);
   label.textContent = ui("draft_label", "Borrador IA");
   const badge = document.createElement("span");
   badge.className = "grounded";
@@ -300,33 +346,37 @@ function appendDraft(panel, view) {
   badge.textContent = view.reply_grounded
     ? ui("grounded_ok", "Fundamentado")
     : ui("grounded_bad", "Sin fundamento");
-  label.append(" ");
-  label.appendChild(badge);
   const area = document.createElement("textarea");
+  area.id = areaId;
   area.value = view.reply_sent || view.reply_draft;
   const send = document.createElement("button");
   send.type = "submit";
-  send.textContent = ui("send_reply", "Enviar respuesta");
+  send.textContent = ui("send_reply", "Revisar y enviar (agente humano)");
   const note = document.createElement("p");
   note.className = "meta";
   if (view.reply_sent) note.textContent = ui("reply_sent_label", "Respuesta registrada");
-  const caseId = panel.dataset.caseId || "";
-  area.addEventListener("input", async () => {
+  let draftTimer = 0;
+  area.addEventListener("input", () => {
     if (!caseId) return;
-    const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/draft-check`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${tokenInput.value}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ text: area.value }),
-    });
-    if (!response.ok) return;
-    const checked = await response.json();
-    badge.dataset.grounded = checked.ok ? "1" : "0";
-    badge.textContent = checked.ok
-      ? ui("grounded_ok", "Fundamentado")
-      : ui("grounded_bad", "Sin fundamento");
+    if (draftTimer && typeof clearTimeout === "function") clearTimeout(draftTimer);
+    const run = async () => {
+      const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/draft-check`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${agentToken()}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ text: area.value }),
+      });
+      if (!response.ok) return;
+      const checked = await response.json();
+      badge.dataset.grounded = checked.ok ? "1" : "0";
+      badge.textContent = checked.ok
+        ? ui("grounded_ok", "Fundamentado")
+        : ui("grounded_bad", "Sin fundamento");
+    };
+    if (typeof setTimeout === "function") draftTimer = setTimeout(run, 400);
+    else run();
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -334,7 +384,7 @@ function appendDraft(panel, view) {
     const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/reply`, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${tokenInput.value}`,
+        authorization: `Bearer ${agentToken()}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({ text: area.value }),
@@ -347,7 +397,7 @@ function appendDraft(panel, view) {
       ? ui("grounded_ok", "Fundamentado")
       : ui("grounded_bad", "Sin fundamento");
   });
-  form.append(label, area, send, note);
+  form.append(label, badge, area, send, note);
   panel.appendChild(form);
 }
 
@@ -395,19 +445,20 @@ function fillCard(card, item) {
   when.textContent = item.local_time || "";
   const reason = document.createElement("p");
   reason.textContent = item.reason_label || "";
-  const panel = document.createElement("pre");
+  const panel = document.createElement("div");
   panel.className = "packet-panel";
   panel.hidden = true;
   const button = document.createElement("button");
   button.type = "button";
   button.setAttribute("data-action", "packet");
   button.textContent = ui("open_packet", "Abrir paquete");
-  button.addEventListener("click", () => togglePacket(panel, item.case_id));
+  button.addEventListener("click", () => togglePacket(panel, item.case_id, card));
   const resolve = document.createElement("button");
   resolve.type = "button";
+  resolve.disabled = true;
   resolve.setAttribute("data-action", "resolve");
   resolve.textContent = ui("resolve", "Resolver");
-  resolve.addEventListener("click", () => resolveCase(item.case_id, panel));
+  resolve.addEventListener("click", () => resolveCase(item.case_id, panel, card));
   card.append(title, meta, merchant, when, reason, button, resolve, panel);
 }
 
@@ -452,13 +503,19 @@ async function loadQueue() {
   }
 }
 
-async function togglePacket(panel, caseId) {
+function enableResolve(card) {
+  if (!card || typeof card.querySelector !== "function") return;
+  const button = card.querySelector('[data-action="resolve"]');
+  if (button) button.disabled = false;
+}
+
+async function togglePacket(panel, caseId, card) {
   if (!panel.hidden && panel.dataset.loaded === "1") {
     panel.hidden = true;
     return;
   }
   panel.hidden = false;
-  const headers = { authorization: `Bearer ${tokenInput.value}` };
+  const headers = { authorization: `Bearer ${agentToken()}` };
   const response = await fetch(
     `/api/handoff/${encodeURIComponent(caseId)}?language=${consoleState.language}`,
     { headers },
@@ -477,19 +534,39 @@ async function togglePacket(panel, caseId) {
   panel.dataset.caseId = caseId;
   renderPacket(panel, body.view || {}, trail);
   panel.dataset.loaded = "1";
+  enableResolve(card || panel.parentElement);
 }
 
-async function resolveCase(caseId, panel) {
+async function resolveCase(caseId, panel, card) {
+  if (panel.dataset.loaded !== "1") return;
+  const host = card || panel.parentElement || panel;
+  if (panel.dataset.confirm !== "1") {
+    panel.dataset.confirm = "1";
+    const note = document.createElement("p");
+    note.className = "resolve-confirm";
+    note.textContent = ui(
+      "resolve_confirm",
+      "¿Resolver este caso? Vuelve a pulsar para confirmar.",
+    );
+    if (typeof host.insertBefore === "function") host.insertBefore(note, panel);
+    else host.appendChild(note);
+    return;
+  }
   const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/resolve`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${tokenInput.value}`,
+      authorization: `Bearer ${agentToken()}`,
       "content-type": "application/json",
     },
     body: "{}",
   });
-  panel.hidden = false;
-  panel.textContent = response.ok
+  let result = typeof host.querySelector === "function" ? host.querySelector(".resolve-result") : null;
+  if (!result) {
+    result = document.createElement("p");
+    result.className = "resolve-result";
+    host.appendChild(result);
+  }
+  result.textContent = response.ok
     ? ui("resolved", "Resuelto")
     : ui("resolve_error", "No se pudo resolver");
 }
@@ -517,6 +594,12 @@ function applyConsoleLanguage() {
   }
   for (const resolve of document.querySelectorAll('[data-action="resolve"]')) {
     resolve.textContent = pack.resolve;
+  }
+  for (const send of document.querySelectorAll(".draft button")) {
+    send.textContent = pack.send_reply;
+  }
+  for (const draftLabel of document.querySelectorAll(".draft-label")) {
+    draftLabel.textContent = pack.draft_label;
   }
   for (const chip of document.querySelectorAll('[data-chip="test"]')) {
     chip.textContent = pack.test_chip || "Prueba";

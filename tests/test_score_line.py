@@ -85,6 +85,31 @@ def test_zero_threshold_does_not_divide() -> None:
     assert line == "Puntaje: —"
 
 
+def test_guardrail_block_has_its_own_score_row() -> None:
+    line = score_line(
+        "es",
+        "out_of_scope",
+        model_risk_score=None,
+        fraud_score=None,
+        t_low=1,
+        high_value=30,
+        guardrail=True,
+    )
+    assert line == "Bloqueado por guardrail · sin puntaje"
+    assert "Pendiente" not in line
+    portuguese = score_line(
+        "pt",
+        "out_of_scope",
+        model_risk_score=5,
+        fraud_score=10,
+        t_low=1,
+        high_value=30,
+        guardrail=True,
+    )
+    assert portuguese == "Bloqueado por guardrail · sem pontuação"
+    assert "Pendente" not in portuguese
+
+
 def test_threshold_crossed_stays_raw_english() -> None:
     assert threshold_crossed("high", fraud_score=45, t_low=0.2, high_value=30) == (
         "fraud_score > 30 (45)"

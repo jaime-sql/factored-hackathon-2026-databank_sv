@@ -19,7 +19,7 @@ from app.bank.fixture import persona_first_name
 from app.bank.models import Customer, Transaction
 from app.bank.repository import BankRepository, synthetic_pair_sibling
 from app.config import Settings
-from app.demo_attack import DEMO_ATTACK_MESSAGE
+from app.demo_attack import demo_attack_message
 from app.errors import APIError
 from app.guardrails.injection import detect_injection
 from app.guardrails.pii import redact
@@ -141,6 +141,8 @@ class CaseResult:
             "is_test": self.is_test,
             "demo_attack": self.demo_attack,
         }
+        if self.guardrail_flags:
+            payload["guardrail_flags"] = list(self.guardrail_flags)
         if self.demo_attack:
             payload["masked_message"] = self.masked_message
             payload["audit"] = {
@@ -180,7 +182,7 @@ class Engine:
         if eval_run_id or case_source:
             is_test = False
         if demo_attack:
-            message = DEMO_ATTACK_MESSAGE
+            message = demo_attack_message(language)
         lang = detect_language(message or "", language)
         flags: list[str] = []
         redacted, changed = _redact(message or "")

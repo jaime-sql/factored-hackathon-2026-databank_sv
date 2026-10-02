@@ -79,9 +79,10 @@ def _settings(request: Request) -> Settings:
 def _session_token(request: Request) -> str:
     header = request.headers.get("authorization", "")
     token = header.removeprefix("Bearer ").strip() if header.lower().startswith("bearer ") else ""
-    if not token:
-        token = request.cookies.get("hd_session", "")
-    return token
+    # Agent tokens are not customer sessions. A judge bearer must not hide the cookie.
+    if token and agent_role(_settings(request), token) is None:
+        return token
+    return request.cookies.get("hd_session", "")
 
 
 def _customer(request: Request) -> str:
@@ -295,13 +296,21 @@ def open_case(
     request: Request,
     eval_runner_token: str | None = Header(default=None, alias="EVAL_RUNNER_TOKEN"),
 ) -> JSONResponse:
+    settings = _settings(request)
     customer_key = _customer(request)
-    eval_run_id, case_source = accept_eval_fields(
-        eval_runner_token,
-        _settings(request).eval_runner_token,
-        body.eval_run_id,
-        body.case_source,
-    )
+    presented_eval = (eval_runner_token or "").strip()
+    # A judge token never stamps an eval run, even with a valid runner header.
+    judge_bearer = agent_role(settings, _bearer(request)) == "judge"
+    judge_header = agent_role(settings, presented_eval) == "judge"
+    if judge_bearer or judge_header:
+        eval_run_id, case_source = None, None
+    else:
+        eval_run_id, case_source = accept_eval_fields(
+            eval_runner_token,
+            settings.eval_runner_token,
+            body.eval_run_id,
+            body.case_source,
+        )
     is_eval = bool(eval_run_id or case_source)
     header_match = accepts_qa_test_token(
         _settings(request).qa_test_token, request.headers.get("x-test-token", "")

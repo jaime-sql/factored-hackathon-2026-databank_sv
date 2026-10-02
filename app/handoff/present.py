@@ -16,6 +16,17 @@ from app.i18n import (
 from app.timeutil import present_time
 
 
+def _prompt_blocked(audit: dict[str, Any] | None) -> bool:
+    if not audit:
+        return False
+    flags = audit.get("guardrail_flags") or []
+    if isinstance(flags, str):
+        flags = [part for part in flags.split("|") if part]
+    if not isinstance(flags, (list, tuple, set)):
+        return False
+    return "prompt_injection" in {str(flag) for flag in flags}
+
+
 def _packet(row: dict[str, Any]) -> dict[str, Any]:
     packet = row.get("packet")
     return packet if isinstance(packet, dict) else {}
@@ -170,6 +181,7 @@ def packet_view(
             fraud_score=score,
             t_low=t_low,
             high_value=high_value,
+            guardrail=_prompt_blocked(audit),
         ),
         "amount": card["amount"],
         "merchant": card["merchant"],

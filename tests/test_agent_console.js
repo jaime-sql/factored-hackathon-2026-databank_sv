@@ -4,7 +4,7 @@ const vm = require("node:vm");
 
 const source = fs.readFileSync("static/js/agent.js", "utf8");
 assert.equal(source.includes("onclick="), false);
-assert.match(source, /authorization: `Bearer \$\{tokenInput\.value\}`/);
+assert.match(source, /authorization: `Bearer \$\{agentToken\(\)\}`/);
 assert.match(source, /\/api\/handoff\/\$\{encodeURIComponent\(caseId\)\}/);
 assert.match(source, /addEventListener\("click"/);
 
@@ -152,6 +152,37 @@ assert.equal(portuguese.textContent.includes("block_card"), false);
 assert.equal(portuguese.textContent.includes("handoff verified"), false);
 context.consoleState.language = "es";
 
+const guarded = { textContent: "", hidden: true, dataset: {} };
+context.renderPacket(
+  guarded,
+  {
+    band: "out_of_scope",
+    score_line: "Bloqueado por guardrail · sin puntaje",
+    amount: "1",
+    merchant: "M",
+    recommended_next_step: "",
+  },
+  {
+    steps: [
+      {
+        kind: "decision",
+        at: "15 ene 2026, 12:00 CST",
+        band: "out_of_scope",
+        guardrail_flags: ["prompt_injection", "pii_masked"],
+        handoff: "abandoned",
+      },
+    ],
+  },
+);
+assert.ok(guarded.textContent.includes("Fuera de alcance"));
+assert.ok(guarded.textContent.includes("Inyección bloqueada"));
+assert.ok(guarded.textContent.includes("Datos enmascarados"));
+assert.ok(guarded.textContent.includes("Abandonado"));
+assert.equal(guarded.textContent.includes("out_of_scope"), false);
+assert.equal(guarded.textContent.includes("prompt_injection"), false);
+assert.equal(guarded.textContent.includes("pii_masked"), false);
+assert.ok(guarded.textContent.includes("Bloqueado por guardrail · sin puntaje"));
+
 function fakeElement() {
   return {
     className: "",
@@ -173,7 +204,30 @@ function fakeElement() {
     setAttribute() {},
   };
 }
-context.document = { createElement: () => fakeElement() };
+context.document = {
+  createElement(tag) {
+    const el = fakeElement();
+    el.tagName = String(tag || "").toUpperCase();
+    el.listeners = {};
+    el.attrs = {};
+    el.setAttribute = function (name, value) {
+      this.attrs[name] = String(value);
+      if (name === "id") this.id = String(value);
+      if (name === "for") this.htmlFor = String(value);
+    };
+    el.addEventListener = function (type, fn) {
+      this.listeners[type] = this.listeners[type] || [];
+      this.listeners[type].push(fn);
+    };
+    return el;
+  },
+  getElementById(id) {
+    return id === "token" ? { value: "agent-token" } : null;
+  },
+  createTextNode(value) {
+    return { textContent: String(value), children: [] };
+  },
+};
 
 function findScore(node) {
   if (node.className === "score-line") return node;
@@ -241,6 +295,87 @@ const pendingScore = findScore(pendingDom);
 assert.equal(pendingScore.dataset.band, "out_of_scope");
 assert.equal(pendingScore.textContent, "Pendiente/Revertido → explicación por regla");
 assert.equal(pendingScore.title, "");
+
+function walkTags(node, found) {
+  found.push(node);
+  for (const child of node.children || []) walkTags(child, found);
+}
+
+const light = fakeElement();
+light.dataset.caseId = "case-1";
+context.renderPacket(
+  light,
+  {
+    band: "review",
+    score_line: "Puntaje: 1.02× umbral · encima → revisión",
+    amount: "10 MXN",
+    merchant: "U•••",
+    recommended_next_step: "Revisar",
+    reply_draft: "Hola. Harbor Desk vio el cargo.",
+    reply_grounded: false,
+  },
+  {
+    steps: [
+      {
+        kind: "decision",
+        at: "15 ene",
+        band: "review",
+        guardrail_flags: ["prompt_injection"],
+      },
+    ],
+  },
+);
+const lightNodes = [];
+walkTags(light, lightNodes);
+assert.ok(lightNodes.some((node) => node.tagName === "DL"));
+assert.ok(lightNodes.some((node) => node.tagName === "DT" && node.textContent === "Banda"));
+assert.ok(lightNodes.some((node) => node.tagName === "DD"));
+const draft = lightNodes.find((node) => node.className === "draft");
+assert.ok(draft);
+assert.equal(draft.tagName, "FORM");
+const label = lightNodes.find((node) => node.className === "draft-label");
+assert.equal(label.tagName, "LABEL");
+assert.equal(label.textContent, "Borrador IA");
+const area = lightNodes.find((node) => node.tagName === "TEXTAREA");
+assert.ok(area);
+assert.equal(label.htmlFor, area.id);
+const send = draft.children.find((node) => node.tagName === "BUTTON");
+assert.equal(send.textContent, "Revisar y enviar (agente humano)");
+const why = lightNodes.find((node) => node.className === "why-trail");
+assert.equal(why.tagName, "PRE");
+assert.ok(
+  lightNodes.some((node) => node.className === "flag-chip" && node.textContent === "Inyección bloqueada"),
+);
+function insidePre(node, parentPre) {
+  const here = parentPre || node.tagName === "PRE";
+  if (node.className === "draft" && here) return true;
+  for (const child of node.children || []) {
+    if (insidePre(child, here)) return true;
+  }
+  return false;
+}
+assert.equal(insidePre(light, false), false);
+
+let scheduled = null;
+context.setTimeout = (fn, ms) => {
+  scheduled = { fn, ms };
+  return 7;
+};
+context.clearTimeout = () => {
+  scheduled = null;
+};
+let checks = 0;
+context.fetch = async () => {
+  checks += 1;
+  return { ok: true, json: async () => ({ ok: true }) };
+};
+area.listeners.input[0]();
+area.listeners.input[0]();
+assert.equal(checks, 0);
+assert.equal(scheduled.ms, 400);
+scheduled.fn();
+assert.equal(checks, 1);
+
 delete context.document;
 
 assert.match(source, /\/api\/cases\/\$\{encodeURIComponent\(caseId\)\}\/trail/);
@@ -326,11 +461,13 @@ async function checkLoadQueue() {
   assert.ok(box.kids.some((node) => node.textContent === "Não foi possível ler a fila."));
   context.consoleState.language = "es";
 
-  function node() {
+  function node(tag) {
     return {
+      tagName: String(tag || "").toUpperCase(),
       className: "",
       textContent: "",
       hidden: false,
+      disabled: false,
       dataset: {},
       children: [],
       append(...items) {
@@ -344,7 +481,7 @@ async function checkLoadQueue() {
     };
   }
   context.document = {
-    createElement: () => node(),
+    createElement: (tag) => node(tag),
     createTextNode: (value) => ({ textContent: String(value), children: [] }),
     getElementById: () => null,
     querySelectorAll: () => [],
@@ -368,6 +505,11 @@ async function checkLoadQueue() {
   assert.ok(texts.includes("Prueba"));
   assert.ok(texts.includes("M · 10 MXN · c1"));
   assert.equal(texts.includes("c1"), false);
+  const panel = flagged.children.find((child) => child.className === "packet-panel");
+  assert.equal(panel.tagName, "DIV");
+  const resolve = flagged.children.find((child) => child.disabled);
+  assert.ok(resolve);
+  assert.equal(resolve.tagName, "BUTTON");
   const plain = node();
   context.fillCard(plain, {
     case_id: "c2",

@@ -68,6 +68,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def normalize(self) -> Self:
+        judge = self.demo_judge_token.strip()
+        runner = self.eval_runner_token.strip()
+        if judge and runner and judge == runner:
+            raise ValueError("DEMO_JUDGE_TOKEN must be distinct from EVAL_RUNNER_TOKEN")
         if not self.session_secret.strip():
             self.session_secret = DEV_SESSION_SECRET
         if not self.demo_agent_token.strip():

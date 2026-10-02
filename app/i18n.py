@@ -185,8 +185,8 @@ _ACTION_PHRASES = {
     },
 }
 _DECISIONS = {
-    "es": {"handoff": "Traspaso"},
-    "pt": {"handoff": "Repasse"},
+    "es": {"handoff": "Traspaso", "abandoned": "Abandonado"},
+    "pt": {"handoff": "Repasse", "abandoned": "Abandonado"},
 }
 
 
@@ -751,9 +751,14 @@ def score_line(
     fraud_score: float | None,
     t_low: float,
     high_value: float,
+    guardrail: bool = False,
 ) -> str:
     """Agent-facing score sentence. Audit, API enums, and CSV stay on threshold_crossed."""
     lang = _lang(language)
+    if guardrail:
+        if lang == "pt":
+            return "Bloqueado por guardrail · sem pontuação"
+        return "Bloqueado por guardrail · sin puntaje"
     if band == "high":
         prefix = "Pontuação de fraude" if lang == "pt" else "Puntaje de fraude"
         action = "bloqueio" if lang == "pt" else "bloqueo"
@@ -843,9 +848,13 @@ _UI = {
         "field_time": "Hora local",
         "field_step": "Siguiente paso",
         "resolve": "Resolver",
+        "resolve_confirm": "¿Resolver este caso? Vuelve a pulsar para confirmar.",
         "packet_error": "No se pudo abrir el paquete",
         "resolved": "Resuelto",
         "resolve_error": "No se pudo resolver",
+        "score_guardrail": "Bloqueado por guardrail · sin puntaje",
+        "flag_injection": "Inyección bloqueada",
+        "flag_pii": "Datos enmascarados",
         "no_actions": "ninguna",
         "metrics_title": "Métricas",
         "metrics_lede": (
@@ -869,7 +878,7 @@ _UI = {
         "draft_label": "Borrador IA",
         "grounded_ok": "Fundamentado",
         "grounded_bad": "Sin fundamento",
-        "send_reply": "Enviar respuesta",
+        "send_reply": "Revisar y enviar (agente humano)",
         "reply_sent_label": "Respuesta registrada",
         "health_title": "Salud del sistema",
         "health_p50": "Latencia p50",
@@ -879,6 +888,7 @@ _UI = {
         "health_empty": "Sin llamadas en esta ventana",
         "trust_title": "Confianza de los datos",
         "sim_title": "Simulador de umbral",
+        "sim_validation": "conjunto de validación",
         "sim_split": "Corte",
         "sim_model": "Versión del modelo",
         "sim_default": "Umbral habitual",
@@ -904,6 +914,7 @@ _UI = {
         "fair_review": "Revisión",
         "fair_high": "Alto",
         "fair_missed": "Fraude no visto",
+        "fair_small": "Los grupos con menos de 30 casos quedan fuera",
     },
     "pt": {
         "nav_client": "Cliente",
@@ -943,9 +954,13 @@ _UI = {
         "field_time": "Horário local",
         "field_step": "Próximo passo",
         "resolve": "Resolver",
+        "resolve_confirm": "Resolver este caso? Toque outra vez para confirmar.",
         "packet_error": "Não foi possível abrir o pacote",
         "resolved": "Resolvido",
         "resolve_error": "Não foi possível resolver",
+        "score_guardrail": "Bloqueado por guardrail · sem pontuação",
+        "flag_injection": "Injeção bloqueada",
+        "flag_pii": "Dados mascarados",
         "no_actions": "nenhuma",
         "metrics_title": "Métricas",
         "metrics_lede": (
@@ -969,7 +984,7 @@ _UI = {
         "draft_label": "Rascunho IA",
         "grounded_ok": "Fundamentado",
         "grounded_bad": "Sem fundamento",
-        "send_reply": "Enviar resposta",
+        "send_reply": "Revisar e enviar (agente humano)",
         "reply_sent_label": "Resposta registrada",
         "health_title": "Saúde do sistema",
         "health_p50": "Latência p50",
@@ -979,6 +994,7 @@ _UI = {
         "health_empty": "Sem chamadas nesta janela",
         "trust_title": "Confiança dos dados",
         "sim_title": "Simulador de limiar",
+        "sim_validation": "conjunto de validação",
         "sim_split": "Corte",
         "sim_model": "Versão do modelo",
         "sim_default": "Limiar habitual",
@@ -1004,6 +1020,7 @@ _UI = {
         "fair_review": "Revisão",
         "fair_high": "Alto",
         "fair_missed": "Fraude não vista",
+        "fair_small": "Os grupos com menos de 30 casos ficam de fora",
     },
 }
 
