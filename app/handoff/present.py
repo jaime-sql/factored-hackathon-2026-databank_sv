@@ -193,4 +193,5 @@ def packet_view(
         "reason_label": card["reason_label"],
         "is_test": card["is_test"],
         "recommended_next_step": card["recommended_next_step"] or "",
+        "guardrail": _prompt_blocked(audit),
     }

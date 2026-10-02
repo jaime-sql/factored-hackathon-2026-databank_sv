@@ -60,3 +60,21 @@ def test_light_card_colors_are_aa() -> None:
         color = _color(selector, "color")
         ratio = contrast(color, background)
         assert ratio >= 4.5, f"{selector} {color} on {background} is {ratio:.2f}"
+
+
+def test_trail_flag_chip_is_aa() -> None:
+    color = _color("pre .flag-chip", "color")
+    background = _color("pre", "background")
+    assert color == "#e8e0d4"
+    assert background == "#241f1a"
+    ratio = contrast(color, background)
+    assert ratio >= 4.5, f"trail chip {color} on {background} is {ratio:.2f}"
+
+
+def test_fairness_gap_row_is_aa() -> None:
+    color = _color("#fairness tr.fair-gap", "color")
+    background = _color("#fairness tr.fair-gap", "background")
+    assert color == "#7a5200"
+    assert background == "#fffdf8"
+    ratio = contrast(color, background)
+    assert ratio >= 4.5, f"fairness gap {color} on {background} is {ratio:.2f}"

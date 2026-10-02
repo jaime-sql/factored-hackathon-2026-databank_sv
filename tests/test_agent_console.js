@@ -361,8 +361,28 @@ const pendingScore = findScore(pendingDom);
 assert.equal(pendingScore.dataset.band, "out_of_scope");
 assert.equal(pendingScore.textContent, "Pendiente/Reversado → explicación por regla");
 assert.equal(pendingScore.title, "Pendiente/Reversado");
+
+const guardScoreHost = fakeElement();
+context.renderPacket(guardScoreHost, {
+  band: "out_of_scope",
+  guardrail: true,
+  score_line: "Bloqueado por guardrail · sin puntaje",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Explicar",
+});
+const guardScore = findScore(guardScoreHost);
+assert.equal(guardScore.title, "Bloqueado por guardrail · sin puntaje");
+assert.equal(guardScore.title.includes("Pendiente/Reversado"), false);
 assertNoRawEnums(
-  [boundaryScore.title, belowScore.title, highScore.title, pendingScore.title, pendingScore.textContent].join("\n"),
+  [
+    boundaryScore.title,
+    belowScore.title,
+    highScore.title,
+    pendingScore.title,
+    pendingScore.textContent,
+    guardScore.title,
+  ].join("\n"),
   "score tooltip es",
 );
 
@@ -379,7 +399,29 @@ context.renderPacket(ptScoreHost, {
 });
 const ptScore = findScore(ptScoreHost);
 assert.equal(ptScore.title, "pontuação de fraude 45 > 30");
-assertNoRawEnums(ptScore.title, "score tooltip pt");
+const ptPendingHost = fakeElement();
+context.renderPacket(ptPendingHost, {
+  band: "out_of_scope",
+  score_line: "Pendente/Estornado → explicação por regra",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Explicar",
+});
+const ptPending = findScore(ptPendingHost);
+assert.equal(ptPending.title, "Pendente/Estornado");
+const ptGuardHost = fakeElement();
+context.renderPacket(ptGuardHost, {
+  band: "out_of_scope",
+  guardrail: true,
+  score_line: "Bloqueado por guardrail · sem pontuação",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Explicar",
+});
+const ptGuard = findScore(ptGuardHost);
+assert.equal(ptGuard.title, "Bloqueado por guardrail · sem pontuação");
+assert.equal(ptGuard.title.includes("Pendente/Estornado"), false);
+assertNoRawEnums([ptScore.title, ptPending.title, ptGuard.title].join("\n"), "score tooltip pt");
 context.consoleState.language = "es";
 
 function walkTags(node, found) {

@@ -153,6 +153,11 @@ function fieldLabel(key) {
   return FIELD_LABELS[packetLanguage()][key] || key;
 }
 
+function guardrailBlocked(view) {
+  if (view && view.guardrail) return true;
+  return String((view && view.score_line) || "").includes("Bloqueado por guardrail");
+}
+
 function scoreTooltip(view) {
   const pt = packetLanguage() === "pt";
   if (
@@ -168,6 +173,12 @@ function scoreTooltip(view) {
     return `${name} ${view.fraud_score} > ${view.high_value}`;
   }
   if (view.band === "out_of_scope") {
+    if (guardrailBlocked(view)) {
+      return ui(
+        "score_guardrail",
+        pt ? "Bloqueado por guardrail · sem pontuação" : "Bloqueado por guardrail · sin puntaje",
+      );
+    }
     return pt ? "Pendente/Estornado" : "Pendiente/Reversado";
   }
   return "";

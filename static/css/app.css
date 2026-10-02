@@ -205,6 +205,40 @@ button.linkish {
   font-family: "Segoe UI", sans-serif;
   font-size: 0.75rem;
 }
+pre .flag-chip {
+  color: #e8e0d4;
+  border-color: #e8e0d4;
+}
+#fairness tr.fair-gap {
+  color: #7a5200;
+  background: #fffdf8;
+}
+#fairness tr.fair-gap td:first-child {
+  border-left: 3px solid #F59E0B;
+}
+#fairness tr.fair-cause-row {
+  background: #fffdf8;
+}
+#fairness .fair-cause {
+  margin: 0.15rem 0 0.35rem;
+  color: #7a5200;
+}
+.fair-gap-chip {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid #7a5200;
+  border-radius: 999px;
+  color: #7a5200;
+  font-family: "Segoe UI", sans-serif;
+  font-size: 0.75rem;
+}
+.fair-sample {
+  margin-left: 0.35rem;
+  font-family: "Segoe UI", sans-serif;
+  font-size: 0.75rem;
+  color: #4d463e;
+}
 .sim-slider { width: 100%; max-width: 100%; }
 .sim-readout p { margin: 0.25rem 0; overflow-wrap: anywhere; }
 .small-sample { color: #3f3a34; }

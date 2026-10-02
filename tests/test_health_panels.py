@@ -55,7 +55,10 @@ def test_metrics_health_and_hidden_panels(client: TestClient) -> None:
     assert body["health"]["mean_cost_per_call_usd"] is None
     assert body["trust"] is None
     assert body["simulator"] is None
-    assert body["fairness"] is None
+    fairness = body["fairness"]
+    assert fairness["shares_included"] is False
+    assert "Mexico" in fairness["by_customer_country"]
+    assert "cause" not in fairness["by_customer_country"]["Mexico"]
 
 
 def test_panels_render_only_when_files_exist(tmp_path: Path) -> None:

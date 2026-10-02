@@ -927,6 +927,13 @@ _UI = {
         "fair_review": "Revisión",
         "fair_high": "Alto",
         "fair_missed": "Fraude no visto",
+        "fair_escalation": "Razón de derivación",
+        "fair_caveat": (
+            "Intervalos de confianza al 95% (set de validación). "
+            "México: brecha significativa, ver causa."
+        ),
+        "fair_sample": "muestra pequeña",
+        "fair_gap": "Brecha conocida",
         "fair_small": "Los grupos con menos de 30 casos quedan fuera",
     },
     "pt": {
@@ -1033,6 +1040,13 @@ _UI = {
         "fair_review": "Revisão",
         "fair_high": "Alto",
         "fair_missed": "Fraude não vista",
+        "fair_escalation": "Razão de encaminhamento",
+        "fair_caveat": (
+            "Intervalos de confiança de 95% (conjunto de validação). "
+            "México: diferença significativa, ver causa."
+        ),
+        "fair_sample": "amostra pequena",
+        "fair_gap": "Lacuna conhecida",
         "fair_small": "Os grupos com menos de 30 casos ficam de fora",
     },
 }

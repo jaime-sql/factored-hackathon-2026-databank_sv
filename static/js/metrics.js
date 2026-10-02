@@ -294,12 +294,16 @@ function formatCost(point) {
   return flat == null ? "" : String(flat);
 }
 
+function fairLabel(text, key, fallback) {
+  return text && text[key] ? text[key] : fallback;
+}
+
 function renderFairness(payload, text) {
   const node = clearSection("fairness");
   if (!node || payload == null) return;
   node.hidden = false;
   const title = document.createElement("h2");
-  title.textContent = text ? text.fair_title : "Equidad";
+  title.textContent = fairLabel(text, "fair_title", "Equidad");
   node.appendChild(title);
   const groups = payload.by_customer_country;
   if (!groups || typeof groups !== "object" || Array.isArray(groups)) {
@@ -308,48 +312,125 @@ function renderFairness(payload, text) {
     node.appendChild(pre);
     return;
   }
+  const pt = language === "pt";
+  const lang = pt ? "pt" : "es";
+  const caveat = document.createElement("p");
+  caveat.className = "fair-caveat";
+  caveat.textContent = fairLabel(
+    text,
+    "fair_caveat",
+    pt
+      ? "Intervalos de confiança de 95% (conjunto de validação). México: diferença significativa, ver causa."
+      : "Intervalos de confianza al 95% (set de validación). México: brecha significativa, ver causa.",
+  );
+  node.appendChild(caveat);
+  const notes = payload.denominator_note;
+  if (notes && typeof notes === "object" && typeof notes[lang] === "string" && notes[lang]) {
+    const denominator = document.createElement("p");
+    denominator.className = "fair-denominator";
+    denominator.textContent = notes[lang];
+    node.appendChild(denominator);
+  }
+  const showShares = payload.shares_included === true;
+  const headers = [
+    fairLabel(text, "fair_country", "País"),
+    fairLabel(text, "fair_n", "Casos"),
+  ];
+  if (showShares) {
+    headers.push(
+      fairLabel(text, "fair_low", "Bajo"),
+      fairLabel(text, "fair_review", "Revisión"),
+      fairLabel(text, "fair_high", "Alto"),
+    );
+  }
+  headers.push(
+    fairLabel(text, "fair_escalation", pt ? "Razão de encaminhamento" : "Razón de derivación"),
+  );
+  headers.push(fairLabel(text, "fair_missed", "Fraude no visto"));
   const table = document.createElement("table");
   table.className = "sim-table";
   const head = document.createElement("tr");
-  for (const label of [
-    text ? text.fair_country : "País",
-    text ? text.fair_n : "Casos",
-    text ? text.fair_low : "Bajo",
-    text ? text.fair_review : "Revisión",
-    text ? text.fair_high : "Alto",
-    text ? text.fair_missed : "Fraude no visto",
-  ]) {
+  for (const label of headers) {
     const cell = document.createElement("th");
     cell.textContent = label;
     head.appendChild(cell);
   }
   table.appendChild(head);
-  let hidden = 0;
   for (const [country, group] of Object.entries(groups)) {
-    if (!sampleOk(group)) {
-      hidden += 1;
-      continue;
-    }
+    const cause = countryCause(group, lang);
     const row = document.createElement("tr");
-    const missed = group.missed_fraud || {};
-    const missedText =
-      missed.k == null ? "" : `${missed.k}/${missed.n}`;
-    for (const value of [
-      country,
-      group.n,
-      share(group.low_share),
-      share(group.review_share),
-      share(group.high_share),
-      missedText,
-    ]) {
-      const cell = document.createElement("td");
-      cell.textContent = value == null ? "" : String(value);
-      row.appendChild(cell);
+    row.setAttribute("data-country", country);
+    if (cause) row.className = "fair-gap";
+    const missed = (group && group.missed_fraud) || {};
+    const values = [null, group && group.n];
+    if (showShares) {
+      values.push(share(group.low_share), share(group.review_share), share(group.high_share));
     }
+    values.push(percent(group && group.escalation_ratio_vs_overall, pt));
+    values.push(missedText(missed, pt));
+    values.forEach((value, index) => {
+      const cell = document.createElement("td");
+      if (index === 0) fillCountry(cell, country, group, cause, text, pt);
+      else cell.textContent = value == null ? "" : String(value);
+      row.appendChild(cell);
+    });
     table.appendChild(row);
+    if (!cause) continue;
+    const extra = document.createElement("tr");
+    extra.className = "fair-cause-row";
+    const cell = document.createElement("td");
+    cell.setAttribute("colspan", String(headers.length));
+    const paragraph = document.createElement("p");
+    paragraph.className = "fair-cause";
+    paragraph.textContent = cause;
+    cell.appendChild(paragraph);
+    extra.appendChild(cell);
+    table.appendChild(extra);
   }
   node.appendChild(table);
-  if (hidden) node.appendChild(smallSampleNote(text));
+}
+
+function countryCause(group, lang) {
+  if (!group || typeof group !== "object") return "";
+  const cause = group.cause;
+  if (!cause || typeof cause !== "object" || Array.isArray(cause)) return "";
+  const line = cause[lang];
+  return typeof line === "string" ? line.trim() : "";
+}
+
+function fillCountry(cell, country, group, cause, text, pt) {
+  cell.appendChild(document.createTextNode(country));
+  if (group && group.small_sample === true) {
+    const tag = document.createElement("span");
+    tag.className = "fair-sample";
+    tag.textContent = fairLabel(text, "fair_sample", pt ? "amostra pequena" : "muestra pequeña");
+    cell.appendChild(document.createTextNode(" "));
+    cell.appendChild(tag);
+  }
+  if (!cause) return;
+  const chip = document.createElement("span");
+  chip.className = "fair-gap-chip";
+  chip.textContent = fairLabel(text, "fair_gap", pt ? "Lacuna conhecida" : "Brecha conocida");
+  cell.appendChild(document.createTextNode(" "));
+  cell.appendChild(chip);
+}
+
+function missedText(missed, pt) {
+  const parts = [];
+  if (missed && missed.k != null && missed.n != null) parts.push(`${missed.k}/${missed.n}`);
+  const rate = percent(missed && missed.rate, pt);
+  const low = percent(missed && missed.ci95_low, pt);
+  const high = percent(missed && missed.ci95_high, pt);
+  if (rate && low && high) parts.push(`${rate} (${low}–${high})`);
+  else if (rate) parts.push(rate);
+  return parts.join(" · ");
+}
+
+function percent(value, pt) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+  const rounded = Math.round(value * 1000) / 10;
+  const shown = String(rounded);
+  return `${pt ? shown.replaceAll(".", ",") : shown}%`;
 }
 
 function sampleOk(group) {

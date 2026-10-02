@@ -1178,14 +1178,163 @@ async function testSimulatorSlider() {
   assert.equal(moved.includes("40"), false, moved);
   const rows = [...fairness.querySelectorAll("tbody tr"), ...fairness.querySelectorAll("tr")];
   const countries = rows
-    .map((row) => (row.children[0] ? row.children[0].textContent : ""))
-    .filter((value) => value && value !== catalog.es.fair_country);
+    .map((row) => row.getAttribute("data-country"))
+    .filter(Boolean);
   assert.ok(countries.includes("MX"), countries.join(","));
-  assert.equal(countries.includes("AR"), false, countries.join(","));
+  assert.ok(countries.includes("AR"), countries.join(","));
+  assert.equal(fairness.textContent.includes(catalog.es.fair_low), false, fairness.textContent);
+  assert.equal(fairness.textContent.includes("50%"), false, fairness.textContent);
+  assert.ok(fairness.textContent.includes("1/4"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("0/0"), fairness.textContent);
+  assert.ok(fairness.textContent.includes(catalog.es.fair_caveat), fairness.textContent);
   assert.ok(fairness.textContent.includes(catalog.es.fair_small), fairness.textContent);
   assert.ok(fairness.textContent.includes("MX: 40"), fairness.textContent);
   assert.equal(fairness.textContent.includes("AR: 4"), false, fairness.textContent);
+  assert.equal(fairness.querySelector(".fair-sample"), null);
+  assert.equal(fairness.querySelector(".fair-gap-chip"), null);
   assertNoRawEnums(`${simulator.textContent}\n${fairness.textContent}`, "simulator es");
+}
+
+function metricsShell() {
+  memoryStore.set("hd_lang", "es");
+  const document = makeDocument("metrics");
+  header(document, catalog.es.metrics_title, catalog.es.metrics_lede);
+  const toggle = document.createElement("input");
+  toggle.id = "include-eval";
+  const evalLabel = document.createElement("span");
+  evalLabel.id = "eval-label";
+  const tiles = document.createElement("div");
+  tiles.id = "tiles";
+  const fairness = document.createElement("section");
+  fairness.id = "fairness";
+  fairness.hidden = true;
+  const raw = document.createElement("pre");
+  raw.id = "raw";
+  document.body.append(toggle, evalLabel, tiles, fairness, raw);
+  return { document, fairness };
+}
+
+function metricsFetch(fairness) {
+  return async (url) => {
+    const href = String(url);
+    if (href.includes("/api/i18n")) throw new Error("pages must not fetch /api/i18n");
+    if (href.includes("/api/auth/config")) return jsonResponse(200, {});
+    if (href.includes("/api/test-mode")) return jsonResponse(200, { is_test: false });
+    if (href.includes("/api/metrics")) {
+      return jsonResponse(200, {
+        eval_toggle_label: catalog.es.eval_toggle,
+        excluded_eval_cases: 0,
+        excluded_test_cases: 0,
+        k1_volume: { total: 1 },
+        k5_handoff: { display: "0 / 1" },
+        k6_containment: { display: "1 / 1" },
+        fairness,
+      });
+    }
+    return jsonResponse(404, {});
+  };
+}
+
+async function testFairnessPanel() {
+  const real = JSON.parse(fs.readFileSync("static/data/fairness.json", "utf8"));
+  assert.equal(Array.isArray(real.by_customer_country), false);
+  assert.equal(real.shares_included, false);
+  assert.ok(real.by_customer_country.Mexico);
+  assert.equal(real.by_customer_country.Mexico.cause, undefined);
+  const shell = metricsShell();
+  run("static/js/metrics.js", shell.document, metricsFetch(real));
+  await flush();
+  const fairness = shell.fairness;
+  assert.equal(fairness.hidden, false);
+  assert.ok(fairness.textContent.includes(catalog.es.fair_caveat), fairness.textContent);
+  assert.ok(fairness.textContent.includes(real.denominator_note.es), fairness.textContent);
+  assert.equal(fairness.textContent.includes(catalog.es.fair_low), false, fairness.textContent);
+  assert.equal(fairness.textContent.includes(catalog.es.fair_review), false, fairness.textContent);
+  assert.equal(fairness.textContent.includes(catalog.es.fair_high), false, fairness.textContent);
+  assert.equal(fairness.querySelector(".fair-gap-chip"), null);
+  assert.equal(fairness.querySelector("p.fair-cause"), null);
+  assert.equal(fairness.querySelector(".fair-sample"), null);
+  for (const country of ["Mexico", "Colombia", "Argentina"]) {
+    const row = fairness.querySelector(`tr[data-country="${country}"]`);
+    assert.ok(row, country);
+    assert.equal(row.className.includes("fair-gap"), false, country);
+    const missed = real.by_customer_country[country].missed_fraud;
+    assert.ok(row.textContent.includes(`${missed.k}/${missed.n}`), row.textContent);
+    assert.ok(row.textContent.includes("%"), row.textContent);
+  }
+  assert.ok(fairness.textContent.includes("21/292"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("7.2%"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("4.8%–10.7%"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("96.3%"), fairness.textContent);
+  assertNoRawEnums(fairness.textContent, "fairness file es");
+
+  shell.document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
+  assert.ok(fairness.textContent.includes(catalog.pt.fair_caveat), fairness.textContent);
+  assert.ok(fairness.textContent.includes(real.denominator_note.pt), fairness.textContent);
+  assert.equal(fairness.textContent.includes(catalog.es.fair_caveat), false, fairness.textContent);
+  assert.ok(fairness.textContent.includes("7,2%"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("4,8%–10,7%"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("96,3%"), fairness.textContent);
+  assert.equal(fairness.textContent.includes("7.2%"), false, fairness.textContent);
+  assert.equal(fairness.querySelector(".fair-gap-chip"), null);
+  assertNoRawEnums(fairness.textContent, "fairness file pt");
+
+  shell.document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
+  assert.ok(fairness.textContent.includes(catalog.es.fair_caveat), fairness.textContent);
+  assert.equal(fairness.textContent.includes(catalog.pt.fair_caveat), false, fairness.textContent);
+  assert.ok(fairness.textContent.includes("7.2%"), fairness.textContent);
+
+  const fixture = JSON.parse(JSON.stringify(real));
+  fixture.by_customer_country.Mexico.cause = {
+    es: "El modelo deja más fraude en riesgo bajo en México.",
+    pt: "O modelo deixa mais fraude em risco baixo no México.",
+  };
+  fixture.by_customer_country.Argentina.small_sample = true;
+  const caused = metricsShell();
+  run("static/js/metrics.js", caused.document, metricsFetch(fixture));
+  await flush();
+  const panel = caused.fairness;
+  const mexico = panel.querySelector('tr[data-country="Mexico"]');
+  assert.ok(mexico.className.includes("fair-gap"), mexico.className);
+  assert.equal(mexico.querySelector(".fair-gap-chip").textContent, catalog.es.fair_gap);
+  const rows = [...panel.querySelectorAll("tr")];
+  const next = rows[rows.indexOf(mexico) + 1];
+  const cause = next.querySelector("p.fair-cause");
+  assert.ok(cause);
+  assert.equal(cause.textContent, fixture.by_customer_country.Mexico.cause.es);
+  assert.equal(mexico.title || "", "");
+  const colombia = panel.querySelector('tr[data-country="Colombia"]');
+  assert.equal(colombia.className.includes("fair-gap"), false);
+  assert.equal(colombia.querySelector(".fair-gap-chip"), null);
+  assert.equal(colombia.querySelector("p.fair-cause"), null);
+  const argentina = panel.querySelector('tr[data-country="Argentina"]');
+  assert.equal(argentina.querySelector(".fair-sample").textContent, catalog.es.fair_sample);
+  assert.ok(argentina.textContent.includes("4/137"), argentina.textContent);
+  assert.equal(argentina.querySelector(".fair-gap-chip"), null);
+
+  caused.document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
+  const mexicoPt = panel.querySelector('tr[data-country="Mexico"]');
+  assert.equal(mexicoPt.querySelector(".fair-gap-chip").textContent, catalog.pt.fair_gap);
+  const causePt = panel.querySelector("p.fair-cause");
+  assert.equal(causePt.textContent, fixture.by_customer_country.Mexico.cause.pt);
+  assert.equal(
+    panel.querySelector('tr[data-country="Argentina"]').querySelector(".fair-sample").textContent,
+    catalog.pt.fair_sample,
+  );
+  assert.ok(panel.textContent.includes(catalog.pt.fair_caveat), panel.textContent);
+
+  caused.document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
+  assert.equal(
+    panel.querySelector('tr[data-country="Mexico"]').querySelector(".fair-gap-chip").textContent,
+    catalog.es.fair_gap,
+  );
+  assert.equal(panel.querySelector("p.fair-cause").textContent, fixture.by_customer_country.Mexico.cause.es);
+  assert.ok(panel.textContent.includes(catalog.es.fair_caveat), panel.textContent);
+  memoryStore.set("hd_lang", "es");
 }
 
 function taggedText(html, id) {
@@ -1327,6 +1476,7 @@ testCatalogFallback()
   .then(() => testBundledPortuguese())
   .then(() => testBreakItAndPersonas())
   .then(() => testSimulatorSlider())
+  .then(() => testFairnessPanel())
   .then(() => console.log("locale ok"))
   .catch((error) => {
     console.error(error);
