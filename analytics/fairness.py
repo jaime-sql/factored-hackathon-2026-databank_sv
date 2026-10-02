@@ -34,9 +34,13 @@ Run:
   python analytics/fairness.py                       # writes analytics/out/fairness.json (local)
   python analytics/fairness.py --routing-split ROUTING_SPLIT.json --ship
                                                      # writes static/data/fairness.json
-Shipping is refused unless the ML Engineer's routing-order validation split (--routing-split) is
-given and its totals match this reproduction (gate 6). Until that split lands, the team rule is that
-no overall automation-rate figure goes into new material, so the shipped file waits for it.
+  python analytics/fairness.py --no-shares --ship    # embargo-safe static/data/fairness.json
+Shipping the full file is refused unless the ML Engineer's routing-order validation split
+(--routing-split) is given and its totals match this reproduction (gate 6). Until that split lands,
+the team rule is that no overall automation-rate figure goes into new material.
+--no-shares writes an embargo-safe file instead: per-country counts, the handoff ratio vs overall,
+and missed fraud with its Wilson interval. It has no LOW/REVIEW/HIGH shares, no band counts and no
+routing-order shares, so no automation rate can be derived from it. All gates 1-5 still run.
 Accepted routing-split shapes (keys at top level or under "totals"; confirm with the ML Engineer):
   n_charges, n_high, n_rule, n_low, n_review   (counts on the VAL set in routing order)
 Needs duckdb, pandas, pyarrow, lightgbm==4.7.0, pytz (imported lazily so the helpers stay testable).
@@ -62,6 +66,10 @@ SHIP_OUT = REPO / "static" / "data" / "fairness.json"
 DEFAULT_OUT = REPO / "analytics" / "out" / "fairness.json"  # local only, do not commit
 COUNTRIES = ("Mexico", "Colombia", "Argentina")
 Z95 = 1.959963984540054
+MISSED_DEF = (
+    "fraud the model puts in LOW (Approved/Declined) / ALL validation fraud in the group, "
+    "including Pending/Reversed charges (positives_all_statuses); Wilson 95% interval, z=1.96"
+)
 HIGH_VALUE = 30.0  # read from thresholds.json["high_rule"]["value"] and asserted at run time
 
 # Offline eval KPI: ES vs PT, on the eval set, PT machine-translated. Not executed by this script.
@@ -157,19 +165,113 @@ def group_stats(band, y, mask) -> dict:
     }
 
 
+def embargo_safe(T, t_low, model_sha, val_hash, fil, overall, groups) -> dict:
+    """Shares withheld: only counts, the handoff ratio vs overall and missed fraud (with Wilson CI).
+
+    No low/review/high share, band count or routing-order share is written, and none can be derived
+    (the ratio is relative to an overall share that is not in the file).
+    """
+
+    def mf(st):
+        return dict(st["missed_fraud"])
+
+    return {
+        "label": "validation set",
+        "split": "validation",
+        "test_set_used": False,
+        "generated_at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generator": "analytics/fairness.py --no-shares",
+        "thresholds_version": T["version"],
+        "t_low": t_low,
+        "high_rule": "fraud_score > 30 (fixed, checked first)",
+        "shares_included": False,
+        "scope": {
+            "es": "Set de validación. n = cargos Aprobados/Rechazados (los que puntúa el modelo).",
+            "pt": (
+                "Conjunto de validação. n = cobranças Aprovadas/Recusadas (as que o modelo pontua)."
+            ),
+        },
+        "denominator_note": {
+            "en": (
+                "missed fraud = fraud the model sends to LOW (AI auto-resolves) / ALL validation "
+                "fraud in the group, including Pending/Reversed charges (which follow the fixed "
+                "rule path and are never LOW). Handoff ratios are among Approved/Declined only."
+            ),
+            "es": (
+                "Fraude no visto = fraude que el modelo deja en riesgo bajo (la IA lo resuelve) / "
+                "todo el fraude del grupo en el set de validación, incluidos los cargos Pendientes/"
+                "Reversados (siguen la regla fija y nunca quedan en riesgo bajo). La razón de "
+                "derivación se calcula solo sobre cargos Aprobados/Rechazados."
+            ),
+            "pt": (
+                "Fraude não vista = fraude que o modelo deixa em risco baixo (a IA resolve) / toda "
+                "a fraude do grupo no conjunto de validação, incluindo as cobranças Pendentes/"
+                "Estornadas (seguem a regra fixa e nunca ficam em risco baixo). A razão de "
+                "encaminhamento é calculada só sobre cobranças Aprovadas/Recusadas."
+            ),
+        },
+        "definitions": {
+            "n": "Approved/Declined VAL charges in the group",
+            "positives": "fraud among those Approved/Declined charges",
+            "positives_pending_reversed": "fraud among the group's Pending/Reversed VAL charges",
+            "escalation_ratio_vs_overall": (
+                "group REVIEW (human handoff) share / overall REVIEW share; 1.0 = same handoff "
+                "rate as overall"
+            ),
+            "positives_all_statuses": "all VAL fraud in the group, incl. Pending/Reversed",
+            "missed_fraud": MISSED_DEF,
+            "small_sample": "fewer than 30 fraud cases in the group",
+        },
+        "reproduction_gates": {
+            "model_sha256": model_sha,
+            "val_sha256_sorted_keys": val_hash,
+            "band_counts_match_thresholds": True,
+            "fraud_in_low": fil,
+            "per_country_matches_val_results": True,
+            "pending_reversed_matches_val_results": True,
+        },
+        "overall": {
+            "n": overall["n"],
+            "positives": overall["positives"],
+            "positives_pending_reversed": overall["positives_pending_reversed"],
+            "positives_all_statuses": overall["positives_all_statuses"],
+            "missed_fraud": mf(overall),
+        },
+        "by_customer_country": {
+            g: {
+                "n": st["n"],
+                "positives": st["positives"],
+                "positives_pending_reversed": st["positives_pending_reversed"],
+                "positives_all_statuses": st["positives_all_statuses"],
+                "escalation_ratio_vs_overall": st["escalation_ratio_vs_overall"],
+                "missed_fraud": mf(st),
+                "small_sample": st["small_sample"],
+            }
+            for g, st in groups.items()
+        },
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", default=None, help="override output path")
     ap.add_argument("--routing-split", default=None, help="ML Engineer routing-order split JSON")
     ap.add_argument("--ship", action="store_true", help="write static/data/fairness.json")
+    ap.add_argument(
+        "--no-shares",
+        action="store_true",
+        help="embargo-safe output: counts, handoff ratio and missed fraud only (no shares)",
+    )
     args = ap.parse_args(argv)
-    if args.ship and not args.routing_split:
+    if args.no_shares and args.routing_split:
+        sys.exit("--no-shares and --routing-split are exclusive: the split is for the full file.")
+    if args.ship and not args.routing_split and not args.no_shares:
         sys.exit(
             "REFUSING TO SHIP: --ship needs --routing-split (the ML Engineer's Oct 2 routing-order "
             "validation split) so the overall shares are cross-checked before they are published."
         )
     out_path = Path(args.out) if args.out else (SHIP_OUT if args.ship else DEFAULT_OUT)
-    if out_path.resolve() == SHIP_OUT.resolve() and not args.routing_split:
+    if out_path.resolve() == SHIP_OUT.resolve() and not (args.routing_split or args.no_shares):
         sys.exit("REFUSING TO WRITE static/data/fairness.json without --routing-split.")
 
     art = Path(os.environ.get("HACK_ML_ARTIFACTS", "/workspace/hack-ml/artifacts"))
@@ -291,6 +393,30 @@ def main(argv: list[str] | None = None) -> int:
     if mine_pr != theirs_pr:
         raise GateError(f"Pending/Reversed VAL (rows, fraud, high) {mine_pr} != {theirs_pr}")
 
+    # Missed-fraud denominator (locked Oct 2): ALL validation fraud in the group, including the
+    # Pending/Reversed charges (overall 29/610). The numerator is unchanged (fraud the model puts in
+    # LOW); Pending/Reversed fraud is never LOW, so it only enlarges the denominator.
+    pr_other = sorted(set(pr_c[pr_y]) - set(COUNTRIES))
+    if pr_other:
+        raise GateError(f"unexpected customer_country on Pending/Reversed VAL fraud: {pr_other}")
+    pr_fraud = {g: int((pr_y & (pr_c == g)).sum()) for g in COUNTRIES}
+
+    def all_status_missed(st, extra):
+        st["positives_pending_reversed"] = extra
+        st["positives_all_statuses"] = st["positives"] + extra
+        st["missed_fraud"] = wilson(st["missed_fraud"]["k"], st["positives_all_statuses"])
+
+    all_status_missed(overall, int(pr_y.sum()))
+    for g in COUNTRIES:
+        all_status_missed(groups[g], pr_fraud[g])
+    if (
+        sum(groups[g]["positives_all_statuses"] for g in COUNTRIES)
+        != overall["positives_all_statuses"]
+    ):
+        raise GateError("per-country fraud (all statuses) does not sum to overall")
+    if sum(groups[g]["missed_fraud"]["k"] for g in COUNTRIES) != overall["missed_fraud"]["k"]:
+        raise GateError("per-country missed fraud does not sum to overall")
+
     def routing(mask_model, mask_pr) -> dict:
         m_low = int(((band == "low") & mask_model).sum())
         m_rev = int(((band == "review") & mask_model).sum())
@@ -337,6 +463,13 @@ def main(argv: list[str] | None = None) -> int:
         rg["escalation_ratio_vs_overall"] = rg["review_share"] / r_all["review_share"]
         groups[g]["routing_order"] = rg
 
+    if args.no_shares:
+        out = embargo_safe(T, t_low, model_sha, val_hash, fil, overall, groups)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"wrote {out_path} (no shares)")
+        return 0
+
     out = {
         "label": "validation set",
         "split": "validation",
@@ -355,7 +488,7 @@ def main(argv: list[str] | None = None) -> int:
             "legit_escalation_ratio_vs_overall": (
                 "group share of legit charges sent to a human (REVIEW or HIGH) / overall share"
             ),
-            "missed_fraud": "fraud in LOW / all fraud in group; Wilson 95% interval, z=1.96",
+            "missed_fraud": MISSED_DEF,
             "routing_order": (
                 "all VAL charges incl. Pending/Reversed: HIGH first, then the deterministic "
                 "Pending/Reversed rule path, then LOW/REVIEW. fraud_on_rule_path = fraud that the "

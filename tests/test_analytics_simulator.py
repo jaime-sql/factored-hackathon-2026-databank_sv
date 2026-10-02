@@ -116,7 +116,40 @@ def test_refuses_foreign_cost_model() -> None:
 
 
 def test_wilson_matches_dashboard_reference() -> None:
-    w = fair.wilson(29, 599)
-    assert w["ci95_low"] == pytest.approx(0.033917781042, abs=1e-11)
-    assert w["ci95_high"] == pytest.approx(0.068665506679, abs=1e-11)
+    w = fair.wilson(29, 610)
+    assert w["ci95_low"] == pytest.approx(0.033302414391, abs=1e-11)
+    assert w["ci95_high"] == pytest.approx(0.067442587323, abs=1e-11)
     assert fair.wilson(0, 0)["rate"] is None
+
+
+def test_no_shares_output_has_no_share_or_band_counts() -> None:
+    st = {
+        "n": 100,
+        "positives": 10,
+        "positives_pending_reversed": 1,
+        "positives_all_statuses": 11,
+        "low_n": 20,
+        "review_n": 79,
+        "high_n": 1,
+        "low_share": 0.2,
+        "review_share": 0.79,
+        "high_share": 0.01,
+        "missed_fraud": fair.wilson(2, 11),
+        "escalation_ratio_vs_overall": 1.0,
+        "small_sample": True,
+    }
+    out = fair.embargo_safe({"version": "v"}, 0.1, "m", "h", 2, dict(st), {"Mexico": dict(st)})
+    text = json.dumps(out)
+    for banned in (
+        "low_share",
+        "review_share",
+        "high_share",
+        "low_n",
+        "review_n",
+        "high_n",
+        'band_counts"',
+        "routing_order",
+        "seguro",
+    ):
+        assert banned not in text, banned
+    assert out["by_customer_country"]["Mexico"]["missed_fraud"]["n"] == 11

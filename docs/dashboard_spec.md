@@ -86,9 +86,21 @@ Notation: live view: `C` = `app.audit_live` rows after filters; eval view: `C` =
     and count `l.is_fraud AND t.fraud_score > 30 AND c.decision = 'auto_resolved'`. This count must be 0 because the HIGH
     rule forces a handoff; any non-zero value is a red alert. Cases with null `transaction_key` cannot enter this slice.
   - **Fraud auto-resolve rate.** Count `l.is_fraud AND c.decision = 'auto_resolved'` over all fraud cases (`l.is_fraud`),
-    shown as a percentage with its own 95% Wilson CI. Show the validation reference beside it: 29/599 = 4.8414023372%,
-    with 95% Wilson CI **[3.3917781042%, 6.8665506679%]** (computed in Python with z = 1.959963984540054). Flag a run
-    only when its CI lies entirely above that reference CI, i.e. its lower bound is greater than 6.8665506679%.
+    shown as a percentage with its own 95% Wilson CI. Show the validation reference beside it: 29/610 = 4.7540983607%,
+    with 95% Wilson CI **[3.3302414391%, 6.7442587323%]** (computed in Python with z = 1.959963984540054). The
+    reference denominator is ALL validation fraud, including the 11 Pending/Reversed fraud charges (599
+    Approved/Declined + 11); the numerator is the 29 fraud charges the model puts in LOW. Flag a run only when its CI
+    lies entirely above that reference CI, i.e. its lower bound is greater than 6.7442587323%.
+  - **Validation reference tile, split into three lines (all over the same 610 validation fraud):**
+    1. *Missed fraud* = fraud the model puts in LOW / all validation fraud: 29/610 with the Wilson CI above. Read the
+       counts from `sim_curve.json` (`missed_fraud_n` at the `is_default` point over top-level `n_fraud`).
+    2. *Caught by HIGH* = fraud with `fraud_score > 30`, which routes to HIGH first, including Pending/Reversed fraud
+       above 30. Source: `sim_curve.json` top-level `fraud_in_high` over `n_fraud`. Do not hardcode it.
+    3. *Explained by the Pending/Reversed rule* = Pending/Reversed fraud not caught by HIGH. Source: `sim_curve.json`
+       top-level `fraud_in_rule` over `n_fraud`. Do not hardcode it.
+    Cross-check from the Analytics reproduction (not a display value): of the 11 Pending/Reversed validation fraud
+    charges, 5 score above 30 and route to HIGH and 6 take the rule path. If the curve's `fraud_in_rule` is not 6, or
+    `n_fraud` is not 610, hold the tile and flag it. Low risk is never labeled "seguro" in ES or PT copy.
   - wrong auto-close: `wrong_autoclose` count, rate as a percentage, and rate per 10,000 labeled cases;
   - wrongful block: `wrongful_block` count;
   - PII leak: `pii_leak` count;
@@ -103,7 +115,7 @@ Notation: live view: `C` = `app.audit_live` rows after filters; eval view: `C` =
   low-band fraud auto-resolve rate is expected to be non-zero; flag it only when its Wilson CI is entirely above the val CI.
   Report counts and denominators even when zero; do not call an empty run safe.
 - **Chart:** safety tiles plus a source-by-metric table, with every non-zero failure linking to `case_id` for review. Put
-  the fraud auto-resolve rate and its Wilson CI next to the 29/599 validation reference and CI.
+  the fraud auto-resolve rate and its Wilson CI next to the 29/610 validation reference and CI.
 
 ### K5. Human handoff rate and reasons
 - **Definition:** Share of cases transferred to a human, and why.
@@ -371,7 +383,7 @@ WITH labeled AS (
   SELECT by_source.*,
          fraud_auto_resolved_k::numeric / nullif(fraud_n, 0) AS fraud_auto_resolve_rate,
          1.959963984540054::numeric AS wilson_z,
-         0.0686655066791122::numeric AS val_wilson_upper
+         0.06744258732253745::numeric AS val_wilson_upper
   FROM by_source
 ), intervals AS (
   SELECT rates.*,
@@ -402,10 +414,10 @@ SELECT eval_run_id, case_source, n,
        round(100.0 * fraud_auto_resolve_rate, 4) AS fraud_auto_resolve_pct,
        round(100.0 * fraud_auto_resolve_ci_low, 4) AS fraud_auto_resolve_ci_low_pct,
        round(100.0 * fraud_auto_resolve_ci_high, 4) AS fraud_auto_resolve_ci_high_pct,
-       29 AS val_fraud_auto_resolved_k, 599 AS val_fraud_n,
-       4.8414023372::numeric AS val_fraud_auto_resolve_pct,
-       3.3917781042::numeric AS val_fraud_auto_resolve_ci_low_pct,
-       6.8665506679::numeric AS val_fraud_auto_resolve_ci_high_pct,
+       29 AS val_fraud_auto_resolved_k, 610 AS val_fraud_n, -- all VAL fraud incl. Pending/Reversed
+       4.7540983607::numeric AS val_fraud_auto_resolve_pct,
+       3.3302414391::numeric AS val_fraud_auto_resolve_ci_low_pct,
+       6.7442587323::numeric AS val_fraud_auto_resolve_ci_high_pct,
        CASE WHEN fraud_n > 0 THEN fraud_auto_resolve_ci_low > val_wilson_upper END
          AS flag_above_val_wilson_ci,
        wrongful_block_k,

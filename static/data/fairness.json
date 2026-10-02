@@ -1,0 +1,97 @@
+{
+  "label": "validation set",
+  "split": "validation",
+  "test_set_used": false,
+  "generated_at_utc": "2026-10-02T10:20:52Z",
+  "generator": "analytics/fairness.py --no-shares",
+  "thresholds_version": "v2-rule-high-2026-09-29",
+  "t_low": 0.000275603870032301,
+  "high_rule": "fraud_score > 30 (fixed, checked first)",
+  "shares_included": false,
+  "scope": {
+    "es": "Set de validación. n = cargos Aprobados/Rechazados (los que puntúa el modelo).",
+    "pt": "Conjunto de validação. n = cobranças Aprovadas/Recusadas (as que o modelo pontua)."
+  },
+  "denominator_note": {
+    "en": "missed fraud = fraud the model sends to LOW (AI auto-resolves) / ALL validation fraud in the group, including Pending/Reversed charges (which follow the fixed rule path and are never LOW). Handoff ratios are among Approved/Declined only.",
+    "es": "Fraude no visto = fraude que el modelo deja en riesgo bajo (la IA lo resuelve) / todo el fraude del grupo en el set de validación, incluidos los cargos Pendientes/Reversados (siguen la regla fija y nunca quedan en riesgo bajo). La razón de derivación se calcula solo sobre cargos Aprobados/Rechazados.",
+    "pt": "Fraude não vista = fraude que o modelo deixa em risco baixo (a IA resolve) / toda a fraude do grupo no conjunto de validação, incluindo as cobranças Pendentes/Estornadas (seguem a regra fixa e nunca ficam em risco baixo). A razão de encaminhamento é calculada só sobre cobranças Aprovadas/Recusadas."
+  },
+  "definitions": {
+    "n": "Approved/Declined VAL charges in the group",
+    "positives": "fraud among those Approved/Declined charges",
+    "positives_pending_reversed": "fraud among the group's Pending/Reversed VAL charges",
+    "escalation_ratio_vs_overall": "group REVIEW (human handoff) share / overall REVIEW share; 1.0 = same handoff rate as overall",
+    "positives_all_statuses": "all VAL fraud in the group, incl. Pending/Reversed",
+    "missed_fraud": "fraud the model puts in LOW (Approved/Declined) / ALL validation fraud in the group, including Pending/Reversed charges (positives_all_statuses); Wilson 95% interval, z=1.96",
+    "small_sample": "fewer than 30 fraud cases in the group"
+  },
+  "reproduction_gates": {
+    "model_sha256": "fb972233981238cc2fb148b27d0f77a1f313c69c6a6c0920b44cee7ca9de6884",
+    "val_sha256_sorted_keys": "8cc3b47d7c907dc48acaf50b6c3c5ce710999a4a1c2165cec3053ffe9266de14",
+    "band_counts_match_thresholds": true,
+    "fraud_in_low": 29,
+    "per_country_matches_val_results": true,
+    "pending_reversed_matches_val_results": true
+  },
+  "overall": {
+    "n": 643787,
+    "positives": 599,
+    "positives_pending_reversed": 11,
+    "positives_all_statuses": 610,
+    "missed_fraud": {
+      "k": 29,
+      "n": 610,
+      "rate": 0.047540983606557376,
+      "ci95_low": 0.03330241439093966,
+      "ci95_high": 0.06744258732253745
+    }
+  },
+  "by_customer_country": {
+    "Mexico": {
+      "n": 323267,
+      "positives": 287,
+      "positives_pending_reversed": 5,
+      "positives_all_statuses": 292,
+      "escalation_ratio_vs_overall": 0.9628435722481863,
+      "missed_fraud": {
+        "k": 21,
+        "n": 292,
+        "rate": 0.07191780821917808,
+        "ci95_low": 0.04751674810296955,
+        "ci95_high": 0.10743603979711333
+      },
+      "small_sample": false
+    },
+    "Colombia": {
+      "n": 193041,
+      "positives": 178,
+      "positives_pending_reversed": 3,
+      "positives_all_statuses": 181,
+      "escalation_ratio_vs_overall": 1.0545927522436709,
+      "missed_fraud": {
+        "k": 4,
+        "n": 181,
+        "rate": 0.022099447513812154,
+        "ci95_low": 0.008626812097932448,
+        "ci95_high": 0.055435973903886326
+      },
+      "small_sample": false
+    },
+    "Argentina": {
+      "n": 127479,
+      "positives": 134,
+      "positives_pending_reversed": 3,
+      "positives_all_statuses": 137,
+      "escalation_ratio_vs_overall": 1.0115533338367506,
+      "missed_fraud": {
+        "k": 4,
+        "n": 137,
+        "rate": 0.029197080291970802,
+        "ci95_low": 0.011411525162847307,
+        "ci95_high": 0.07266498838540794
+      },
+      "small_sample": false
+    }
+  }
+}

@@ -30,7 +30,12 @@ The curve carries that value as top-level `t_low_default` and flags the matching
 and log a warning; the confirmed curve includes the exact `t_low_default` as one of the cut points.
 
 Cross-check at the start point (ML scope, from `thresholds.json`, not a new figure): fraud in LOW
-`val.low.fraud_in_low` = 29 of 599 val fraud (Wilson 95% CI 3.39% to 6.87%, same as dashboard_spec K4),
+`val.low.fraud_in_low` = 29 of 610 val fraud, all statuses (599 Approved/Declined + 11 Pending/Reversed;
+Wilson 95% CI 3.33% to 6.74%, same as dashboard_spec K4). The missed-fraud tile shows fraud in LOW over all
+610, with two separate constant lines under it: fraud caught by HIGH (`fraud_in_high`, including
+Pending/Reversed fraud scoring above 30) and fraud explained by the Pending/Reversed rule (`fraud_in_rule`),
+both over `n_fraud` and read from the curve, never hardcoded. Cross-check: 5 of the 11 Pending/Reversed
+fraud route to HIGH, 6 take the rule path. Also
 wrongful auto-close `val.low.false_auto_close_per_10k_tx` = 0.45 per 10k charges. The routing-order
 curve may use a larger denominator (it includes Pending/Reversed charges); the tiles show whatever the
 curve says. **Do not show any automation-rate number from thresholds.json or val_results.json** on the
