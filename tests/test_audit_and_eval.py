@@ -303,6 +303,79 @@ def test_migration_004_appends_demo_attack_and_leaves_audit_grants() -> None:
     assert "GRANT DELETE" not in sql
 
 
+def test_migration_005_makes_reference_tables_select_only() -> None:
+    from app.ops.store import _sql_statements
+
+    sql = (ROOT / "migrations" / "005_readonly_reference.sql").read_text(encoding="utf-8")
+    revoke = (
+        "REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON "
+        "app.llm_price, app.analytics_assumption FROM app_rw"
+    )
+    grant = "GRANT SELECT ON app.llm_price, app.analytics_assumption TO app_rw"
+    assert revoke in sql
+    assert grant in sql
+    assert sql.index(revoke) < sql.index(grant)
+    assert "alter default privileges" not in sql.lower()
+    parts = _sql_statements(ROOT / "migrations" / "005_readonly_reference.sql")
+    assert parts == [revoke, grant]
+    applied = "\n".join(parts).lower()
+    for other in (
+        "eval_rw",
+        "audit_",
+        "app.cases",
+        "app.handoff",
+        "app.test_cases",
+        "public.",
+        "default",
+        "policy",
+    ):
+        assert other not in applied, other
+    store = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
+    assert "005_readonly_reference.sql" not in store
+
+
+def test_app_code_does_not_write_reference_tables() -> None:
+    """Postgres app_rw only selects these tables.
+
+    The local SQLite demo seeds them once inside OpsStore._init_sqlite.
+    That path does not run against app.llm_price or app.analytics_assumption.
+    """
+    verbs = ("insert", "update", "delete", "truncate")
+    tables = ("llm_price", "analytics_assumption")
+    found: list[str] = []
+    for root in (ROOT / "app", ROOT / "scripts", ROOT / "evals"):
+        if not root.exists():
+            continue
+        for path in root.rglob("*.py"):
+            relative = path.relative_to(ROOT).as_posix()
+            for line in path.read_text(encoding="utf-8").splitlines():
+                lowered = line.lower()
+                if not any(table in lowered for table in tables):
+                    continue
+                if not any(verb in lowered for verb in verbs):
+                    continue
+                found.append(f"{relative}: {line.strip()}")
+    assert found == [
+        'app/ops/store.py: "INSERT OR IGNORE INTO llm_price VALUES (?, ?, ?, ?, ?)",',
+        'app/ops/store.py: "INSERT OR IGNORE INTO analytics_assumption VALUES (?, ?, ?)",',
+    ]
+    store = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
+    assert 'if backend == "sqlite":\n            self._init_sqlite()' in store
+    assert store.count("self._init_sqlite()") == 1
+    init = store.split("def _init_sqlite", 1)[1].split("\n    def ", 1)[0]
+    assert "INSERT OR IGNORE INTO llm_price" in init
+    assert "INSERT OR IGNORE INTO analytics_assumption" in init
+    assert "app.llm_price" not in store
+    assert "app.analytics_assumption" not in store
+    for root in (ROOT / "app", ROOT / "scripts", ROOT / "evals"):
+        if not root.exists():
+            continue
+        for path in root.rglob("*.py"):
+            text = path.read_text(encoding="utf-8")
+            assert "app.llm_price" not in text
+            assert "app.analytics_assumption" not in text
+
+
 def test_app_code_does_not_read_eval_labels() -> None:
     for path in (ROOT / "app").rglob("*.py"):
         text = path.read_text(encoding="utf-8")
