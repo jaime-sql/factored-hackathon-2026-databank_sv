@@ -34,7 +34,7 @@ PERSONAS: tuple[dict[str, str], ...] = (
         "id": "camilo",
         "customer_key": "ck_co_camilo",
         "bank_customer_key": "CUS_b202620b1dbf4256f447",
-        "label": "Camilo · Colombia",
+        "label": "Camilo · Barranquilla",
         "country": "Colombia",
         "segment": "Plus",
         "accent": "andino",

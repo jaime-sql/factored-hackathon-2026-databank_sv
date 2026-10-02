@@ -35,6 +35,14 @@ for (const [page, file] of Object.entries(PAGES)) {
   assert.ok(html.includes('id="tour"'), file);
   assert.ok(html.includes(`data-tour-page="${page}"`), file);
   assert.ok(html.includes("¿Cómo funciona?"), file);
+  if (page === "client") {
+    assert.match(html, /<label[^>]*for="message"/);
+    assert.match(html, /class="visually-hidden"/);
+  }
+  if (page === "agent") {
+    assert.match(html, /<label[^>]*for="token"/);
+    assert.match(html, /class="visually-hidden"/);
+  }
   const steps = GUIDE.pages[page];
   assert.ok(steps.length > 0, page);
   for (const step of steps) {
@@ -80,7 +88,7 @@ for (const name of ["cases", "handoff", "containment", "eval"]) {
 }
 
 const css = fs.readFileSync("static/css/app.css", "utf8");
-assert.match(css, /#lang,\s*\n#tour\s*\{[^}]*z-index:\s*31/);
+assert.match(css, /#lang,\s*\n#tour\s*\{[^}]*z-index:\s*41/);
 assert.match(css, /#lang,\s*\n#tour\s*\{[^}]*pointer-events:\s*auto/);
 assert.match(css, /\.tour-shade\s*\{[^}]*z-index:\s*30/);
 assert.equal(path.basename("static/js/tour.js"), "tour.js");

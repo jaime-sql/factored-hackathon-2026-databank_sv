@@ -13,7 +13,7 @@ const dumped = execFileSync(
       "import json",
       "from app.i18n import persona_label, persona_note, ui_catalog",
       "ids = ['ana', 'camilo', 'maria', 'teo', 'lucia']",
-      "fallback = {'lucia': 'Lucía · Querétaro', 'teo': 'Teo · Tijuana', 'ana': 'Ana · Argentina', 'camilo': 'Camilo · Colombia', 'maria': 'María · Ciudad de México'}",
+      "fallback = {'lucia': 'Lucía · Querétaro', 'teo': 'Teo · Tijuana', 'ana': 'Ana · Argentina', 'camilo': 'Camilo · Barranquilla', 'maria': 'María · Ciudad de México'}",
       "personas = []",
       "for pid in ids:",
       "    personas.append({",
@@ -404,6 +404,8 @@ const RAW_ENUMS = [
   "prompt_injection",
   "pii_masked",
   "Food",
+  "auto_resolved",
+  "guardrail",
 ];
 
 function assertNoRawEnums(text, label) {
@@ -797,7 +799,8 @@ async function testMetrics() {
   assertNoEnglish(text, "metrics pt", ["Consola"]);
   const healthPt = document.getElementById("health").textContent;
   assert.ok(healthPt.includes("120 ms"), healthPt);
-  assert.ok(healthPt.includes("US$0.0012"), healthPt);
+  assert.ok(healthPt.includes("US$0,0012"), healthPt);
+  assert.equal(healthPt.includes("US$0.0012"), false, healthPt);
   assert.ok(healthPt.includes(catalog.pt.health_p50), healthPt);
   assertNoRawEnums(renderedText(document), "metrics pt");
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
@@ -840,6 +843,10 @@ async function testBundledPortuguese() {
   const client = makeDocument("client");
   client.documentElement.classList.add("i18n-pending");
   header(client, "Harbor Desk", catalog.es.client_lede);
+  const messageLabel = client.createElement("label");
+  messageLabel.id = "message-label";
+  messageLabel.setAttribute("for", "message");
+  messageLabel.textContent = "Mensaje";
   const message = client.createElement("input");
   message.id = "message";
   message.placeholder = "Mensaje";
@@ -848,7 +855,7 @@ async function testBundledPortuguese() {
   send.textContent = "Enviar";
   const composer = client.createElement("form");
   composer.id = "composer";
-  composer.append(message, send);
+  composer.append(messageLabel, message, send);
   const testLink = client.createElement("button");
   testLink.id = "test-mode-link";
   testLink.textContent = "Modo de prueba";
@@ -877,9 +884,14 @@ async function testBundledPortuguese() {
   assert.ok(text.includes(catalog.pt.lang_name), text);
   assert.ok(text.includes("Console"), text);
   assert.ok(text.includes("Mensagem"), text);
+  assert.equal(messageLabel.getAttribute("for"), "message");
+  assert.equal(messageLabel.textContent, catalog.pt.message_placeholder);
   assert.ok(text.includes("Modo de teste"), text);
   assert.ok(text.includes("Token de teste"), text);
-  assert.ok(text.includes("Colômbia"), text);
+  assert.ok(text.includes("Barranquilla"), text);
+  assert.ok(text.includes("Ana · Argentina"), text);
+  assert.equal(text.includes("Camilo · Colombia"), false, text);
+  assert.equal(text.includes("Camilo · Colômbia"), false, text);
   assert.ok(text.includes("Pessoa sintética"), text);
   assert.equal(text.includes("America/"), false, text);
   assertAbsent(
@@ -891,6 +903,10 @@ async function testBundledPortuguese() {
   const agent = makeDocument("agent");
   agent.documentElement.classList.add("i18n-pending");
   header(agent, catalog.es.agent_title, catalog.es.agent_lede);
+  const tokenLabel = agent.createElement("label");
+  tokenLabel.id = "token-label";
+  tokenLabel.setAttribute("for", "token");
+  tokenLabel.textContent = catalog.es.token_placeholder;
   const token = agent.createElement("input");
   token.id = "token";
   token.placeholder = catalog.es.token_placeholder;
@@ -899,7 +915,7 @@ async function testBundledPortuguese() {
   load.textContent = catalog.es.load_queue;
   const queue = agent.createElement("section");
   queue.id = "queue";
-  agent.body.append(token, load, queue);
+  agent.body.append(tokenLabel, token, load, queue);
   run("static/js/agent.js", agent, fetchImpl);
   run("static/js/tour.js", agent, fetchImpl);
   await flush();
@@ -909,6 +925,8 @@ async function testBundledPortuguese() {
   assert.ok(text.includes(catalog.pt.agent_title), text);
   assert.ok(text.includes(catalog.pt.agent_lede), text);
   assert.ok(text.includes(catalog.pt.token_placeholder), text);
+  assert.equal(tokenLabel.getAttribute("for"), "token");
+  assert.equal(tokenLabel.textContent, catalog.pt.token_placeholder);
   assert.ok(text.includes(catalog.pt.load_queue), text);
   assert.ok(text.includes(catalog.pt.tour_open), text);
   assertAbsent(
@@ -1176,6 +1194,13 @@ async function testSimulatorSlider() {
   assert.ok(moved.includes("0.1"), moved);
   assert.equal(moved.includes("100"), false, moved);
   assert.equal(moved.includes("40"), false, moved);
+  document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
+  const ptReadout = simulator.querySelector(".sim-readout").textContent;
+  assert.ok(ptReadout.includes(`${catalog.pt.sim_t}: 0,2`), ptReadout);
+  assert.equal(ptReadout.includes("0.2"), false, ptReadout);
+  document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
   const rows = [...fairness.querySelectorAll("tbody tr"), ...fairness.querySelectorAll("tr")];
   const countries = rows
     .map((row) => row.getAttribute("data-country"))
@@ -1342,6 +1367,52 @@ function taggedText(html, id) {
   return match ? match[1] : "";
 }
 
+async function testCaseNetworkError() {
+  memoryStore.set("hd_lang", "es");
+  const document = makeDocument("client");
+  header(document, catalog.es.client_title, catalog.es.client_lede);
+  const personasBox = document.createElement("section");
+  personasBox.id = "personas";
+  const charges = document.createElement("section");
+  charges.id = "charges";
+  const composer = document.createElement("form");
+  composer.id = "composer";
+  const message = document.createElement("input");
+  message.id = "message";
+  const send = document.createElement("button");
+  send.id = "send";
+  composer.append(message, send);
+  const thread = document.createElement("section");
+  thread.id = "thread";
+  document.body.append(personasBox, charges, composer, thread);
+  run("static/js/desk.js", document, async (url) => {
+    const href = String(url);
+    if (href.includes("/api/personas")) return jsonResponse(200, { personas: personas.slice(0, 1) });
+    if (href.includes("/api/test-mode")) return jsonResponse(200, { is_test: false });
+    if (href.includes("/api/session")) return jsonResponse(200, { token: "customer-token" });
+    if (href.includes("/api/transactions")) return jsonResponse(200, { transactions: [] });
+    if (href.includes("/cases")) throw new Error("Failed to fetch");
+    return jsonResponse(404, {});
+  });
+  await flush();
+  const pill = document.querySelector("#personas button");
+  await pill.listeners.click[0]();
+  await flush();
+  message.value = "hola";
+  await composer.listeners.submit[0]({ preventDefault() {} });
+  await flush();
+  assert.ok(thread.textContent.includes(catalog.es.connect_error), thread.textContent);
+  assert.equal(thread.textContent.includes("Failed to fetch"), false, thread.textContent);
+  document.getElementById("lang").listeners.click.forEach((fn) => fn());
+  await flush();
+  message.value = "olá";
+  await composer.listeners.submit[0]({ preventDefault() {} });
+  await flush();
+  assert.ok(thread.textContent.includes(catalog.pt.connect_error), thread.textContent);
+  assert.equal(thread.textContent.includes("Failed to fetch"), false, thread.textContent);
+  memoryStore.set("hd_lang", "es");
+}
+
 async function testCatalogFallback() {
   memoryStore.set("hd_lang", "es");
   const pages = [
@@ -1477,6 +1548,7 @@ testCatalogFallback()
   .then(() => testBreakItAndPersonas())
   .then(() => testSimulatorSlider())
   .then(() => testFairnessPanel())
+  .then(() => testCaseNetworkError())
   .then(() => console.log("locale ok"))
   .catch((error) => {
     console.error(error);

@@ -13,6 +13,8 @@ const RAW_ENUMS = [
   "prompt_injection",
   "pii_masked",
   "Food",
+  "auto_resolved",
+  "guardrail",
 ];
 
 function assertNoRawEnums(text, label) {
@@ -170,6 +172,13 @@ context.renderPacket(
       },
       {
         kind: "decision",
+        at: "15 jan 2026, 12:04 CST",
+        band: "low",
+        threshold: "score < 0.0002756",
+        handoff: "auto_resolved",
+      },
+      {
+        kind: "decision",
         at: "15 jan 2026, 12:03 CST",
         band: "out_of_scope",
         threshold: "Pending/Reversed",
@@ -190,6 +199,9 @@ assert.ok(portuguese.textContent.includes("pontuação < limiar"));
 assert.ok(portuguese.textContent.includes("Resposta enviada"));
 assert.ok(portuguese.textContent.includes("Pendente/Estornado"));
 assert.ok(portuguese.textContent.includes("Abandonado"));
+assert.ok(portuguese.textContent.includes("Resolvido automaticamente"));
+assert.ok(portuguese.textContent.includes("pontuação < 0,0002756"));
+assert.equal(portuguese.textContent.includes("auto_resolved"), false);
 assert.equal(portuguese.textContent.includes("t_low"), false);
 assert.equal(portuguese.textContent.includes("reply_sent"), false);
 assert.equal(portuguese.textContent.includes("abandoned"), false);
@@ -206,7 +218,7 @@ context.renderPacket(
   guarded,
   {
     band: "out_of_scope",
-    score_line: "Bloqueado por guardrail · sin puntaje",
+    score_line: "Bloqueado por protección · sin puntaje",
     amount: "1",
     merchant: "M",
     recommended_next_step: "",
@@ -228,6 +240,13 @@ context.renderPacket(
         threshold: "Pending/Reversed",
         handoff: "reply_sent",
       },
+      {
+        kind: "decision",
+        at: "15 ene 2026, 12:04 CST",
+        band: "low",
+        threshold: "score < t_low",
+        handoff: "auto_resolved",
+      },
     ],
   },
 );
@@ -246,7 +265,9 @@ assert.equal(guarded.textContent.includes("Pending/Reversed"), false);
 assert.equal(guarded.textContent.includes("out_of_scope"), false);
 assert.equal(guarded.textContent.includes("prompt_injection"), false);
 assert.equal(guarded.textContent.includes("pii_masked"), false);
-assert.ok(guarded.textContent.includes("Bloqueado por guardrail · sin puntaje"));
+assert.ok(guarded.textContent.includes("Bloqueado por protección · sin puntaje"));
+assert.ok(guarded.textContent.includes("Resuelto automáticamente"));
+assert.equal(guarded.textContent.includes("auto_resolved"), false);
 assertNoRawEnums(guarded.textContent, "packet es");
 
 function fakeElement() {
@@ -366,13 +387,13 @@ const guardScoreHost = fakeElement();
 context.renderPacket(guardScoreHost, {
   band: "out_of_scope",
   guardrail: true,
-  score_line: "Bloqueado por guardrail · sin puntaje",
+  score_line: "Bloqueado por protección · sin puntaje",
   amount: "1",
   merchant: "M",
   recommended_next_step: "Explicar",
 });
 const guardScore = findScore(guardScoreHost);
-assert.equal(guardScore.title, "Bloqueado por guardrail · sin puntaje");
+assert.equal(guardScore.title, "Bloqueado por protección · sin puntaje");
 assert.equal(guardScore.title.includes("Pendiente/Reversado"), false);
 assertNoRawEnums(
   [
@@ -399,6 +420,18 @@ context.renderPacket(ptScoreHost, {
 });
 const ptScore = findScore(ptScoreHost);
 assert.equal(ptScore.title, "pontuação de fraude 45 > 30");
+const ptThreshold = fakeElement();
+context.renderPacket(ptThreshold, {
+  band: "low",
+  model_risk_score: 0.995,
+  t_low: 0.0002756,
+  score_line: "Pontuação: 0,85× limiar · abaixo → automático",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Listo",
+});
+const ptThresholdScore = findScore(ptThreshold);
+assert.equal(ptThresholdScore.title, "0,995 · limiar 0,0002756");
 const ptPendingHost = fakeElement();
 context.renderPacket(ptPendingHost, {
   band: "out_of_scope",
@@ -413,13 +446,13 @@ const ptGuardHost = fakeElement();
 context.renderPacket(ptGuardHost, {
   band: "out_of_scope",
   guardrail: true,
-  score_line: "Bloqueado por guardrail · sem pontuação",
+  score_line: "Bloqueado por proteção · sem pontuação",
   amount: "1",
   merchant: "M",
   recommended_next_step: "Explicar",
 });
 const ptGuard = findScore(ptGuardHost);
-assert.equal(ptGuard.title, "Bloqueado por guardrail · sem pontuação");
+assert.equal(ptGuard.title, "Bloqueado por proteção · sem pontuação");
 assert.equal(ptGuard.title.includes("Pendente/Estornado"), false);
 assertNoRawEnums([ptScore.title, ptPending.title, ptGuard.title].join("\n"), "score tooltip pt");
 context.consoleState.language = "es";

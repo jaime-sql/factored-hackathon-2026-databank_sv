@@ -95,7 +95,7 @@ def test_guardrail_block_has_its_own_score_row() -> None:
         high_value=30,
         guardrail=True,
     )
-    assert line == "Bloqueado por guardrail · sin puntaje"
+    assert line == "Bloqueado por protección · sin puntaje"
     assert "Pendiente" not in line
     portuguese = score_line(
         "pt",
@@ -106,7 +106,7 @@ def test_guardrail_block_has_its_own_score_row() -> None:
         high_value=30,
         guardrail=True,
     )
-    assert portuguese == "Bloqueado por guardrail · sem pontuação"
+    assert portuguese == "Bloqueado por proteção · sem pontuação"
     assert "Pendente" not in portuguese
 
 

@@ -87,6 +87,8 @@ function applyLanguage() {
   if (tour) tour.textContent = copy.tour_open;
   const message = document.getElementById("message");
   if (message) message.placeholder = copy.message_placeholder;
+  const messageLabel = document.getElementById("message-label");
+  if (messageLabel && copy.message_placeholder) messageLabel.textContent = copy.message_placeholder;
   const send = document.getElementById("send");
   if (send) send.textContent = copy.send;
   const why = document.querySelector("details.why summary");
@@ -243,20 +245,48 @@ function bindTestArm() {
   });
 }
 
-async function openCase(transactionKey, message) {
-  const response = await fetch("/cases", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${state.token}`,
-    },
-    body: JSON.stringify({
-      transaction_key: transactionKey,
-      message,
-      language: state.language,
-    }),
-  });
+function connectError() {
+  const copy = text();
+  if (copy && copy.connect_error) return copy.connect_error;
+  return state.language === "pt"
+    ? "Não foi possível conectar. Tente novamente."
+    : "No pudimos conectar. Intenta de nuevo.";
+}
+
+function showConnectError() {
+  const box = document.getElementById("thread");
+  if (!box || typeof box.replaceChildren !== "function") return;
+  const note = document.createElement("p");
+  note.className = "queue-status error";
+  note.setAttribute("data-connect-error", "1");
+  note.textContent = connectError();
+  box.replaceChildren(note);
+}
+
+async function postCase(body) {
+  let response;
+  try {
+    response = await fetch("/cases", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${state.token}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    showConnectError();
+    return;
+  }
   render(await response.json());
+}
+
+async function openCase(transactionKey, message) {
+  await postCase({
+    transaction_key: transactionKey,
+    message,
+    language: state.language,
+  });
 }
 
 async function sendAction(action) {
@@ -313,7 +343,7 @@ function render(body) {
     const score = document.createElement("p");
     score.className = "score-line";
     score.dataset.band = "out_of_scope";
-    score.textContent = copy ? copy.score_guardrail : "Bloqueado por guardrail · sin puntaje";
+    score.textContent = copy ? copy.score_guardrail : "Bloqueado por protección · sin puntaje";
     card.appendChild(score);
   }
   const reply = document.createElement("p");
@@ -423,15 +453,7 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
   const message = input.value.trim();
   if (!message) return;
   input.value = "";
-  const response = await fetch("/cases", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${state.token}`,
-    },
-    body: JSON.stringify({ message, language: state.language }),
-  });
-  render(await response.json());
+  await postCase({ message, language: state.language });
 });
 
 const breakButton = document.getElementById("break-it");
@@ -442,18 +464,10 @@ if (breakButton) breakButton.addEventListener("click", async () => {
     await signIn(first.id);
   }
   if (!state.token) return;
-  const response = await fetch("/cases", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${state.token}`,
-    },
-    body: JSON.stringify({
-      demo_attack: true,
-      language: state.language,
-    }),
+  await postCase({
+    demo_attack: true,
+    language: state.language,
   });
-  render(await response.json());
 });
 
 document.getElementById("lang").addEventListener("click", () => {

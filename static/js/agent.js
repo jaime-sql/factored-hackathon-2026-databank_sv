@@ -77,6 +77,7 @@ const PACKET_LABELS = {
     decisions: {
       handoff: "Traspaso",
       abandoned: "Abandonado",
+      auto_resolved: "Resuelto automáticamente",
       reply_draft: "Borrador",
       reply_sent: "Respuesta enviada",
     },
@@ -95,6 +96,7 @@ const PACKET_LABELS = {
     decisions: {
       handoff: "Repasse",
       abandoned: "Abandonado",
+      auto_resolved: "Resolvido automaticamente",
       reply_draft: "Rascunho",
       reply_sent: "Resposta enviada",
     },
@@ -153,9 +155,15 @@ function fieldLabel(key) {
   return FIELD_LABELS[packetLanguage()][key] || key;
 }
 
+function shownNumber(value) {
+  const text = String(value);
+  return packetLanguage() === "pt" ? text.replace(/(\d)\.(\d)/g, "$1,$2") : text;
+}
+
 function guardrailBlocked(view) {
   if (view && view.guardrail) return true;
-  return String((view && view.score_line) || "").includes("Bloqueado por guardrail");
+  const line = String((view && view.score_line) || "");
+  return line.includes("Bloqueado por guardrail") || line.includes("Bloqueado por protec");
 }
 
 function scoreTooltip(view) {
@@ -166,17 +174,17 @@ function scoreTooltip(view) {
     view.t_low != null
   ) {
     const name = pt ? "limiar" : "umbral";
-    return `${view.model_risk_score} · ${name} ${view.t_low}`;
+    return `${shownNumber(view.model_risk_score)} · ${name} ${shownNumber(view.t_low)}`;
   }
   if (view.band === "high" && view.fraud_score != null && view.high_value != null) {
     const name = pt ? "pontuação de fraude" : "puntaje de fraude";
-    return `${name} ${view.fraud_score} > ${view.high_value}`;
+    return `${name} ${shownNumber(view.fraud_score)} > ${shownNumber(view.high_value)}`;
   }
   if (view.band === "out_of_scope") {
     if (guardrailBlocked(view)) {
       return ui(
         "score_guardrail",
-        pt ? "Bloqueado por guardrail · sem pontuação" : "Bloqueado por guardrail · sin puntaje",
+        pt ? "Bloqueado por proteção · sem pontuação" : "Bloqueado por protección · sin puntaje",
       );
     }
     return pt ? "Pendente/Estornado" : "Pendiente/Reversado";
@@ -192,16 +200,16 @@ function displayThreshold(raw) {
   const fraud = /^fraud_score > (\S+)(.*)$/.exec(text);
   if (fraud) {
     const label = pt ? "pontuação de fraude" : "puntaje de fraude";
-    return `${label} > ${fraud[1]}${fraud[2]}`;
+    return shownNumber(`${label} > ${fraud[1]}${fraud[2]}`);
   }
   const name = pt ? "limiar" : "umbral";
   const score = /^score (>=|<) (\S+)$/.exec(text);
   if (score) {
     const label = pt ? "pontuação" : "puntaje";
     const op = score[1] === ">=" ? "≥" : "<";
-    return `${label} ${op} ${score[2].replaceAll("t_low", name)}`;
+    return shownNumber(`${label} ${op} ${score[2].replaceAll("t_low", name)}`);
   }
-  return text.replaceAll("t_low", name);
+  return shownNumber(text.replaceAll("t_low", name));
 }
 
 function cardTitle(item) {
@@ -659,6 +667,8 @@ function applyConsoleLanguage() {
   if (tour) tour.textContent = pack.tour_open;
   const token = document.getElementById("token");
   if (token) token.placeholder = pack.token_placeholder;
+  const tokenLabel = document.getElementById("token-label");
+  if (tokenLabel && pack.token_placeholder) tokenLabel.textContent = pack.token_placeholder;
   const load = document.getElementById("load");
   if (load) load.textContent = pack.load_queue;
   for (const packet of document.querySelectorAll('[data-action="packet"]')) {

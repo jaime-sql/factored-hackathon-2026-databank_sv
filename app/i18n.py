@@ -188,12 +188,14 @@ _DECISIONS = {
     "es": {
         "handoff": "Traspaso",
         "abandoned": "Abandonado",
+        "auto_resolved": "Resuelto automáticamente",
         "reply_draft": "Borrador",
         "reply_sent": "Respuesta enviada",
     },
     "pt": {
         "handoff": "Repasse",
         "abandoned": "Abandonado",
+        "auto_resolved": "Resolvido automaticamente",
         "reply_draft": "Rascunho",
         "reply_sent": "Resposta enviada",
     },
@@ -770,8 +772,8 @@ def score_line(
     lang = _lang(language)
     if guardrail:
         if lang == "pt":
-            return "Bloqueado por guardrail · sem pontuação"
-        return "Bloqueado por guardrail · sin puntaje"
+            return "Bloqueado por proteção · sem pontuação"
+        return "Bloqueado por protección · sin puntaje"
     if band == "high":
         prefix = "Pontuação de fraude" if lang == "pt" else "Puntaje de fraude"
         action = "bloqueio" if lang == "pt" else "bloqueo"
@@ -865,7 +867,8 @@ _UI = {
         "packet_error": "No se pudo abrir el paquete",
         "resolved": "Resuelto",
         "resolve_error": "No se pudo resolver",
-        "score_guardrail": "Bloqueado por guardrail · sin puntaje",
+        "score_guardrail": "Bloqueado por protección · sin puntaje",
+        "connect_error": "No pudimos conectar. Intenta de nuevo.",
         "flag_injection": "Inyección bloqueada",
         "flag_pii": "Datos enmascarados",
         "no_actions": "ninguna",
@@ -978,7 +981,8 @@ _UI = {
         "packet_error": "Não foi possível abrir o pacote",
         "resolved": "Resolvido",
         "resolve_error": "Não foi possível resolver",
-        "score_guardrail": "Bloqueado por guardrail · sem pontuação",
+        "score_guardrail": "Bloqueado por proteção · sem pontuação",
+        "connect_error": "Não foi possível conectar. Tente novamente.",
         "flag_injection": "Injeção bloqueada",
         "flag_pii": "Dados mascarados",
         "no_actions": "nenhuma",
@@ -1094,7 +1098,7 @@ def persona_note(language: str, persona_id: str, *, postgres: bool) -> str:
 
 def persona_label(language: str, persona_id: str, fallback: str) -> str:
     labels = {
-        "camilo": {"es": "Camilo · Colombia", "pt": "Camilo · Colômbia"},
+        "camilo": {"es": "Camilo · Barranquilla", "pt": "Camilo · Barranquilla"},
         "maria": {"es": "María · Ciudad de México", "pt": "María · Cidade do México"},
     }
     row = labels.get(persona_id)

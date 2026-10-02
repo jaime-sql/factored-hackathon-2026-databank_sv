@@ -156,19 +156,24 @@ function renderJudgePanels(body, text) {
   renderK11(body, text);
 }
 
+function localNumber(value) {
+  const text = String(value);
+  return language === "pt" ? text.replace(/(\d)\.(\d)/g, "$1,$2") : text;
+}
+
 function formatUsd(value) {
   if (value == null || value === "") return "—";
   const number = Number(value);
   if (!Number.isFinite(number)) return "—";
   const digits = number !== 0 && Math.abs(number) < 0.01 ? 4 : 2;
-  return `US$${number.toFixed(digits)}`;
+  return `US$${localNumber(number.toFixed(digits))}`;
 }
 
 function formatMs(value) {
   if (value == null || value === "") return "—";
   const number = Number(value);
   if (!Number.isFinite(number)) return "—";
-  return `${number} ms`;
+  return `${localNumber(number)} ms`;
 }
 
 function renderHealth(health, text) {
@@ -257,14 +262,14 @@ function renderSimulator(sim, text) {
     const point = points[Number(slider.value)] || points[start];
     readout.replaceChildren();
     const lines = [
-      `${simLabel(text, "sim_t", "Umbral")}: ${point.t_low}`,
-      `${simLabel(text, "sim_n_low", "Bajo")}: ${point.n_low}`,
-      `${simLabel(text, "sim_n_review", "Revisión")}: ${point.n_review}`,
-      `${simLabel(text, "sim_auto", "Automatización")}: ${point.automation_rate}`,
-      `${simLabel(text, "sim_missed_n", "Fraude no visto")}: ${point.missed_fraud_n}`,
-      `${simLabel(text, "sim_missed_rate", "Tasa de fraude no visto")}: ${point.missed_fraud_rate}`,
-      `${simLabel(text, "sim_ci", "Intervalo")}: ${point.missed_fraud_ci_lo}–${point.missed_fraud_ci_hi}`,
-      `${simLabel(text, "sim_wrong", "Cierres indebidos por 10 mil")}: ${point.wrongful_autoclose_per_10k}`,
+      `${simLabel(text, "sim_t", "Umbral")}: ${localNumber(point.t_low)}`,
+      `${simLabel(text, "sim_n_low", "Bajo")}: ${localNumber(point.n_low)}`,
+      `${simLabel(text, "sim_n_review", "Revisión")}: ${localNumber(point.n_review)}`,
+      `${simLabel(text, "sim_auto", "Automatización")}: ${localNumber(point.automation_rate)}`,
+      `${simLabel(text, "sim_missed_n", "Fraude no visto")}: ${localNumber(point.missed_fraud_n)}`,
+      `${simLabel(text, "sim_missed_rate", "Tasa de fraude no visto")}: ${localNumber(point.missed_fraud_rate)}`,
+      `${simLabel(text, "sim_ci", "Intervalo")}: ${localNumber(point.missed_fraud_ci_lo)}–${localNumber(point.missed_fraud_ci_hi)}`,
+      `${simLabel(text, "sim_wrong", "Cierres indebidos por 10 mil")}: ${localNumber(point.wrongful_autoclose_per_10k)}`,
     ];
     if (sim.show_cost) lines.push(`${simLabel(text, "sim_cost", "Costo por caso")}: ${formatCost(point)}`);
     for (const line of lines) {
