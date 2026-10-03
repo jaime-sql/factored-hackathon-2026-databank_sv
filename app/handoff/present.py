@@ -10,9 +10,21 @@ from app.i18n import (
     localize_stored_merchant,
     mask_merchant,
     money,
+    score_line,
     threshold_crossed,
 )
 from app.timeutil import present_time
+
+
+def _prompt_blocked(audit: dict[str, Any] | None) -> bool:
+    if not audit:
+        return False
+    flags = audit.get("guardrail_flags") or []
+    if isinstance(flags, str):
+        flags = [part for part in flags.split("|") if part]
+    if not isinstance(flags, (list, tuple, set)):
+        return False
+    return "prompt_injection" in {str(flag) for flag in flags}
 
 
 def _packet(row: dict[str, Any]) -> dict[str, Any]:
@@ -136,7 +148,15 @@ def packet_view(
     transaction = _transaction(packet)
     triage = _triage(packet)
     fraud_score = triage.get("fraud_score")
-    score = float(fraud_score) if isinstance(fraud_score, (int, float)) else None
+    score = (
+        float(fraud_score)
+        if isinstance(fraud_score, (int, float)) and not isinstance(fraud_score, bool)
+        else None
+    )
+    risk = triage.get("model_risk_score")
+    risk_score = (
+        float(risk) if isinstance(risk, (int, float)) and not isinstance(risk, bool) else None
+    )
     actions = [
         {
             "name": str(item.get("name") or ""),
@@ -147,10 +167,21 @@ def packet_view(
     return {
         "band": card["band"],
         "model_version": str(triage.get("model_version") or ""),
-        "model_risk_score": triage.get("model_risk_score"),
+        "model_risk_score": risk_score,
         "fraud_score": score,
+        "t_low": t_low,
+        "high_value": high_value,
         "threshold_crossed": threshold_crossed(
             card["band"], fraud_score=score, t_low=t_low, high_value=high_value
+        ),
+        "score_line": score_line(
+            card["language"],
+            card["band"],
+            model_risk_score=risk_score,
+            fraud_score=score,
+            t_low=t_low,
+            high_value=high_value,
+            guardrail=_prompt_blocked(audit),
         ),
         "amount": card["amount"],
         "merchant": card["merchant"],
@@ -162,4 +193,5 @@ def packet_view(
         "reason_label": card["reason_label"],
         "is_test": card["is_test"],
         "recommended_next_step": card["recommended_next_step"] or "",
+        "guardrail": _prompt_blocked(audit),
     }

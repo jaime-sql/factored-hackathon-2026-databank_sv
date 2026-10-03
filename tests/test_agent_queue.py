@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.config import Settings
-from app.i18n import handoff_reason_label, mask_merchant
+from app.i18n import handoff_reason_label, mask_merchant, score_line
 from app.main import create_app
 from tests.conftest import login
 
@@ -106,6 +106,9 @@ def test_queue_cards_and_packet_view(client: TestClient) -> None:
     assert view["band"] == "high"
     assert view["model_version"]
     assert view["threshold_crossed"].startswith("fraud_score > 30")
+    assert view["score_line"] == "Puntaje de fraude 31 > 30 → bloqueo"
+    assert view["fraud_score"] == 31
+    assert "Puntaje" not in view["threshold_crossed"]
     assert "MXN" in view["amount"]
     assert view["merchant"]
     assert view["local_time"]
@@ -121,6 +124,32 @@ def test_queue_cards_and_packet_view(client: TestClient) -> None:
     assert review_view["threshold_crossed"].startswith("score >= ")
     assert review_view["model_version"].startswith("lgbm:")
     assert review_view["model_risk_score"] is not None
+    assert review_view["score_line"] == score_line(
+        "es",
+        review_view["band"],
+        model_risk_score=review_view["model_risk_score"],
+        fraud_score=review_view["fraud_score"],
+        t_low=review_view["t_low"],
+        high_value=review_view["high_value"],
+    )
+    assert "Puntaje" not in review_view["threshold_crossed"]
+    assert "×" in review_view["score_line"]
+
+    pending_detail = client.get(f"/api/handoff/{pending['case_id']}", headers=agent)
+    pending_view = pending_detail.json()["view"]
+    assert pending_view["band"] == "out_of_scope"
+    assert pending_view["threshold_crossed"] == "Pending/Reversed"
+    assert pending_view["score_line"] == "Pendiente/Reversado → explicación por regla"
+
+    low_view = client.get(f"/api/handoff/{low['case_id']}", headers=agent).json()["view"]
+    assert low_view["threshold_crossed"].startswith("score < ")
+    assert "debajo → automático" in low_view["score_line"]
+
+    portuguese_view = client.get(
+        f"/api/handoff/{portuguese['case_id']}?language=pt", headers=agent
+    ).json()["view"]
+    assert portuguese_view["score_line"] == "Pontuação: —"
+    assert portuguese_view["threshold_crossed"].startswith("score >= ")
 
 
 def test_packet_enums_stay_raw_in_audit_api_and_export(client: TestClient) -> None:
@@ -163,13 +192,23 @@ def test_packet_enums_stay_raw_in_audit_api_and_export(client: TestClient) -> No
     assert underlying
     decisions = {row["decision"] for row in underlying}
     assert "handoff" in decisions
-    assert decisions <= {None, "handoff"}
+    assert "reply_draft" in decisions
+    assert decisions <= {None, "handoff", "reply_draft", "reply_sent", "console_open"}
 
     exported = client.get("/audit/export", headers=agent)
     assert exported.status_code == 200, exported.text
     assert "handoff" in exported.text
     for translated in ("Alto", "Bloqueo de tarjeta verificado", "Traspaso verificado"):
         assert translated not in exported.text
+    for display in (
+        "Puntaje",
+        "Pontuação",
+        "umbral",
+        "limiar",
+        "Pendiente/Reversado",
+        "Pendente/Estornado",
+    ):
+        assert display not in exported.text
 
     trail = client.get(f"/api/cases/{case_id}/trail", headers=agent)
     assert trail.status_code == 200, trail.text

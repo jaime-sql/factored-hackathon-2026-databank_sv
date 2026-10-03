@@ -96,6 +96,17 @@ _COUNTRY_NAMES = {
 }
 
 
+# English country names as they appear in analytics outputs (e.g. fairness.json keys).
+_COUNTRY_KEYS = {
+    "Argentina": "AR",
+    "Brazil": "BR",
+    "Colombia": "CO",
+    "Mexico": "MX",
+    "Spain": "ES",
+    "United States": "US",
+}
+
+
 def _ui_language(language: str) -> str:
     return "pt" if language == "pt" else "es"
 
@@ -185,8 +196,20 @@ _ACTION_PHRASES = {
     },
 }
 _DECISIONS = {
-    "es": {"handoff": "Traspaso"},
-    "pt": {"handoff": "Repasse"},
+    "es": {
+        "handoff": "Traspaso",
+        "abandoned": "Abandonado",
+        "auto_resolved": "Resuelto automáticamente",
+        "reply_draft": "Borrador",
+        "reply_sent": "Respuesta enviada",
+    },
+    "pt": {
+        "handoff": "Repasse",
+        "abandoned": "Abandonado",
+        "auto_resolved": "Resolvido automaticamente",
+        "reply_draft": "Rascunho",
+        "reply_sent": "Resposta enviada",
+    },
 }
 
 
@@ -419,20 +442,23 @@ def reply_low(
     transaction_type: str = "",
 ) -> str:
     label = merchant_label(language, merchant, category, transaction_type)
+    shown_category = category_label(language, category)
     if language == "pt":
         if (merchant or "").strip():
-            found = f"Encontrei {merchant} ({category}) em {city}, {when}, por {amount}."
+            extra = f" ({shown_category})" if shown_category else ""
+            found = f"Encontrei {merchant.strip()}{extra} em {city}, {when}, por {amount}."
         elif label:
             found = f"Encontrei um comércio ({label}) em {city}, {when}, por {amount}."
         else:
-            found = f"Encontrei um cargo em {city}, {when}, por {amount}."
+            found = f"Encontrei uma cobrança em {city}, {when}, por {amount}."
         return (
             f"{found} "
             "Está no seu histórico. Se agora reconhece o comércio, fechamos o caso. "
             "Se não, uma pessoa revisa. Nenhum dinheiro foi movido."
         )
     if (merchant or "").strip():
-        found = f"Encontré {merchant} ({category}) en {city}, el {when}, por {amount}."
+        extra = f" ({shown_category})" if shown_category else ""
+        found = f"Encontré {merchant.strip()}{extra} en {city}, el {when}, por {amount}."
     elif label:
         found = f"Encontré un comercio ({label}) en {city}, el {when}, por {amount}."
     else:
@@ -711,6 +737,76 @@ def threshold_crossed(
     return "Pending/Reversed"
 
 
+def _finite(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    if number != number or number in {float("inf"), float("-inf")}:
+        return None
+    return number
+
+
+def _count_text(value: float, language: str) -> str:
+    text = f"{value:g}"
+    if language == "pt":
+        return text.replace(".", ",")
+    return text
+
+
+def _ratio_text(score: float, t_low: float, language: str) -> str | None:
+    """Two-decimal score/t_low. A 1.00 rounding keeps the raw >= direction."""
+    if t_low <= 0:
+        return None
+    ratio = (Decimal(str(score)) / Decimal(str(t_low))).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    digits = f"{ratio:.2f}"
+    if language == "pt":
+        digits = digits.replace(".", ",")
+    if ratio == Decimal("1.00"):
+        sign = "≥" if score >= t_low else "<"
+        return f"{sign}{digits}×"
+    return f"{digits}×"
+
+
+def score_line(
+    language: str,
+    band: str,
+    *,
+    model_risk_score: float | None,
+    fraud_score: float | None,
+    t_low: float,
+    high_value: float,
+    guardrail: bool = False,
+) -> str:
+    """Agent-facing score sentence. Audit, API enums, and CSV stay on threshold_crossed."""
+    lang = _lang(language)
+    if guardrail:
+        if lang == "pt":
+            return "Bloqueado por proteção · sem pontuação"
+        return "Bloqueado por protección · sin puntaje"
+    if band == "high":
+        prefix = "Pontuação de fraude" if lang == "pt" else "Puntaje de fraude"
+        action = "bloqueio" if lang == "pt" else "bloqueo"
+        shown = _finite(fraud_score)
+        if shown is None:
+            return f"{prefix} > {_count_text(high_value, lang)} → {action}"
+        return f"{prefix} {_count_text(shown, lang)} > {_count_text(high_value, lang)} → {action}"
+    if band not in {"low", "review"}:
+        if lang == "pt":
+            return "Pendente/Estornado → explicação por regra"
+        return "Pendiente/Reversado → explicación por regla"
+    score = _finite(model_risk_score)
+    marker = None if score is None else _ratio_text(score, t_low, lang)
+    if score is None or marker is None:
+        return "Pontuação: —" if lang == "pt" else "Puntaje: —"
+    if lang == "pt":
+        tail = "acima → revisão" if score >= t_low else "abaixo → automático"
+        return f"Pontuação: {marker} limiar · {tail}"
+    tail = "encima → revisión" if score >= t_low else "debajo → automático"
+    return f"Puntaje: {marker} umbral · {tail}"
+
+
 def next_step_contest(language: str) -> str:
     if language == "pt":
         return "O cliente rejeitou a explicação automática. Revisar a cobrança. Nenhum crédito foi emitido."
@@ -762,6 +858,13 @@ _UI = {
         "test_arm": "Modo de prueba",
         "test_arm_send": "Activar",
         "test_token": "Token de prueba",
+        "demo_title": "Demos rápidas",
+        "demo_high": "Teo · Tijuana · cargo de riesgo alto",
+        "demo_review": "Teo · Tijuana · cargo dudoso",
+        "demo_pending": "María · Ciudad de México · cargo pendiente",
+        "demo_chip_high": "Bloqueo · riesgo alto",
+        "demo_chip_review": "Revisión humana",
+        "demo_chip_pending": "Pendiente",
         "agent_title": "Consola del agente",
         "agent_lede": "Cola de casos con el paquete verificado. No hay texto crudo del cliente.",
         "token_placeholder": "Token del agente",
@@ -771,10 +874,21 @@ _UI = {
         "queue_failed": "No se pudo leer la cola.",
         "queue_loading": "Cargando la cola…",
         "open_packet": "Abrir paquete",
+        "field_band": "Banda",
+        "field_score": "Puntaje vs umbral",
+        "field_amount": "Monto",
+        "field_merchant": "Comercio enmascarado",
+        "field_time": "Hora local",
+        "field_step": "Siguiente paso",
         "resolve": "Resolver",
+        "resolve_confirm": "¿Resolver este caso? Vuelve a pulsar para confirmar.",
         "packet_error": "No se pudo abrir el paquete",
         "resolved": "Resuelto",
         "resolve_error": "No se pudo resolver",
+        "score_guardrail": "Bloqueado por protección · sin puntaje",
+        "connect_error": "No pudimos conectar. Intenta de nuevo.",
+        "flag_injection": "Inyección bloqueada",
+        "flag_pii": "Datos enmascarados",
         "no_actions": "ninguna",
         "metrics_title": "Métricas",
         "metrics_lede": (
@@ -790,6 +904,75 @@ _UI = {
         "eval_toggle": (
             "Muestra de demostración (enriquecida en fraude, tasa de riesgo alto cerca de "
             "11 veces la de los datos completos)"
+        ),
+        "break_it": "Intenta romperlo",
+        "no_money": "No se movió dinero",
+        "masked_label": "Texto enmascarado",
+        "audit_label": "Fila de auditoría",
+        "draft_label": "Borrador IA",
+        "grounded_ok": "Fundamentado",
+        "grounded_bad": "Sin fundamento",
+        "send_reply": "Revisar y enviar (agente humano)",
+        "reply_sent_label": "Respuesta registrada",
+        "draft_pending": "Borrador en preparación…",
+        "draft_failed": "No se pudo generar el borrador",
+        "draft_retry": "Reintentar",
+        "health_title": "Salud del sistema",
+        "health_p50": "Latencia p50",
+        "health_p95": "Latencia p95",
+        "health_cost": "Costo medio por llamada",
+        "health_calls": "Llamadas",
+        "health_empty": "Sin llamadas en esta ventana",
+        "trust_title": "Confianza de los datos",
+        "sim_title": "Simulador de umbral",
+        "sim_validation": "conjunto de validación",
+        "sim_split": "Corte",
+        "sim_model": "Versión del modelo",
+        "sim_default": "Umbral habitual",
+        "sim_charges": "Cargos",
+        "sim_fraud": "Fraude",
+        "sim_high": "Riesgo alto",
+        "sim_rule": "Regla",
+        "sim_fraud_high": "Fraude en riesgo alto",
+        "sim_fraud_rule": "Fraude en la regla",
+        "sim_t": "Umbral",
+        "sim_n_low": "Bajo",
+        "sim_n_review": "Revisión",
+        "sim_auto": "Automatización",
+        "sim_missed_n": "Fraude no visto",
+        "sim_missed_rate": "Tasa de fraude no visto",
+        "sim_ci": "Intervalo",
+        "sim_wrong": "Fraudes cerrados sin revisión humana, por 10k cargos (incluye pendientes y revertidos)",
+        "sim_cost": "Costo por caso",
+        "sim_human_only": "solo revisión humana",
+        "sim_saving": "ahorro",
+        "sim_cost_low": "Escenario bajo",
+        "sim_cost_high": "Escenario alto",
+        "fair_title": "Equidad",
+        "fair_country": "País",
+        "fair_n": "Casos",
+        "fair_low": "Bajo",
+        "fair_review": "Revisión",
+        "fair_high": "Alto",
+        "fair_missed": "Fraude no visto",
+        "fair_escalation": "Razón de derivación",
+        "fair_caveat": (
+            "Intervalos de confianza al 95% (set de validación). "
+            "México: brecha significativa, ver causa."
+        ),
+        "fair_sample": "muestra pequeña",
+        "fair_gap": "Brecha conocida",
+        "fair_small": "Los grupos con menos de 30 casos quedan fuera",
+        "fair_escalation_note": (
+            "Derivación a revisión humana de este país ÷ la del total (cargos Aprobados/Rechazados, "
+            "set de validación). 1.00× = igual al promedio."
+        ),
+        "raw_toggle": "Ver JSON",
+        "trust_note": (
+            "Verificado en la última ejecución del pipeline ({when}): confirma que cada tabla tiene "
+            "exactamente las filas que produjo el pipeline, que la app no puede ver las etiquetas de "
+            "fraude usadas para evaluar, que el registro de auditoría solo admite inserciones y que la "
+            "seguridad por fila está activa en todas las tablas."
         ),
     },
     "pt": {
@@ -814,6 +997,13 @@ _UI = {
         "test_arm": "Modo de teste",
         "test_arm_send": "Ativar",
         "test_token": "Token de teste",
+        "demo_title": "Demos rápidas",
+        "demo_high": "Teo · Tijuana · cobrança de risco alto",
+        "demo_review": "Teo · Tijuana · cobrança duvidosa",
+        "demo_pending": "María · Cidade do México · cobrança pendente",
+        "demo_chip_high": "Bloqueio · risco alto",
+        "demo_chip_review": "Revisão humana",
+        "demo_chip_pending": "Pendente",
         "agent_title": "Console do agente",
         "agent_lede": "Fila de casos com o pacote verificado. Não há texto cru do cliente.",
         "token_placeholder": "Token do agente",
@@ -823,10 +1013,21 @@ _UI = {
         "queue_failed": "Não foi possível ler a fila.",
         "queue_loading": "Carregando a fila…",
         "open_packet": "Abrir pacote",
+        "field_band": "Faixa",
+        "field_score": "Pontuação vs limiar",
+        "field_amount": "Valor",
+        "field_merchant": "Comércio mascarado",
+        "field_time": "Horário local",
+        "field_step": "Próximo passo",
         "resolve": "Resolver",
+        "resolve_confirm": "Resolver este caso? Toque outra vez para confirmar.",
         "packet_error": "Não foi possível abrir o pacote",
         "resolved": "Resolvido",
         "resolve_error": "Não foi possível resolver",
+        "score_guardrail": "Bloqueado por proteção · sem pontuação",
+        "connect_error": "Não foi possível conectar. Tente novamente.",
+        "flag_injection": "Injeção bloqueada",
+        "flag_pii": "Dados mascarados",
         "no_actions": "nenhuma",
         "metrics_title": "Métricas",
         "metrics_lede": (
@@ -842,6 +1043,75 @@ _UI = {
         "eval_toggle": (
             "Amostra de demonstração (enriquecida em fraude, taxa de risco alto cerca de "
             "11 vezes a dos dados completos)"
+        ),
+        "break_it": "Tente quebrá-lo",
+        "no_money": "Nenhum dinheiro foi movido",
+        "masked_label": "Texto mascarado",
+        "audit_label": "Linha de auditoria",
+        "draft_label": "Rascunho IA",
+        "grounded_ok": "Fundamentado",
+        "grounded_bad": "Sem fundamento",
+        "send_reply": "Revisar e enviar (agente humano)",
+        "reply_sent_label": "Resposta registrada",
+        "draft_pending": "Rascunho em preparação…",
+        "draft_failed": "Não foi possível gerar o rascunho",
+        "draft_retry": "Tentar novamente",
+        "health_title": "Saúde do sistema",
+        "health_p50": "Latência p50",
+        "health_p95": "Latência p95",
+        "health_cost": "Custo médio por chamada",
+        "health_calls": "Chamadas",
+        "health_empty": "Sem chamadas nesta janela",
+        "trust_title": "Confiança dos dados",
+        "sim_title": "Simulador de limiar",
+        "sim_validation": "conjunto de validação",
+        "sim_split": "Corte",
+        "sim_model": "Versão do modelo",
+        "sim_default": "Limiar habitual",
+        "sim_charges": "Cobranças",
+        "sim_fraud": "Fraude",
+        "sim_high": "Risco alto",
+        "sim_rule": "Regra",
+        "sim_fraud_high": "Fraude no risco alto",
+        "sim_fraud_rule": "Fraude na regra",
+        "sim_t": "Limiar",
+        "sim_n_low": "Baixo",
+        "sim_n_review": "Revisão",
+        "sim_auto": "Automação",
+        "sim_missed_n": "Fraude não vista",
+        "sim_missed_rate": "Taxa de fraude não vista",
+        "sim_ci": "Intervalo",
+        "sim_wrong": "Fraudes encerradas sem revisão humana, por 10 mil transações (inclui pendentes e revertidas)",
+        "sim_cost": "Custo por caso",
+        "sim_human_only": "só revisão humana",
+        "sim_saving": "economia",
+        "sim_cost_low": "Cenário baixo",
+        "sim_cost_high": "Cenário alto",
+        "fair_title": "Equidade",
+        "fair_country": "País",
+        "fair_n": "Casos",
+        "fair_low": "Baixo",
+        "fair_review": "Revisão",
+        "fair_high": "Alto",
+        "fair_missed": "Fraude não vista",
+        "fair_escalation": "Razão de encaminhamento",
+        "fair_caveat": (
+            "Intervalos de confiança de 95% (conjunto de validação). "
+            "México: diferença significativa, ver causa."
+        ),
+        "fair_sample": "amostra pequena",
+        "fair_gap": "Lacuna conhecida",
+        "fair_small": "Os grupos com menos de 30 casos ficam de fora",
+        "fair_escalation_note": (
+            "Encaminhamento para revisão humana deste país ÷ o do total (cobranças Aprovadas/Recusadas, "
+            "conjunto de validação). 1,00× = igual à média."
+        ),
+        "raw_toggle": "Ver JSON",
+        "trust_note": (
+            "Verificado na última execução do pipeline ({when}): confirma que cada tabela tem "
+            "exatamente as linhas geradas pelo pipeline, que o app não consegue ver os rótulos de "
+            "fraude usados na avaliação, que o registro de auditoria só aceita inserções e que a "
+            "segurança por linha está ativa em todas as tabelas."
         ),
     },
 }
@@ -889,7 +1159,8 @@ def persona_note(language: str, persona_id: str, *, postgres: bool) -> str:
 
 def persona_label(language: str, persona_id: str, fallback: str) -> str:
     labels = {
-        "camilo": {"es": "Camilo · Colombia", "pt": "Camilo · Colômbia"},
+        "ana": {"es": "Ana · Rosario", "pt": "Ana · Rosário"},
+        "camilo": {"es": "Camilo · Barranquilla", "pt": "Camilo · Barranquilla"},
         "maria": {"es": "María · Ciudad de México", "pt": "María · Cidade do México"},
     }
     row = labels.get(persona_id)
@@ -934,6 +1205,9 @@ def ui_copy(language: str) -> dict[str, object]:
     payload["actions"] = dict(_ACTION_PHRASES[lang])
     payload["decisions"] = dict(_DECISIONS[lang])
     payload["months"] = list(MONTHS[lang])
+    payload["countries"] = {
+        name: _COUNTRY_NAMES[lang][code] for name, code in _COUNTRY_KEYS.items()
+    }
     return payload
 
 

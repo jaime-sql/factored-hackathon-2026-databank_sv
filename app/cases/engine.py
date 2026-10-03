@@ -11,13 +11,18 @@ Routing order, from the vendored thresholds:
 from __future__ import annotations
 
 import logging
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.bank.fixture import persona_first_name
 from app.bank.models import Customer, Transaction
 from app.bank.repository import BankRepository, synthetic_pair_sibling
 from app.config import Settings
+from app.demo_attack import demo_attack_message
 from app.errors import APIError
 from app.guardrails.injection import detect_injection
 from app.guardrails.pii import redact
@@ -57,6 +62,7 @@ from app.i18n import (
     reply_review,
 )
 from app.ids import new_case_id, new_id
+from app.ops.console_action import CONSOLE_ACTIONS
 from app.ops.store import OpsStore
 from app.thresholds_loader import ThresholdSource, preliminary_route
 from app.timeutil import present_time
@@ -118,9 +124,12 @@ class CaseResult:
     eval_run_id: str | None
     case_source: str | None
     guardrail_flags: list[str] = field(default_factory=list)
+    demo_attack: bool = False
+    masked_message: str = ""
+    is_test: bool = False
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "case_id": self.case_id,
             "reply": self.reply,
             "language": self.language,
@@ -133,7 +142,19 @@ class CaseResult:
             "case_source": self.case_source,
             "money_movement": "none",
             "protected": "prompt_injection" in self.guardrail_flags,
+            "is_test": self.is_test,
+            "demo_attack": self.demo_attack,
         }
+        if self.guardrail_flags:
+            payload["guardrail_flags"] = list(self.guardrail_flags)
+        if self.demo_attack:
+            payload["masked_message"] = self.masked_message
+            payload["audit"] = {
+                "decision": "abandoned",
+                "guardrail_flags": list(self.guardrail_flags),
+                "demo_attack": True,
+            }
+        return payload
 
 
 class Engine:
@@ -150,6 +171,61 @@ class Engine:
         self.thresholds = thresholds
         self.settings = settings
         self.triage = triage or LightGBMTriage()
+        self._draft_local = threading.local()
+        self._draft_lock = threading.Lock()
+        self._drafting: set[str] = set()
+
+    @contextmanager
+    def deferred_drafts(self) -> Iterator[list[str]]:
+        """Collect reply drafts instead of writing them inside this request.
+
+        The caller runs ``ensure_reply_draft`` for each case id after the
+        response is ready, so the customer never waits on the draft model.
+        Outside this block drafts are written inline (CLI, evals, tests).
+        """
+        pending: list[str] = []
+        previous = getattr(self._draft_local, "pending", None)
+        self._draft_local.pending = pending
+        try:
+            yield pending
+        finally:
+            self._draft_local.pending = previous
+
+    def draft_in_progress(self, case_id: str) -> bool:
+        with self._draft_lock:
+            return case_id in self._drafting
+
+    def claim_draft(self, case_id: str) -> bool:
+        """Reserve the one in-flight draft slot for a case. False if it is taken."""
+        with self._draft_lock:
+            if case_id in self._drafting:
+                return False
+            self._drafting.add(case_id)
+            return True
+
+    def ensure_reply_draft(self, case_id: str) -> bool:
+        """Write the reply draft once. Returns True when this call wrote it."""
+        if not self.claim_draft(case_id):
+            return False
+        return self.run_claimed_draft(case_id)
+
+    def run_claimed_draft(self, case_id: str) -> bool:
+        """Write the draft for a case already reserved with ``claim_draft``."""
+        try:
+            case = self.ops.get_case(case_id)
+            if case is None or case.get("reply_draft") or case.get("reply_sent"):
+                return False
+            row = self.ops.get_handoff(case_id)
+            if row is None:
+                return False
+            packet = HandoffPacket.model_validate(row["packet"])
+            return self._record_reply_draft(case_id, packet)
+        except Exception as exc:
+            logger.warning("reply draft was not stored (%s)", type(exc).__name__)
+            return False
+        finally:
+            with self._draft_lock:
+                self._drafting.discard(case_id)
 
     def open_case(
         self,
@@ -160,9 +236,12 @@ class Engine:
         eval_run_id: str | None,
         case_source: str | None,
         is_test: bool = False,
+        demo_attack: bool = False,
     ) -> CaseResult:
         if eval_run_id or case_source:
             is_test = False
+        if demo_attack:
+            message = demo_attack_message(language)
         lang = detect_language(message or "", language)
         flags: list[str] = []
         redacted, changed = _redact(message or "")
@@ -170,10 +249,19 @@ class Engine:
             flags.append("pii_masked")
         if detect_injection(redacted).blocked:
             return self._injection(
-                customer_key, lang, flags, eval_run_id, case_source, redacted, is_test
+                customer_key,
+                lang,
+                flags,
+                eval_run_id,
+                case_source,
+                redacted,
+                is_test,
+                demo_attack,
             )
         if not transaction_key:
-            return self._clarify(customer_key, lang, flags, eval_run_id, case_source, is_test)
+            return self._clarify(
+                customer_key, lang, flags, eval_run_id, case_source, is_test, demo_attack
+            )
         customer = self.bank.get_customer(customer_key)
         if customer is None:
             raise APIError(404, "not_found", "Customer not found")
@@ -183,7 +271,16 @@ class Engine:
         features = self.bank.get_features(customer_key, transaction_key)
         duplicate = self.bank.get_duplicate(customer_key, transaction_key)
         return self._route(
-            customer, tx, features, duplicate, lang, flags, eval_run_id, case_source, is_test
+            customer,
+            tx,
+            features,
+            duplicate,
+            lang,
+            flags,
+            eval_run_id,
+            case_source,
+            is_test,
+            demo_attack,
         )
 
     def act(self, customer_key: str, case_id: str, action: str) -> CaseResult:
@@ -219,6 +316,7 @@ class Engine:
         eval_run_id: str | None,
         case_source: str | None,
         is_test: bool = False,
+        demo_attack: bool = False,
     ) -> CaseResult:
         if (
             features is None
@@ -312,6 +410,7 @@ class Engine:
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
                 "is_test": is_test and not is_eval,
+                "demo_attack": demo_attack,
             }
         )
         packet_complete: bool | None = None
@@ -355,6 +454,7 @@ class Engine:
             eval_run_id=eval_run_id,
             case_source=case_source,
             is_test=is_test and not is_eval,
+            demo_attack=demo_attack,
         )
         self._event(
             case_id, "step", "route", {"band": band, "case_type": case_type}, "not_applicable"
@@ -371,6 +471,8 @@ class Engine:
             eval_run_id,
             case_source,
             flags,
+            demo_attack=demo_attack,
+            is_test=is_test and not is_eval,
         )
 
     def _opening(
@@ -798,6 +900,164 @@ class Engine:
             {"packet_case_id": case_id},
             "verified" if ok else "failed",
         )
+        pending = getattr(self._draft_local, "pending", None)
+        if pending is not None:
+            pending.append(case_id)
+            return
+        self.ensure_reply_draft(case_id)
+
+    def _record_reply_draft(self, case_id: str, packet: HandoffPacket) -> bool:
+        """Append a reply_draft audit row without replacing the routing tip."""
+        try:
+            from app.reply.draft import compose_draft
+
+            case = self.ops.get_case(case_id)
+            if case is None:
+                return False
+            customer = self.bank.get_customer(packet.customer_key)
+            if customer is None:
+                return False
+            draft = compose_draft(packet, customer.customer_country, self.settings)
+            latest = self.ops.get_case(case_id)
+            if latest is not None and (latest.get("reply_draft") or latest.get("reply_sent")):
+                return False
+            now = datetime.now(UTC)
+            self.ops.update_case(case_id, {"reply_draft": draft.text, "updated_at": now})
+            audit_id = new_case_id()
+            self._audit(
+                case_id=case_id,
+                audit_id=audit_id,
+                supersedes=None,
+                case_type=str(case.get("case_type") or "triage"),
+                customer=customer,
+                status="handed_off",
+                created=case["created_at"],
+                closed=case.get("closed_at"),
+                decision="reply_draft",
+                automation=False,
+                reason=None,
+                packet_complete=None,
+                lang=draft.facts["language"],
+                version=packet.triage.model_version,
+                fraud_score=packet.triage.fraud_score,
+                prob=packet.triage.model_risk_score,
+                flags=["reply_draft"],
+                is_eval=bool(case.get("is_eval_case")),
+                eval_run_id=case.get("eval_run_id"),
+                case_source=case.get("case_source"),
+                is_test=bool(case.get("is_test")) and not bool(case.get("is_eval_case")),
+                demo_attack=bool(case.get("demo_attack")),
+                side=True,
+            )
+            if draft.used_model:
+                self.ops.append_llm_call(
+                    {
+                        "audit_id": new_case_id(),
+                        "llm_call_id": new_id("llm"),
+                        "case_id": case_id,
+                        "recorded_at": now,
+                        "case_type": case.get("case_type"),
+                        "model": draft.model or "reply-draft",
+                        "input_tokens": draft.input_tokens,
+                        "output_tokens": draft.output_tokens,
+                        "latency_ms": draft.latency_ms,
+                        "call_started_at": now,
+                        "call_purpose": "reply_draft",
+                        "call_status": draft.status if draft.status in {"ok", "error"} else "error",
+                        "retry_attempt": 0,
+                        "prompt_version": self.settings.prompt_version,
+                        "is_eval_case": bool(case.get("is_eval_case")),
+                        "eval_run_id": case.get("eval_run_id"),
+                        "is_test": bool(case.get("is_test")),
+                        "demo_attack": bool(case.get("demo_attack")),
+                    }
+                )
+            return True
+        except Exception as exc:
+            logger.warning("reply draft was not stored (%s)", type(exc).__name__)
+            return False
+
+    def record_console_action(self, case_id: str, action: str, source: str | None) -> None:
+        """Append a console tip. It does not supersede the routing decision."""
+        if action not in CONSOLE_ACTIONS:
+            raise ValueError(f"unknown console action: {action}")
+        case = self.ops.get_case(case_id)
+        if case is None:
+            return
+        customer = self.bank.get_customer(str(case["customer_key"]))
+        if customer is None:
+            return
+        previous = self._current(case_id)
+        version = RULE_VERSION
+        fraud_score = None
+        prob = None
+        if previous is not None:
+            version = str(previous.get("rule_or_model_version") or RULE_VERSION)
+            fraud_score = _float(previous.get("fraud_score"))
+            prob = _float(previous.get("model_risk_score"))
+        case_type = str((previous or {}).get("case_type") or case.get("case_type") or "triage")
+        self._audit(
+            case_id=case_id,
+            audit_id=new_case_id(),
+            supersedes=None,
+            case_type=case_type,
+            customer=customer,
+            status=str(case.get("state") or "handed_off"),
+            created=case["created_at"],
+            closed=case.get("closed_at"),
+            decision=f"console_{action}",
+            automation=False,
+            reason=None,
+            packet_complete=None,
+            lang=str(case.get("language") or "es"),
+            version=version,
+            fraud_score=fraud_score,
+            prob=prob,
+            flags=[],
+            is_eval=bool(case.get("is_eval_case")),
+            eval_run_id=case.get("eval_run_id"),
+            case_source=case.get("case_source"),
+            is_test=bool(case.get("is_test")) and not bool(case.get("is_eval_case")),
+            demo_attack=bool(case.get("demo_attack")),
+            source="judge" if source == "judge" else None,
+        )
+
+    def record_reply_sent(self, case_id: str, text: str, *, source: str | None = None) -> None:
+        case = self.ops.get_case(case_id)
+        if case is None or self.ops.get_handoff(case_id) is None:
+            raise APIError(404, "not_found", "Handoff not found")
+        if str(case.get("reply_sent") or "").strip():
+            raise APIError(409, "reply_already_sent", "A reply was already sent for this case")
+        customer = self._customer(str(case["customer_key"]))
+        now = datetime.now(UTC)
+        self.ops.update_case(case_id, {"reply_sent": text, "updated_at": now})
+        audit_id = new_case_id()
+        self._audit(
+            case_id=case_id,
+            audit_id=audit_id,
+            supersedes=None,
+            case_type=str(case.get("case_type") or "triage"),
+            customer=customer,
+            status=str(case.get("state") or "handed_off"),
+            created=case["created_at"],
+            closed=case.get("closed_at"),
+            decision="reply_sent",
+            automation=False,
+            reason=None,
+            packet_complete=None,
+            lang=str(case.get("language") or "es"),
+            version=RULE_VERSION,
+            fraud_score=None,
+            prob=None,
+            flags=["reply_sent"],
+            is_eval=bool(case.get("is_eval_case")),
+            eval_run_id=case.get("eval_run_id"),
+            case_source=case.get("case_source"),
+            is_test=bool(case.get("is_test")) and not bool(case.get("is_eval_case")),
+            demo_attack=bool(case.get("demo_attack")),
+            side=True,
+            source="judge" if source == "judge" else None,
+        )
 
     def _packet(
         self,
@@ -833,6 +1093,7 @@ class Engine:
         return HandoffPacket(
             case_id=case_id,
             customer_key=customer.customer_key,
+            customer_first_name=persona_first_name(customer.customer_key),
             language=language,  # type: ignore[arg-type]
             transaction=TransactionFacts(
                 transaction_key=tx.transaction_key,
@@ -908,6 +1169,7 @@ class Engine:
             eval_run_id=case.get("eval_run_id"),
             case_source=case.get("case_source"),
             is_test=bool(case.get("is_test")) and not bool(case.get("is_eval_case")),
+            demo_attack=bool(case.get("demo_attack")),
         )
         now = datetime.now(UTC)
         self.ops.update_case(str(case["case_id"]), {"latest_audit_id": audit_id, "updated_at": now})
@@ -936,12 +1198,15 @@ class Engine:
         eval_run_id: str | None,
         case_source: str | None,
         is_test: bool = False,
+        demo_attack: bool = False,
+        side: bool = False,
+        source: str | None = None,
     ) -> None:
         self.ops.append_audit_case(
             {
                 "audit_id": audit_id,
                 "case_id": case_id,
-                "supersedes_audit_id": supersedes,
+                "supersedes_audit_id": audit_id if side else supersedes,
                 "recorded_at": datetime.now(UTC),
                 "case_type": case_type,
                 "customer_segment": customer.customer_segment,
@@ -964,6 +1229,8 @@ class Engine:
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
                 "is_test": bool(is_test) and not is_eval,
+                "demo_attack": bool(demo_attack),
+                "source": source,
             }
         )
 
@@ -976,6 +1243,7 @@ class Engine:
         case_source: str | None,
         redacted_message: str,
         is_test: bool = False,
+        demo_attack: bool = False,
     ) -> CaseResult:
         flags.append("prompt_injection")
         customer = self.bank.get_customer(customer_key)
@@ -1001,6 +1269,7 @@ class Engine:
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
                 "is_test": is_test and not is_eval,
+                "demo_attack": demo_attack,
             }
         )
         self._audit(
@@ -1025,6 +1294,7 @@ class Engine:
             eval_run_id=eval_run_id,
             case_source=case_source,
             is_test=is_test and not is_eval,
+            demo_attack=demo_attack,
         )
         self._event(
             case_id,
@@ -1045,6 +1315,9 @@ class Engine:
             eval_run_id,
             case_source,
             flags,
+            demo_attack=demo_attack,
+            masked_message=redacted_message if demo_attack else "",
+            is_test=is_test and not is_eval,
         )
 
     def _clarify(
@@ -1055,6 +1328,7 @@ class Engine:
         eval_run_id: str | None,
         case_source: str | None,
         is_test: bool = False,
+        demo_attack: bool = False,
     ) -> CaseResult:
         customer = self.bank.get_customer(customer_key)
         if customer is None:
@@ -1079,6 +1353,7 @@ class Engine:
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
                 "is_test": is_test and not is_eval,
+                "demo_attack": demo_attack,
             }
         )
         self._audit(
@@ -1103,6 +1378,7 @@ class Engine:
             eval_run_id=eval_run_id,
             case_source=case_source,
             is_test=is_test and not is_eval,
+            demo_attack=demo_attack,
         )
         return CaseResult(
             case_id,
@@ -1116,6 +1392,8 @@ class Engine:
             eval_run_id,
             case_source,
             flags,
+            demo_attack=demo_attack,
+            is_test=is_test and not is_eval,
         )
 
     def _result(
@@ -1140,6 +1418,8 @@ class Engine:
             str(case["state"]),
             case.get("eval_run_id"),
             case.get("case_source"),
+            demo_attack=bool(case.get("demo_attack")),
+            is_test=bool(case.get("is_test")),
         )
 
     def _own_case(self, customer_key: str, case_id: str) -> dict[str, Any]:

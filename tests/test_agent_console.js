@@ -2,9 +2,34 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 
+const RAW_ENUMS = [
+  "fraud_score",
+  "t_low",
+  "abandoned",
+  "reply_sent",
+  "reply_draft",
+  "Pending/Reversed",
+  "out_of_scope",
+  "prompt_injection",
+  "pii_masked",
+  "Food",
+  "auto_resolved",
+  "guardrail",
+];
+
+function assertNoRawEnums(text, label) {
+  for (const token of RAW_ENUMS) {
+    assert.equal(text.includes(token), false, `${label} still shows ${token}`);
+  }
+  for (const word of ["high", "low", "review"]) {
+    const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${word}(?![\\p{L}\\p{N}_])`, "u");
+    assert.equal(pattern.test(text), false, `${label} still shows ${word}`);
+  }
+}
+
 const source = fs.readFileSync("static/js/agent.js", "utf8");
 assert.equal(source.includes("onclick="), false);
-assert.match(source, /authorization: `Bearer \$\{tokenInput\.value\}`/);
+assert.match(source, /authorization: `Bearer \$\{agentToken\(\)\}`/);
 assert.match(source, /\/api\/handoff\/\$\{encodeURIComponent\(caseId\)\}/);
 assert.match(source, /addEventListener\("click"/);
 
@@ -17,7 +42,10 @@ context.renderPacket(panel, {
   band: "high",
   model_version: "rule_fs_gt30_v1",
   model_risk_score: null,
+  fraud_score: 45,
+  high_value: 30,
   threshold_crossed: "fraud_score > 30",
+  score_line: "Puntaje de fraude 45 > 30 → bloqueo",
   amount: "220.00 MXN",
   merchant: "U•••",
   local_time: "15 ene 2026, 12:00 CST",
@@ -30,19 +58,20 @@ context.renderPacket(panel, {
 assert.equal(panel.hidden, false);
 assert.equal(panel.textContent.split("\n").includes(""), false);
 for (const part of [
-  "Alto",
+  "Banda: Alto",
   "rule_fs_gt30_v1",
-  "fraud_score > 30",
-  "220.00 MXN",
-  "U•••",
-  "15 ene 2026, 12:00 CST",
+  "Puntaje vs umbral: Puntaje de fraude 45 > 30 → bloqueo",
+  "Monto: 220.00 MXN",
+  "Comercio enmascarado: U•••",
+  "Hora local: 15 ene 2026, 12:00 CST",
   "America/Mexico_City",
   "Bloqueo de tarjeta verificado",
   "Riesgo alto: tarjeta bloqueada",
-  "Revisar la tarjeta bloqueada.",
+  "Siguiente paso: Revisar la tarjeta bloqueada.",
 ]) {
   assert.ok(panel.textContent.includes(part), part);
 }
+assert.equal(panel.textContent.includes("fraud_score > 30"), false);
 assert.equal(panel.textContent.includes("block_card"), false);
 assert.equal(panel.textContent.includes("\nhigh\n") || panel.textContent.startsWith("high\n"), false);
 assert.equal(panel.textContent.includes("fraud rate"), false);
@@ -56,6 +85,7 @@ context.renderPacket(
     model_version: "lgbm:v",
     model_risk_score: null,
     threshold_crossed: "score >= 0.0002756",
+    score_line: "Puntaje: ≥1.00× umbral · encima → revisión",
     amount: "10.00 MXN",
     merchant: "U•••",
     local_time: "15 ene 2026, 12:00 CST",
@@ -77,6 +107,7 @@ context.renderPacket(
     band: "review",
     model_version: "lgbm:v",
     threshold_crossed: "score >= 0.0002756",
+    score_line: "Puntaje: 1.02× umbral · encima → revisión",
     amount: "1,400.00 MXN",
     merchant: "T•••••",
     reason_label: "Modelo: revisión",
@@ -102,6 +133,11 @@ context.renderPacket(
 );
 assert.ok(withTrail.textContent.includes("fraud rate in this band on val 1.2%"));
 assert.ok(withTrail.textContent.includes("lgbm:v"));
+assert.ok(withTrail.textContent.includes("Puntaje vs umbral: 1.02× umbral · encima → revisión"));
+assert.equal(withTrail.textContent.includes("Puntaje: 1.02×"), false);
+assert.ok(withTrail.textContent.includes("puntaje ≥ 0.0002756"));
+assert.equal(withTrail.textContent.includes("score >= 0.0002756"), false);
+assert.equal(withTrail.textContent.includes("t_low"), false);
 assert.ok(withTrail.textContent.includes("Traspaso verificado"));
 assert.equal(withTrail.textContent.includes("handoff verified"), false);
 assert.ok(withTrail.textContent.includes("Revisión"));
@@ -113,6 +149,7 @@ context.renderPacket(
     band: "low",
     model_version: "lgbm:v",
     threshold_crossed: "score < 0.0002756",
+    score_line: "Pontuação: 0,85× limiar · abaixo → automático",
     amount: "10.00 MXN",
     merchant: "U•••",
     local_time: "15 jan 2026, 12:00 CST",
@@ -125,15 +162,415 @@ context.renderPacket(
   {
     steps: [
       { kind: "action", at: "15 jan 2026, 12:01 CST", action: "handoff", verification: "verified" },
+      {
+        kind: "decision",
+        at: "15 jan 2026, 12:02 CST",
+        band: "low",
+        threshold: "score < t_low",
+        handoff: "reply_sent",
+        reason_label: "Cliente pediu uma pessoa",
+      },
+      {
+        kind: "decision",
+        at: "15 jan 2026, 12:04 CST",
+        band: "low",
+        threshold: "score < 0.0002756",
+        handoff: "auto_resolved",
+      },
+      {
+        kind: "decision",
+        at: "15 jan 2026, 12:03 CST",
+        band: "out_of_scope",
+        threshold: "Pending/Reversed",
+        handoff: "abandoned",
+      },
     ],
   },
 );
-assert.ok(portuguese.textContent.includes("Baixo"));
+assert.ok(portuguese.textContent.includes("Faixa: Baixo"));
+assert.ok(portuguese.textContent.includes("Pontuação vs limiar: 0,85× limiar · abaixo → automático"));
+assert.equal(portuguese.textContent.includes("Pontuação: 0,85×"), false);
+assert.ok(portuguese.textContent.includes("Valor: 10.00 MXN"));
+assert.ok(portuguese.textContent.includes("Comércio mascarado: U•••"));
+assert.ok(portuguese.textContent.includes("Horário local: 15 jan 2026, 12:00 CST"));
+assert.ok(portuguese.textContent.includes("Próximo passo: Revisar"));
+assert.equal(portuguese.textContent.includes("score < 0.0002756"), false);
+assert.ok(portuguese.textContent.includes("pontuação < limiar"));
+assert.ok(portuguese.textContent.includes("Resposta enviada"));
+assert.ok(portuguese.textContent.includes("Pendente/Estornado"));
+assert.ok(portuguese.textContent.includes("Abandonado"));
+assert.ok(portuguese.textContent.includes("Resolvido automaticamente"));
+assert.ok(portuguese.textContent.includes("pontuação < 0,0002756"));
+assert.equal(portuguese.textContent.includes("auto_resolved"), false);
+assert.equal(portuguese.textContent.includes("t_low"), false);
+assert.equal(portuguese.textContent.includes("reply_sent"), false);
+assert.equal(portuguese.textContent.includes("abandoned"), false);
+assert.equal(portuguese.textContent.includes("Pending/Reversed"), false);
 assert.ok(portuguese.textContent.includes("Bloqueio de cartão verificado"));
 assert.ok(portuguese.textContent.includes("Repasse verificado"));
 assert.equal(portuguese.textContent.includes("block_card"), false);
 assert.equal(portuguese.textContent.includes("handoff verified"), false);
+assertNoRawEnums(portuguese.textContent, "packet pt");
 context.consoleState.language = "es";
+
+const guarded = { textContent: "", hidden: true, dataset: {} };
+context.renderPacket(
+  guarded,
+  {
+    band: "out_of_scope",
+    score_line: "Bloqueado por protección · sin puntaje",
+    amount: "1",
+    merchant: "M",
+    recommended_next_step: "",
+  },
+  {
+    steps: [
+      {
+        kind: "decision",
+        at: "15 ene 2026, 12:00 CST",
+        band: "out_of_scope",
+        threshold: "fraud_score > 30 (45)",
+        guardrail_flags: ["prompt_injection", "pii_masked"],
+        handoff: "abandoned",
+      },
+      {
+        kind: "decision",
+        at: "15 ene 2026, 12:02 CST",
+        band: "out_of_scope",
+        threshold: "Pending/Reversed",
+        handoff: "reply_sent",
+      },
+      {
+        kind: "decision",
+        at: "15 ene 2026, 12:04 CST",
+        band: "low",
+        threshold: "score < t_low",
+        handoff: "auto_resolved",
+      },
+    ],
+  },
+);
+assert.ok(guarded.textContent.includes("Fuera de alcance"));
+assert.ok(guarded.textContent.includes("Inyección bloqueada"));
+assert.ok(guarded.textContent.includes("Datos enmascarados"));
+assert.ok(guarded.textContent.includes("Abandonado"));
+assert.ok(guarded.textContent.includes("puntaje de fraude > 30 (45)"));
+assert.ok(guarded.textContent.includes("Pendiente/Reversado"));
+assert.ok(guarded.textContent.includes("Respuesta enviada"));
+assert.equal(guarded.textContent.includes("fraud_score"), false);
+assert.equal(guarded.textContent.includes("t_low"), false);
+assert.equal(guarded.textContent.includes("abandoned"), false);
+assert.equal(guarded.textContent.includes("reply_sent"), false);
+assert.equal(guarded.textContent.includes("Pending/Reversed"), false);
+assert.equal(guarded.textContent.includes("out_of_scope"), false);
+assert.equal(guarded.textContent.includes("prompt_injection"), false);
+assert.equal(guarded.textContent.includes("pii_masked"), false);
+assert.ok(guarded.textContent.includes("Bloqueado por protección · sin puntaje"));
+assert.ok(guarded.textContent.includes("Resuelto automáticamente"));
+assert.equal(guarded.textContent.includes("auto_resolved"), false);
+assertNoRawEnums(guarded.textContent, "packet es");
+
+function fakeElement() {
+  return {
+    className: "",
+    textContent: "",
+    title: "",
+    hidden: false,
+    dataset: {},
+    children: [],
+    append(...items) {
+      this.children.push(...items);
+    },
+    appendChild(node) {
+      this.children.push(node);
+    },
+    replaceChildren(...items) {
+      this.children = items;
+    },
+    addEventListener() {},
+    setAttribute() {},
+  };
+}
+context.document = {
+  createElement(tag) {
+    const el = fakeElement();
+    el.tagName = String(tag || "").toUpperCase();
+    el.listeners = {};
+    el.attrs = {};
+    el.setAttribute = function (name, value) {
+      this.attrs[name] = String(value);
+      if (name === "id") this.id = String(value);
+      if (name === "for") this.htmlFor = String(value);
+    };
+    el.addEventListener = function (type, fn) {
+      this.listeners[type] = this.listeners[type] || [];
+      this.listeners[type].push(fn);
+    };
+    return el;
+  },
+  getElementById(id) {
+    return id === "token" ? { value: "agent-token" } : null;
+  },
+  createTextNode(value) {
+    return { textContent: String(value), children: [] };
+  },
+};
+
+function findScore(node) {
+  if (node.className === "score-line") return node;
+  for (const child of node.children || []) {
+    const found = findScore(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+const boundary = fakeElement();
+context.renderPacket(boundary, {
+  band: "review",
+  model_risk_score: 1,
+  t_low: 1,
+  score_line: "Puntaje: ≥1.00× umbral · encima → revisión",
+  amount: "10 MXN",
+  merchant: "U•••",
+  recommended_next_step: "Revisar",
+});
+const boundaryScore = findScore(boundary);
+assert.equal(boundaryScore.dataset.band, "review");
+assert.equal(boundaryScore.textContent, "≥1.00× umbral · encima → revisión");
+assert.equal(boundaryScore.title, "1 · umbral 1");
+
+const belowRounded = fakeElement();
+context.renderPacket(belowRounded, {
+  band: "low",
+  model_risk_score: 0.995,
+  t_low: 1,
+  score_line: "Puntaje: <1.00× umbral · debajo → automático",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Listo",
+});
+const belowScore = findScore(belowRounded);
+assert.equal(belowScore.dataset.band, "low");
+assert.equal(belowScore.textContent, "<1.00× umbral · debajo → automático");
+assert.equal(belowScore.title, "0.995 · umbral 1");
+
+const highDom = fakeElement();
+context.renderPacket(highDom, {
+  band: "high",
+  fraud_score: 45,
+  high_value: 30,
+  score_line: "Puntaje de fraude 45 > 30 → bloqueo",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Bloquear",
+});
+const highScore = findScore(highDom);
+assert.equal(highScore.dataset.band, "high");
+assert.equal(highScore.textContent, "Puntaje de fraude 45 > 30 → bloqueo");
+assert.equal(highScore.title, "puntaje de fraude 45 > 30");
+
+const pendingDom = fakeElement();
+context.renderPacket(pendingDom, {
+  band: "out_of_scope",
+  score_line: "Pendiente/Reversado → explicación por regla",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Explicar",
+});
+const pendingScore = findScore(pendingDom);
+assert.equal(pendingScore.dataset.band, "out_of_scope");
+assert.equal(pendingScore.textContent, "Pendiente/Reversado → explicación por regla");
+assert.equal(pendingScore.title, "Pendiente/Reversado");
+
+const guardScoreHost = fakeElement();
+context.renderPacket(guardScoreHost, {
+  band: "out_of_scope",
+  guardrail: true,
+  score_line: "Bloqueado por protección · sin puntaje",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Explicar",
+});
+const guardScore = findScore(guardScoreHost);
+assert.equal(guardScore.title, "Bloqueado por protección · sin puntaje");
+assert.equal(guardScore.title.includes("Pendiente/Reversado"), false);
+assertNoRawEnums(
+  [
+    boundaryScore.title,
+    belowScore.title,
+    highScore.title,
+    pendingScore.title,
+    pendingScore.textContent,
+    guardScore.title,
+  ].join("\n"),
+  "score tooltip es",
+);
+
+context.consoleState.language = "pt";
+const ptScoreHost = fakeElement();
+context.renderPacket(ptScoreHost, {
+  band: "high",
+  fraud_score: 45,
+  high_value: 30,
+  score_line: "Pontuação de fraude 45 > 30 → bloqueio",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Bloquear",
+});
+const ptScore = findScore(ptScoreHost);
+assert.equal(ptScore.title, "pontuação de fraude 45 > 30");
+const ptThreshold = fakeElement();
+context.renderPacket(ptThreshold, {
+  band: "low",
+  model_risk_score: 0.995,
+  t_low: 0.0002756,
+  score_line: "Pontuação: 0,85× limiar · abaixo → automático",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Listo",
+});
+const ptThresholdScore = findScore(ptThreshold);
+assert.equal(ptThresholdScore.title, "0,995 · limiar 0,0002756");
+const ptPendingHost = fakeElement();
+context.renderPacket(ptPendingHost, {
+  band: "out_of_scope",
+  score_line: "Pendente/Estornado → explicação por regra",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Explicar",
+});
+const ptPending = findScore(ptPendingHost);
+assert.equal(ptPending.title, "Pendente/Estornado");
+const ptGuardHost = fakeElement();
+context.renderPacket(ptGuardHost, {
+  band: "out_of_scope",
+  guardrail: true,
+  score_line: "Bloqueado por proteção · sem pontuação",
+  amount: "1",
+  merchant: "M",
+  recommended_next_step: "Explicar",
+});
+const ptGuard = findScore(ptGuardHost);
+assert.equal(ptGuard.title, "Bloqueado por proteção · sem pontuação");
+assert.equal(ptGuard.title.includes("Pendente/Estornado"), false);
+assertNoRawEnums([ptScore.title, ptPending.title, ptGuard.title].join("\n"), "score tooltip pt");
+context.consoleState.language = "es";
+
+function walkTags(node, found) {
+  found.push(node);
+  for (const child of node.children || []) walkTags(child, found);
+}
+
+const light = fakeElement();
+light.dataset.caseId = "case-1";
+context.renderPacket(
+  light,
+  {
+    band: "review",
+    score_line: "Puntaje: 1.02× umbral · encima → revisión",
+    amount: "10 MXN",
+    merchant: "U•••",
+    recommended_next_step: "Revisar",
+    reply_draft: "Hola. Harbor Desk vio el cargo.",
+    reply_grounded: false,
+  },
+  {
+    steps: [
+      {
+        kind: "decision",
+        at: "15 ene",
+        band: "review",
+        guardrail_flags: ["prompt_injection"],
+      },
+    ],
+  },
+);
+const lightNodes = [];
+walkTags(light, lightNodes);
+assert.ok(lightNodes.some((node) => node.tagName === "DL"));
+assert.ok(lightNodes.some((node) => node.tagName === "DT" && node.textContent === "Banda"));
+assert.ok(lightNodes.some((node) => node.tagName === "DD"));
+const draft = lightNodes.find((node) => node.className === "draft");
+assert.ok(draft);
+assert.equal(draft.tagName, "FORM");
+const label = lightNodes.find((node) => node.className === "draft-label");
+assert.equal(label.tagName, "LABEL");
+assert.equal(label.textContent, "Borrador IA");
+const area = lightNodes.find((node) => node.tagName === "TEXTAREA");
+assert.ok(area);
+assert.equal(label.htmlFor, area.id);
+const send = draft.children.find((node) => node.tagName === "BUTTON");
+assert.equal(send.textContent, "Revisar y enviar (agente humano)");
+const why = lightNodes.find((node) => node.className === "why-trail");
+assert.equal(why.tagName, "PRE");
+assert.ok(
+  lightNodes.some((node) => node.className === "flag-chip" && node.textContent === "Inyección bloqueada"),
+);
+function insidePre(node, parentPre) {
+  const here = parentPre || node.tagName === "PRE";
+  if (node.className === "draft" && here) return true;
+  for (const child of node.children || []) {
+    if (insidePre(child, here)) return true;
+  }
+  return false;
+}
+assert.equal(insidePre(light, false), false);
+
+let scheduled = null;
+context.setTimeout = (fn, ms) => {
+  scheduled = { fn, ms };
+  return 7;
+};
+context.clearTimeout = () => {
+  scheduled = null;
+};
+let checks = 0;
+context.fetch = async () => {
+  checks += 1;
+  return { ok: true, json: async () => ({ ok: true }) };
+};
+area.listeners.input[0]();
+area.listeners.input[0]();
+assert.equal(checks, 0);
+assert.equal(scheduled.ms, 400);
+scheduled.fn();
+assert.equal(checks, 1);
+
+async function checkDraftFactsAndSend() {
+  const factsList = draft.children.find((node) => node.className === "unsupported");
+  context.fetch = async (url) => {
+    if (String(url).includes("/draft-check")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: false, unsupported_facts: ["monto inventado", "fecha"] }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, status: "reply_sent" }) };
+  };
+  area.listeners.input[0]();
+  await scheduled.fn();
+  assert.deepEqual(
+    factsList.children.map((row) => row.textContent),
+    ["monto inventado", "fecha"],
+  );
+  assert.equal(Boolean(send.disabled), false);
+  let sends = 0;
+  context.fetch = async () => {
+    sends += 1;
+    return { ok: false, status: 409, json: async () => ({ error: "reply_already_sent", message: "A reply was already sent for this case" }) };
+  };
+  await draft.listeners.submit[0]({ preventDefault() {} });
+  assert.equal(sends, 1);
+  assert.equal(send.disabled, true);
+  assert.equal(area.disabled, true);
+  const note = draft.children.find((node) => node.className === "meta");
+  assert.equal(note.textContent, "Respuesta registrada");
+  assert.equal(note.textContent.includes("already"), false);
+  await draft.listeners.submit[0]({ preventDefault() {} });
+  assert.equal(sends, 1);
+}
 
 assert.match(source, /\/api\/cases\/\$\{encodeURIComponent\(caseId\)\}\/trail/);
 const desk = fs.readFileSync("static/js/desk.js", "utf8");
@@ -161,6 +598,7 @@ assert.equal(context.queueNotice(0, null, "es").text, "No se pudo leer la cola."
 assert.equal(context.queueNotice(200, { queue: [{ case_id: "x" }] }, "es").kind, "cards");
 
 async function checkLoadQueue() {
+  delete context.document;
   const box = {
     kids: [],
     replaceChildren() {
@@ -218,11 +656,13 @@ async function checkLoadQueue() {
   assert.ok(box.kids.some((node) => node.textContent === "Não foi possível ler a fila."));
   context.consoleState.language = "es";
 
-  function node() {
+  function node(tag) {
     return {
+      tagName: String(tag || "").toUpperCase(),
       className: "",
       textContent: "",
       hidden: false,
+      disabled: false,
       dataset: {},
       children: [],
       append(...items) {
@@ -236,7 +676,7 @@ async function checkLoadQueue() {
     };
   }
   context.document = {
-    createElement: () => node(),
+    createElement: (tag) => node(tag),
     createTextNode: (value) => ({ textContent: String(value), children: [] }),
     getElementById: () => null,
     querySelectorAll: () => [],
@@ -258,6 +698,13 @@ async function checkLoadQueue() {
   }
   walk(flagged);
   assert.ok(texts.includes("Prueba"));
+  assert.ok(texts.includes("M · 10 MXN · c1"));
+  assert.equal(texts.includes("c1"), false);
+  const panel = flagged.children.find((child) => child.className === "packet-panel");
+  assert.equal(panel.tagName, "DIV");
+  const resolve = flagged.children.find((child) => child.disabled);
+  assert.ok(resolve);
+  assert.equal(resolve.tagName, "BUTTON");
   const plain = node();
   context.fillCard(plain, {
     case_id: "c2",
@@ -275,9 +722,143 @@ async function checkLoadQueue() {
   }
   walkPlain(plain);
   assert.equal(plainTexts.includes("Prueba"), false);
+  const full = "abcdef12-3456-7890-abcd-ef1234567890";
+  const titled = node();
+  context.fillCard(titled, {
+    case_id: full,
+    band: "low",
+    amount: "20 MXN",
+    is_test: false,
+    merchant: "A•••",
+    local_time: "t",
+    reason_label: "r",
+  });
+  const titleTexts = [];
+  function walkTitle(el) {
+    if (el.textContent && !(el.children && el.children.length)) titleTexts.push(el.textContent);
+    for (const child of el.children || []) walkTitle(child);
+  }
+  walkTitle(titled);
+  assert.ok(titleTexts.includes("A••• · 20 MXN · abcdef12"));
+  assert.equal(titleTexts.includes(full), false);
 }
 
-checkLoadQueue()
+async function checkDraftPendingThenReady() {
+  const panel = fakeElement();
+  panel.dataset.caseId = "case-slow";
+  const timers = [];
+  context.setTimeout = (fn, ms) => {
+    timers.push({ fn, ms });
+    return timers.length;
+  };
+  context.renderPacket(panel, {
+    band: "review",
+    score_line: "Puntaje: 1.02× umbral · encima → revisión",
+    amount: "10 MXN",
+    merchant: "U•••",
+    recommended_next_step: "Revisar",
+    reply_draft: "",
+    reply_sent: "",
+    reply_draft_status: "pending",
+  });
+  const first = [];
+  walkTags(panel, first);
+  const placeholder = first.find((node) => String(node.className).includes("draft-pending"));
+  assert.ok(placeholder, "pending placeholder shown");
+  assert.equal(placeholder.textContent, "Borrador en preparación…");
+  assert.equal(first.some((node) => node.className === "draft"), false);
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].ms, 2000);
+  let polls = 0;
+  context.fetch = async (url) => {
+    polls += 1;
+    assert.equal(String(url), "/api/handoff/case-slow/draft", "polls the read-only draft endpoint");
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        case_id: "case-slow",
+        status: "ready",
+        reply_draft: "Hola. Harbor Desk vio el cargo.",
+        reply_sent: "",
+        reply_grounded: true,
+        reply_unsupported: [],
+      }),
+    };
+  };
+  await timers[0].fn();
+  assert.equal(polls, 1);
+  const after = [];
+  walkTags(panel, after);
+  const ready = after.find((node) => node.className === "draft");
+  assert.ok(ready, "draft appears after the poll");
+  assert.equal(ready.children.find((node) => node.tagName === "TEXTAREA").value, "Hola. Harbor Desk vio el cargo.");
+  assert.equal(timers.length, 1, "no more polls once the draft is ready");
+
+  const i18nText = fs.readFileSync("app/i18n.py", "utf8");
+  assert.match(i18nText, /"draft_pending": "Rascunho em preparação…"/);
+  assert.match(i18nText, /"draft_pending": "Borrador en preparación…"/);
+}
+
+async function checkDraftTimeoutAndRetry() {
+  const panel = fakeElement();
+  panel.dataset.caseId = "case-stuck";
+  const timers = [];
+  context.setTimeout = (fn, ms) => {
+    timers.push({ fn, ms });
+    return timers.length;
+  };
+  const calls = [];
+  let releaseRetry;
+  context.fetch = (url, options = {}) => {
+    calls.push({ url: String(url), method: options.method || "GET" });
+    if (String(url).endsWith("/draft/retry")) {
+      return new Promise((resolve) => {
+        releaseRetry = () => resolve({ ok: false, status: 202, json: async () => ({ status: "generating" }) });
+      });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ case_id: "case-stuck", status: "pending" }) });
+  };
+  context.renderPacket(panel, {
+    band: "review",
+    amount: "10 MXN",
+    merchant: "U•••",
+    recommended_next_step: "Revisar",
+    reply_draft: "",
+    reply_sent: "",
+    reply_draft_status: "pending",
+  });
+  for (let i = 0; i < 20; i += 1) await timers[i].fn();
+  assert.equal(timers.length, 20, "stops polling after the limit");
+  assert.ok(calls.every((call) => call.url === "/api/handoff/case-stuck/draft" && call.method === "GET"));
+  const nodes = [];
+  walkTags(panel, nodes);
+  const failed = nodes.find((node) => String(node.className).includes("draft-failed"));
+  assert.ok(failed, "timeout message shown");
+  const text = failed.children.find((node) => node.className === "draft-failed-text");
+  const retry = failed.children.find((node) => String(node.className).includes("draft-retry"));
+  assert.equal(`${text.textContent}${retry.textContent}`, "No se pudo generar el borrador · Reintentar");
+  calls.length = 0;
+  const first = retry.listeners.click[0]();
+  assert.equal(retry.disabled, true, "disabled while the retry is in flight");
+  retry.listeners.click[0]();
+  retry.listeners.click[0]();
+  assert.equal(calls.filter((call) => call.url.endsWith("/draft/retry")).length, 1, "no double submit");
+  assert.equal(calls[0].method, "POST");
+  releaseRetry();
+  await first;
+  assert.equal(panel.dataset.draftPolls, "1", "polling restarts after the retry");
+  assert.equal(timers.length, 21);
+
+  const i18nText = fs.readFileSync("app/i18n.py", "utf8");
+  assert.match(i18nText, /"draft_failed": "Não foi possível gerar o rascunho"/);
+  assert.match(i18nText, /"draft_retry": "Tentar novamente"/);
+}
+
+checkDraftFactsAndSend()
+  .then(() => checkDraftPendingThenReady())
+  .then(() => checkDraftTimeoutAndRetry())
+  .then(() => checkLoadQueue())
   .then(() => console.log("agent console js ok"))
   .catch((error) => {
     console.error(error);

@@ -29,6 +29,10 @@ def test_sqlite_personas_keep_synthetic_notes(client: TestClient) -> None:
     assert by_id["lucia"]["tz"] == "America/Mexico_City"
     assert by_id["lucia"]["note"] == "Persona sintética, cargo duplicado"
     assert by_id["maria"]["labels"]["pt"] == "María · Cidade do México"
+    assert by_id["camilo"]["label"] == "Camilo · Barranquilla"
+    assert by_id["camilo"]["labels"]["pt"] == "Camilo · Barranquilla"
+    assert by_id["ana"]["label"] == "Ana · Rosario"
+    assert by_id["ana"]["labels"]["pt"] == "Ana · Rosário"
     assert synthetic_pair_sibling("SYN_0238_A") == "SYN_0238_B"
     assert synthetic_pair_sibling("SYN_0238_B") == "SYN_0238_A"
     assert synthetic_pair_sibling("tx_maria_dup_b") is None

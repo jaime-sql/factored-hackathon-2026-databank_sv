@@ -74,7 +74,13 @@ const PACKET_LABELS = {
       "contest not_applicable": "Impugnación registrada",
       "open_dispute not_applicable": "Disputa abierta",
     },
-    decisions: { handoff: "Traspaso" },
+    decisions: {
+      handoff: "Traspaso",
+      abandoned: "Abandonado",
+      auto_resolved: "Resuelto automáticamente",
+      reply_draft: "Borrador",
+      reply_sent: "Respuesta enviada",
+    },
   },
   pt: {
     bands: { high: "Alto", low: "Baixo", review: "Revisão", out_of_scope: "Fora de escopo" },
@@ -87,7 +93,13 @@ const PACKET_LABELS = {
       "contest not_applicable": "Contestação registrada",
       "open_dispute not_applicable": "Disputa aberta",
     },
-    decisions: { handoff: "Repasse" },
+    decisions: {
+      handoff: "Repasse",
+      abandoned: "Abandonado",
+      auto_resolved: "Resolvido automaticamente",
+      reply_draft: "Rascunho",
+      reply_sent: "Resposta enviada",
+    },
   },
 };
 
@@ -116,6 +128,93 @@ function actionLabel(name, status) {
 
 function decisionLabel(decision) {
   return localizedToken("decisions", decision);
+}
+
+const FIELD_LABELS = {
+  es: {
+    field_band: "Banda",
+    field_score: "Puntaje vs umbral",
+    field_amount: "Monto",
+    field_merchant: "Comercio enmascarado",
+    field_time: "Hora local",
+    field_step: "Siguiente paso",
+  },
+  pt: {
+    field_band: "Faixa",
+    field_score: "Pontuação vs limiar",
+    field_amount: "Valor",
+    field_merchant: "Comércio mascarado",
+    field_time: "Horário local",
+    field_step: "Próximo passo",
+  },
+};
+
+function fieldLabel(key) {
+  const pack = textPack();
+  if (pack && pack[key]) return pack[key];
+  return FIELD_LABELS[packetLanguage()][key] || key;
+}
+
+function shownNumber(value) {
+  const text = String(value);
+  return packetLanguage() === "pt" ? text.replace(/(\d)\.(\d)/g, "$1,$2") : text;
+}
+
+function guardrailBlocked(view) {
+  if (view && view.guardrail) return true;
+  const line = String((view && view.score_line) || "");
+  return line.includes("Bloqueado por guardrail") || line.includes("Bloqueado por protec");
+}
+
+function scoreTooltip(view) {
+  const pt = packetLanguage() === "pt";
+  if (
+    (view.band === "low" || view.band === "review") &&
+    view.model_risk_score != null &&
+    view.t_low != null
+  ) {
+    const name = pt ? "limiar" : "umbral";
+    return `${shownNumber(view.model_risk_score)} · ${name} ${shownNumber(view.t_low)}`;
+  }
+  if (view.band === "high" && view.fraud_score != null && view.high_value != null) {
+    const name = pt ? "pontuação de fraude" : "puntaje de fraude";
+    return `${name} ${shownNumber(view.fraud_score)} > ${shownNumber(view.high_value)}`;
+  }
+  if (view.band === "out_of_scope") {
+    if (guardrailBlocked(view)) {
+      return ui(
+        "score_guardrail",
+        pt ? "Bloqueado por proteção · sem pontuação" : "Bloqueado por protección · sin puntaje",
+      );
+    }
+    return pt ? "Pendente/Estornado" : "Pendiente/Reversado";
+  }
+  return "";
+}
+
+function displayThreshold(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const pt = packetLanguage() === "pt";
+  if (text === "Pending/Reversed") return pt ? "Pendente/Estornado" : "Pendiente/Reversado";
+  const fraud = /^fraud_score > (\S+)(.*)$/.exec(text);
+  if (fraud) {
+    const label = pt ? "pontuação de fraude" : "puntaje de fraude";
+    return shownNumber(`${label} > ${fraud[1]}${fraud[2]}`);
+  }
+  const name = pt ? "limiar" : "umbral";
+  const score = /^score (>=|<) (\S+)$/.exec(text);
+  if (score) {
+    const label = pt ? "pontuação" : "puntaje";
+    const op = score[1] === ">=" ? "≥" : "<";
+    return shownNumber(`${label} ${op} ${score[2].replaceAll("t_low", name)}`);
+  }
+  return shownNumber(text.replaceAll("t_low", name));
+}
+
+function cardTitle(item) {
+  const short = String(item.case_id || "").slice(0, 8);
+  return [item.merchant || "", item.amount || "", short].join(" · ");
 }
 
 function adoptCatalog(payload) {
@@ -158,51 +257,326 @@ function showQueueStatus(box, kind, text) {
   box.appendChild(note);
 }
 
-function renderPacket(panel, view, trail) {
+function scoreFieldValue(line) {
+  return String(line || "").replace(/^(?:Puntaje|Pontuação):\s*/, "");
+}
+
+function flagLabel(flag) {
+  const key = flag === "prompt_injection" ? "flag_injection" : flag === "pii_masked" ? "flag_pii" : "";
+  if (!key) return "";
+  const fallback = packetLanguage() === "pt"
+    ? { flag_injection: "Injeção bloqueada", flag_pii: "Dados mascarados" }
+    : { flag_injection: "Inyección bloqueada", flag_pii: "Datos enmascarados" };
+  return ui(key, fallback[key]);
+}
+
+function packetRows(view) {
   const actions = (view.actions_taken || [])
     .map((action) => actionLabel(action.name, action.verification_status))
     .filter(Boolean)
     .join(", ");
-  const lines = [
-    bandLabel(view.band),
-    view.model_version,
-  ];
-  if (view.model_risk_score != null) lines.push(String(view.model_risk_score));
-  lines.push(
-    view.threshold_crossed,
-    view.amount,
-    view.merchant,
-    view.local_time,
-    view.utc,
-    view.customer_tz,
-    actions || ui("no_actions", "ninguna"),
-    view.reason_label,
-    view.recommended_next_step,
-  );
-  if (view.band_evidence) lines.push(view.band_evidence);
-  if (view.is_test) lines.unshift(ui("test_chip", "Prueba"));
+  const rows = [];
+  if (view.is_test) rows.push({ value: ui("test_chip", "Prueba") });
+  rows.push({ label: fieldLabel("field_band"), value: bandLabel(view.band) });
+  if (view.model_version) rows.push({ value: view.model_version });
+  const scoreText = scoreFieldValue(view.score_line);
+  rows.push({ label: fieldLabel("field_score"), value: scoreText, score: true });
+  rows.push({ label: fieldLabel("field_amount"), value: view.amount || "" });
+  rows.push({ label: fieldLabel("field_merchant"), value: view.merchant || "" });
+  rows.push({ label: fieldLabel("field_time"), value: view.local_time || "" });
+  if (view.utc) rows.push({ value: view.utc });
+  if (view.customer_tz) rows.push({ value: view.customer_tz });
+  rows.push({ value: actions || ui("no_actions", "ninguna") });
+  if (view.reason_label) rows.push({ value: view.reason_label });
+  rows.push({ label: fieldLabel("field_step"), value: view.recommended_next_step || "" });
+  if (view.band_evidence) rows.push({ value: view.band_evidence });
+  return rows;
+}
+
+function trailLine(step) {
+  if (step.kind === "action") {
+    return [step.at, actionLabel(step.action, step.verification)].filter(Boolean).join(" · ");
+  }
+  const flags = (step.guardrail_flags || []).map(flagLabel).filter(Boolean).join(" · ");
+  return [
+    step.at,
+    step.rule_or_model,
+    bandLabel(step.band),
+    displayThreshold(step.threshold),
+    flags,
+    decisionLabel(step.handoff),
+    step.reason_label,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function packetLines(view, trail) {
+  const lines = packetRows(view).map((row) => ({
+    text: row.label ? `${row.label}: ${row.value}` : String(row.value || ""),
+    score: Boolean(row.score),
+    value: row.value,
+  }));
   for (const step of (trail && trail.steps) || []) {
-    if (step.kind === "action") {
-      const action = actionLabel(step.action, step.verification);
-      lines.push([step.at, action].filter(Boolean).join(" · "));
+    lines.push({ text: trailLine(step) });
+  }
+  return lines;
+}
+
+function renderPacket(panel, view, trail) {
+  const lines = packetLines(view, trail);
+  panel.hidden = false;
+  const canDom =
+    typeof document !== "undefined" &&
+    typeof document.createElement === "function" &&
+    typeof panel.replaceChildren === "function";
+  if (!canDom) {
+    panel.textContent = lines.map((line) => line.text).join("\n");
+    appendDraft(panel, view);
+    return;
+  }
+  const list = document.createElement("dl");
+  for (const row of packetRows(view)) {
+    if (row.label) {
+      const term = document.createElement("dt");
+      term.textContent = row.label;
+      list.appendChild(term);
+    }
+    const value = document.createElement("dd");
+    if (!row.score) {
+      value.textContent = row.value == null ? "" : String(row.value);
     } else {
-      lines.push(
-        [
-          step.at,
-          step.rule_or_model,
-          bandLabel(step.band),
-          step.threshold,
-          (step.guardrail_flags || []).join(","),
-          decisionLabel(step.handoff),
-          step.reason_label,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      );
+      const score = document.createElement("span");
+      score.className = "score-line";
+      score.dataset.band = view.band || "";
+      score.textContent = row.value;
+      const tip = scoreTooltip(view);
+      if (tip) score.title = tip;
+      value.appendChild(score);
+    }
+    list.appendChild(value);
+  }
+  const steps = (trail && trail.steps) || [];
+  const nodes = [list];
+  if (steps.length) {
+    const why = document.createElement("pre");
+    why.className = "why-trail";
+    for (const step of steps) {
+      const line = document.createElement("span");
+      line.className = "packet-line";
+      line.textContent = trailLine({ ...step, guardrail_flags: [] });
+      const flags = step.guardrail_flags || [];
+      if (flags.length) {
+        line.appendChild(document.createTextNode(" "));
+        for (const flag of flags) {
+          const label = flagLabel(flag);
+          if (!label) continue;
+          const chip = document.createElement("span");
+          chip.className = "flag-chip";
+          chip.textContent = label;
+          line.appendChild(chip);
+        }
+      }
+      why.appendChild(line);
+    }
+    nodes.push(why);
+  }
+  panel.replaceChildren(...nodes);
+  appendDraft(panel, view);
+}
+
+const DRAFT_POLL_MS = 2000;
+const DRAFT_POLL_LIMIT = 20;
+
+function appendDraftPending(panel) {
+  if (typeof document === "undefined" || !panel.appendChild) return;
+  const note = document.createElement("p");
+  note.className = "draft-pending meta";
+  note.textContent = ui("draft_pending", "Borrador en preparación…");
+  panel.appendChild(note);
+  const caseId = panel.dataset.caseId || "";
+  const polls = Number(panel.dataset.draftPolls || "0");
+  if (!caseId || typeof setTimeout !== "function") return;
+  if (polls >= DRAFT_POLL_LIMIT) {
+    if (note.remove) note.remove();
+    appendDraftFailed(panel, caseId);
+    return;
+  }
+  panel.dataset.draftPolls = String(polls + 1);
+  setTimeout(() => refreshDraft(panel, caseId), DRAFT_POLL_MS);
+}
+
+async function refreshDraft(panel, caseId) {
+  if (panel.hidden || panel.dataset.caseId !== caseId) return;
+  let response;
+  try {
+    response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/draft`, {
+      headers: { authorization: `Bearer ${agentToken()}` },
+    });
+  } catch {
+    response = null;
+  }
+  if (panel.hidden || panel.dataset.caseId !== caseId) return;
+  const body = response && response.ok ? await response.json() : {};
+  const pending = panel.querySelector ? panel.querySelector(".draft-pending") : null;
+  if (body.status !== "ready" && body.status !== "sent") {
+    if (pending && pending.remove) pending.remove();
+    appendDraftPending(panel);
+    return;
+  }
+  if (pending && pending.remove) pending.remove();
+  appendDraft(panel, {
+    reply_draft: body.reply_draft || "",
+    reply_sent: body.reply_sent || "",
+    reply_draft_status: "ready",
+    reply_grounded: Boolean(body.reply_grounded),
+    reply_unsupported: body.reply_unsupported || [],
+  });
+}
+
+function draftFailedText() {
+  return `${ui("draft_failed", "No se pudo generar el borrador")} · `;
+}
+
+function appendDraftFailed(panel, caseId) {
+  if (typeof document === "undefined" || !panel.appendChild) return;
+  const note = document.createElement("p");
+  note.className = "draft-failed meta";
+  const label = document.createElement("span");
+  label.className = "draft-failed-text";
+  label.textContent = draftFailedText();
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "draft-retry linkish";
+  retry.setAttribute("data-action", "draft-retry");
+  retry.textContent = ui("draft_retry", "Reintentar");
+  retry.addEventListener("click", () => retryDraft(panel, caseId, note, retry));
+  note.append(label, retry);
+  panel.appendChild(note);
+}
+
+async function retryDraft(panel, caseId, note, retry) {
+  if (retry.disabled || panel.dataset.draftRetrying === "1") return;
+  retry.disabled = true;
+  panel.dataset.draftRetrying = "1";
+  let ok = false;
+  try {
+    const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/draft/retry`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${agentToken()}` },
+    });
+    ok = Boolean(response && (response.ok || response.status === 202));
+  } catch {
+    ok = false;
+  }
+  panel.dataset.draftRetrying = "0";
+  if (!ok) {
+    retry.disabled = false;
+    return;
+  }
+  if (note && note.remove) note.remove();
+  panel.dataset.draftPolls = "0";
+  appendDraftPending(panel);
+}
+
+function appendDraft(panel, view) {
+  if (!view.reply_draft && view.reply_draft_status === "pending" && !view.reply_sent) {
+    appendDraftPending(panel);
+    return;
+  }
+  if (!view.reply_draft || typeof document === "undefined" || !panel.appendChild) return;
+  const form = document.createElement("form");
+  form.className = "draft";
+  const caseId = panel.dataset.caseId || "";
+  const areaId = `draft-${caseId || "new"}`;
+  const label = document.createElement("label");
+  label.className = "draft-label";
+  label.setAttribute("for", areaId);
+  label.textContent = ui("draft_label", "Borrador IA");
+  const badge = document.createElement("span");
+  badge.className = "grounded";
+  badge.dataset.grounded = view.reply_grounded ? "1" : "0";
+  badge.textContent = view.reply_grounded
+    ? ui("grounded_ok", "Fundamentado")
+    : ui("grounded_bad", "Sin fundamento");
+  const area = document.createElement("textarea");
+  area.id = areaId;
+  area.value = view.reply_sent || view.reply_draft;
+  const send = document.createElement("button");
+  send.type = "submit";
+  send.textContent = ui("send_reply", "Revisar y enviar (agente humano)");
+  const facts = document.createElement("ul");
+  facts.className = "unsupported";
+  const note = document.createElement("p");
+  note.className = "meta";
+  function showFacts(items) {
+    if (typeof facts.replaceChildren === "function") facts.replaceChildren();
+    else facts.children = [];
+    for (const item of items || []) {
+      const row = document.createElement("li");
+      row.textContent = String(item);
+      facts.appendChild(row);
     }
   }
-  panel.textContent = lines.join("\n");
-  panel.hidden = false;
+  function paintCheck(checked) {
+    const ok = Boolean(checked && checked.ok);
+    badge.dataset.grounded = ok ? "1" : "0";
+    badge.textContent = ok ? ui("grounded_ok", "Fundamentado") : ui("grounded_bad", "Sin fundamento");
+    showFacts(ok ? [] : (checked && checked.unsupported_facts) || []);
+  }
+  function lockComposer() {
+    area.disabled = true;
+    send.disabled = true;
+  }
+  if (view.reply_sent) {
+    note.textContent = ui("reply_sent_label", "Respuesta registrada");
+    lockComposer();
+  }
+  paintCheck({
+    ok: Boolean(view.reply_grounded),
+    unsupported_facts: view.reply_unsupported || [],
+  });
+  let draftTimer = 0;
+  area.addEventListener("input", () => {
+    if (!caseId || area.disabled) return;
+    if (draftTimer && typeof clearTimeout === "function") clearTimeout(draftTimer);
+    const run = async () => {
+      const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/draft-check`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${agentToken()}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ text: area.value }),
+      });
+      if (!response.ok) return;
+      paintCheck(await response.json());
+    };
+    if (typeof setTimeout === "function") draftTimer = setTimeout(run, 400);
+    else run();
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!caseId || send.disabled) return;
+    send.disabled = true;
+    const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/reply`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${agentToken()}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ text: area.value }),
+    });
+    if (response.status !== 409 && !response.ok) {
+      send.disabled = false;
+      return;
+    }
+    lockComposer();
+    note.textContent = ui("reply_sent_label", "Respuesta registrada");
+    if (response.ok) paintCheck(await response.json());
+  });
+  form.append(label, badge, facts, area, send, note);
+  panel.appendChild(form);
 }
 
 function showTestBadge(on) {
@@ -228,7 +602,7 @@ function fillCard(card, item) {
   card.className = "card";
   card.replaceChildren();
   const title = document.createElement("strong");
-  title.textContent = item.case_id || "";
+  title.textContent = cardTitle(item);
   const meta = document.createElement("div");
   meta.className = "meta";
   const chip = document.createElement("span");
@@ -249,19 +623,20 @@ function fillCard(card, item) {
   when.textContent = item.local_time || "";
   const reason = document.createElement("p");
   reason.textContent = item.reason_label || "";
-  const panel = document.createElement("pre");
+  const panel = document.createElement("div");
   panel.className = "packet-panel";
   panel.hidden = true;
   const button = document.createElement("button");
   button.type = "button";
   button.setAttribute("data-action", "packet");
   button.textContent = ui("open_packet", "Abrir paquete");
-  button.addEventListener("click", () => togglePacket(panel, item.case_id));
+  button.addEventListener("click", () => togglePacket(panel, item.case_id, card));
   const resolve = document.createElement("button");
   resolve.type = "button";
+  resolve.disabled = true;
   resolve.setAttribute("data-action", "resolve");
   resolve.textContent = ui("resolve", "Resolver");
-  resolve.addEventListener("click", () => resolveCase(item.case_id, panel));
+  resolve.addEventListener("click", () => resolveCase(item.case_id, panel, card));
   card.append(title, meta, merchant, when, reason, button, resolve, panel);
 }
 
@@ -306,13 +681,19 @@ async function loadQueue() {
   }
 }
 
-async function togglePacket(panel, caseId) {
+function enableResolve(card) {
+  if (!card || typeof card.querySelector !== "function") return;
+  const button = card.querySelector('[data-action="resolve"]');
+  if (button) button.disabled = false;
+}
+
+async function togglePacket(panel, caseId, card) {
   if (!panel.hidden && panel.dataset.loaded === "1") {
     panel.hidden = true;
     return;
   }
   panel.hidden = false;
-  const headers = { authorization: `Bearer ${tokenInput.value}` };
+  const headers = { authorization: `Bearer ${agentToken()}` };
   const response = await fetch(
     `/api/handoff/${encodeURIComponent(caseId)}?language=${consoleState.language}`,
     { headers },
@@ -328,21 +709,43 @@ async function togglePacket(panel, caseId) {
     { headers },
   );
   if (trailResponse.ok) trail = await trailResponse.json();
+  panel.dataset.caseId = caseId;
+  panel.dataset.draftPolls = "0";
   renderPacket(panel, body.view || {}, trail);
   panel.dataset.loaded = "1";
+  enableResolve(card || panel.parentElement);
 }
 
-async function resolveCase(caseId, panel) {
+async function resolveCase(caseId, panel, card) {
+  if (panel.dataset.loaded !== "1") return;
+  const host = card || panel.parentElement || panel;
+  if (panel.dataset.confirm !== "1") {
+    panel.dataset.confirm = "1";
+    const note = document.createElement("p");
+    note.className = "resolve-confirm";
+    note.textContent = ui(
+      "resolve_confirm",
+      "¿Resolver este caso? Vuelve a pulsar para confirmar.",
+    );
+    if (typeof host.insertBefore === "function") host.insertBefore(note, panel);
+    else host.appendChild(note);
+    return;
+  }
   const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/resolve`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${tokenInput.value}`,
+      authorization: `Bearer ${agentToken()}`,
       "content-type": "application/json",
     },
     body: "{}",
   });
-  panel.hidden = false;
-  panel.textContent = response.ok
+  let result = typeof host.querySelector === "function" ? host.querySelector(".resolve-result") : null;
+  if (!result) {
+    result = document.createElement("p");
+    result.className = "resolve-result";
+    host.appendChild(result);
+  }
+  result.textContent = response.ok
     ? ui("resolved", "Resuelto")
     : ui("resolve_error", "No se pudo resolver");
 }
@@ -363,6 +766,8 @@ function applyConsoleLanguage() {
   if (tour) tour.textContent = pack.tour_open;
   const token = document.getElementById("token");
   if (token) token.placeholder = pack.token_placeholder;
+  const tokenLabel = document.getElementById("token-label");
+  if (tokenLabel && pack.token_placeholder) tokenLabel.textContent = pack.token_placeholder;
   const load = document.getElementById("load");
   if (load) load.textContent = pack.load_queue;
   for (const packet of document.querySelectorAll('[data-action="packet"]')) {
@@ -370,6 +775,21 @@ function applyConsoleLanguage() {
   }
   for (const resolve of document.querySelectorAll('[data-action="resolve"]')) {
     resolve.textContent = pack.resolve;
+  }
+  for (const pending of document.querySelectorAll(".draft-pending")) {
+    pending.textContent = pack.draft_pending;
+  }
+  for (const failed of document.querySelectorAll(".draft-failed-text")) {
+    if (pack.draft_failed) failed.textContent = `${pack.draft_failed} · `;
+  }
+  for (const retry of document.querySelectorAll(".draft-retry")) {
+    if (pack.draft_retry) retry.textContent = pack.draft_retry;
+  }
+  for (const send of document.querySelectorAll(".draft button")) {
+    send.textContent = pack.send_reply;
+  }
+  for (const draftLabel of document.querySelectorAll(".draft-label")) {
+    draftLabel.textContent = pack.draft_label;
   }
   for (const chip of document.querySelectorAll('[data-chip="test"]')) {
     chip.textContent = pack.test_chip || "Prueba";

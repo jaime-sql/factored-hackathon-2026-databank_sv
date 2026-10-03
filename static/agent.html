@@ -13,6 +13,9 @@
       } catch (e) {}
       document.documentElement.lang = lang;
       document.documentElement.classList.add("i18n-pending");
+      setTimeout(function () {
+        document.documentElement.classList.remove("i18n-pending");
+      }, 1200);
     })();
   </script>
   <script src="/static/js/catalog.js"></script>
@@ -38,6 +41,7 @@
   </header>
   <main>
     <div class="row">
+      <label class="visually-hidden" id="token-label" for="token">Token del agente</label>
       <input id="token" placeholder="Token del agente" />
       <button id="load" class="primary" type="button">Ver cola</button>
     </div>

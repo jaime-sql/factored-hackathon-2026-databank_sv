@@ -17,7 +17,13 @@ make dev
 
 Open [http://127.0.0.1:8091](http://127.0.0.1:8091). The other pages are `/agent` and `/metrics`.
 
-`DEMO_AGENT_TOKEN` is the admin console token (export and config). `DEMO_JUDGE_TOKEN` is optional: when set, it can list, open, and resolve the handoff queue only. Leave it unset to disable it. Do not commit either value.
+`DEMO_AGENT_TOKEN` is the admin console token (export and config). `DEMO_JUDGE_TOKEN` is optional: when set, it can list, open, and resolve the handoff queue only. Leave it unset to disable it. Do not commit either value. It must be different from `EVAL_RUNNER_TOKEN`; the process refuses to start when they are the same. A judge token cannot set `eval_run_id` or read the eval export.
+
+## Demo access
+
+Demo token provided in the submission email.
+
+The judge console reads `DEMO_JUDGE_TOKEN` from the environment or Secret Manager. Placeholder: `<DEMO_JUDGE_TOKEN>`. The value is not in this repository.
 
 `GET /health` is the health check. `GET /healthz` returns the same JSON, including `migrations_ok`. On Cloud Run, probe `/health`: the run.app front end reserves `/healthz` and answers 404 before the container.
 
@@ -49,7 +55,7 @@ Eval runs are unchanged and never set `is_test`, even if the test header is also
 
 `/api/metrics` and `GET /audit/export` read `app.audit_live` by default. That view leaves out insert-time `is_test` rows, case ids listed in `app.test_cases`, and tips whose `eval_run_id` is set. An admin token with `include_test=1` or `include_eval=1` reads `app.audit_current` and applies only the filters that were not requested. The export adds an `is_test` column. A judge token cannot bring those rows back.
 
-If `is_test`, `app.test_cases`, or `app.audit_live` is missing, the process keeps serving. Case inserts omit `is_test`, test marks are ignored, and metrics and the export read `audit_current`. `GET /health` and `GET /healthz` include `migrations_ok`.
+If `is_test`, `app.test_cases`, or `app.audit_live` is missing, ordinary cases still open and metrics read `audit_current`. A test-mode case is refused with `test_schema_missing` until `is_test` can be stored; it is not written without the flag. A failed schema check is retried at most every 30 seconds, and a successful check stays cached. `GET /health` and `GET /healthz` include `migrations_ok`.
 
 To mark older demo case ids after the fact, insert them into `app.test_cases`. The script does not change audit rows and it is not run on startup. `--before` skips cases that have an `eval_run_id`. The printed count is how many rows this run inserted:
 
