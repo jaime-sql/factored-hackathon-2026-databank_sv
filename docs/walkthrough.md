@@ -358,7 +358,7 @@ Setup: Python 3.12 venv (the repo's `.python-version`), then `pip install duckdb
 | Cost per case | `python analytics/simulator_cost.py --llm-cost-json eval_cost.json --in-place` (or `--out FILE`). Other flags: `--curve` (default `static/data/sim_curve.json`), `--llm-cost-usd X`, `--rule-path-llm-cost` (default 0), `--note` | `sim_curve.json`, `eval_cost.json` |
 | Fairness / Razón de derivación | `python analytics/fairness.py --routing-split <ML routing split>.json --ship` (`--out` to write elsewhere). It refuses to ship unless its reproduction gates pass and the routing split's totals match its own reproduction. `--no-shares --ship` writes a reduced file with no band shares. | pipeline DuckDB, ML artifacts, splits manifest |
 | Human cost per resolution ($1.66 / $3.32 / $5.53) | `cd analytics && python cost_projection.py` → `out/cost_proj_per_resolution.csv` | `BANK_DUCKDB_PATH` |
-| Demand and case mix (background charts) | `python demand_metrics.py`, `python dispute_case_mix.py` | DuckDB (+ ML artifacts) |
+| Demand and case mix (background charts) | `python demand_metrics.py`, `python chart_05_dispute_mix.py` | DuckDB; chart 05 reads `static/data/sim_curve.json` |
 
 ### 5.4 Cost per case
 
