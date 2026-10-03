@@ -234,6 +234,11 @@ pre .flag-chip {
   margin: 0.15rem 0 0.35rem;
   color: #7a5200;
 }
+#fairness .fair-test-note {
+  margin: 0 0 0.35rem;
+  color: #5c544a;
+  font-size: 0.82rem;
+}
 .fair-gap-chip {
   display: inline-block;
   margin-left: 0.35rem;

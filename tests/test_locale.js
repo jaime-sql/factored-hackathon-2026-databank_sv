@@ -1265,7 +1265,9 @@ async function testFairnessPanel() {
   assert.equal(Array.isArray(real.by_customer_country), false);
   assert.equal(real.shares_included, false);
   assert.ok(real.by_customer_country.Mexico);
-  assert.equal(real.by_customer_country.Mexico.cause, undefined);
+  const realMexico = real.by_customer_country.Mexico;
+  assert.ok(realMexico.cause && realMexico.cause.es && realMexico.cause.pt);
+  assert.ok(realMexico.test_note && realMexico.test_note.es && realMexico.test_note.pt);
   const shell = metricsShell();
   run("static/js/metrics.js", shell.document, metricsFetch(real));
   await flush();
@@ -1276,13 +1278,14 @@ async function testFairnessPanel() {
   assert.equal(fairness.textContent.includes(catalog.es.fair_low), false, fairness.textContent);
   assert.equal(fairness.textContent.includes(catalog.es.fair_review), false, fairness.textContent);
   assert.equal(fairness.textContent.includes(catalog.es.fair_high), false, fairness.textContent);
-  assert.equal(fairness.querySelector(".fair-gap-chip"), null);
-  assert.equal(fairness.querySelector("p.fair-cause"), null);
+  assert.equal(fairness.querySelector(".fair-gap-chip").textContent, catalog.es.fair_gap);
+  assert.equal(fairness.querySelector("p.fair-cause").textContent, realMexico.cause.es.trim());
+  assert.equal(fairness.querySelector("p.fair-test-note").textContent, realMexico.test_note.es.trim());
   assert.equal(fairness.querySelector(".fair-sample"), null);
   for (const country of ["Mexico", "Colombia", "Argentina"]) {
     const row = fairness.querySelector(`tr[data-country="${country}"]`);
     assert.ok(row, country);
-    assert.equal(row.className.includes("fair-gap"), false, country);
+    assert.equal(row.className.includes("fair-gap"), country === "Mexico", country);
     const missed = real.by_customer_country[country].missed_fraud;
     assert.ok(row.textContent.includes(`${missed.k}/${missed.n}`), row.textContent);
     assert.ok(row.textContent.includes("%"), row.textContent);
@@ -1291,7 +1294,9 @@ async function testFairnessPanel() {
   assert.ok(fairness.textContent.includes("7.2%"), fairness.textContent);
   assert.ok(fairness.textContent.includes("4.8%–10.7%"), fairness.textContent);
   assert.ok(fairness.textContent.includes("96.3%"), fairness.textContent);
-  assertNoRawEnums(fairness.textContent, "fairness file es");
+  // The cause row is Analytics-authored text from fairness.json; checked separately.
+  const causeRow = () => fairness.querySelector("tr.fair-cause-row").textContent;
+  assertNoRawEnums(fairness.textContent.replace(causeRow(), ""), "fairness file es");
 
   shell.document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
@@ -1302,8 +1307,10 @@ async function testFairnessPanel() {
   assert.ok(fairness.textContent.includes("4,8%–10,7%"), fairness.textContent);
   assert.ok(fairness.textContent.includes("96,3%"), fairness.textContent);
   assert.equal(fairness.textContent.includes("7.2%"), false, fairness.textContent);
-  assert.equal(fairness.querySelector(".fair-gap-chip"), null);
-  assertNoRawEnums(fairness.textContent, "fairness file pt");
+  assert.equal(fairness.querySelector(".fair-gap-chip").textContent, catalog.pt.fair_gap);
+  assert.equal(fairness.querySelector("p.fair-cause").textContent, realMexico.cause.pt.trim());
+  assert.equal(fairness.querySelector("p.fair-test-note").textContent, realMexico.test_note.pt.trim());
+  assertNoRawEnums(fairness.textContent.replace(causeRow(), ""), "fairness file pt");
 
   shell.document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
@@ -1316,6 +1323,7 @@ async function testFairnessPanel() {
     es: "El modelo deja más fraude en riesgo bajo en México.",
     pt: "O modelo deixa mais fraude em risco baixo no México.",
   };
+  delete fixture.by_customer_country.Mexico.test_note;
   fixture.by_customer_country.Argentina.small_sample = true;
   const caused = metricsShell();
   run("static/js/metrics.js", caused.document, metricsFetch(fixture));
@@ -1329,6 +1337,7 @@ async function testFairnessPanel() {
   const cause = next.querySelector("p.fair-cause");
   assert.ok(cause);
   assert.equal(cause.textContent, fixture.by_customer_country.Mexico.cause.es);
+  assert.equal(next.querySelector("p.fair-test-note"), null);
   assert.equal(mexico.title || "", "");
   const colombia = panel.querySelector('tr[data-country="Colombia"]');
   assert.equal(colombia.className.includes("fair-gap"), false);

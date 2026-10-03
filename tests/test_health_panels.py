@@ -58,7 +58,9 @@ def test_metrics_health_and_hidden_panels(client: TestClient) -> None:
     fairness = body["fairness"]
     assert fairness["shares_included"] is False
     assert "Mexico" in fairness["by_customer_country"]
-    assert "cause" not in fairness["by_customer_country"]["Mexico"]
+    mexico = fairness["by_customer_country"]["Mexico"]
+    assert mexico["cause"]["es"] and mexico["cause"]["pt"]
+    assert mexico["test_note"]["es"] and mexico["test_note"]["pt"]
 
 
 def test_panels_render_only_when_files_exist(tmp_path: Path) -> None:

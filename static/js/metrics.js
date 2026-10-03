@@ -389,6 +389,13 @@ function renderFairness(payload, text) {
     paragraph.className = "fair-cause";
     paragraph.textContent = cause;
     cell.appendChild(paragraph);
+    const testNote = countryLine(group, "test_note", lang);
+    if (testNote) {
+      const note = document.createElement("p");
+      note.className = "fair-test-note";
+      note.textContent = testNote;
+      cell.appendChild(note);
+    }
     extra.appendChild(cell);
     table.appendChild(extra);
   }
@@ -396,10 +403,14 @@ function renderFairness(payload, text) {
 }
 
 function countryCause(group, lang) {
+  return countryLine(group, "cause", lang);
+}
+
+function countryLine(group, key, lang) {
   if (!group || typeof group !== "object") return "";
-  const cause = group.cause;
-  if (!cause || typeof cause !== "object" || Array.isArray(cause)) return "";
-  const line = cause[lang];
+  const lines = group[key];
+  if (!lines || typeof lines !== "object" || Array.isArray(lines)) return "";
+  const line = lines[lang];
   return typeof line === "string" ? line.trim() : "";
 }
 
