@@ -385,7 +385,46 @@ function renderPacket(panel, view, trail) {
   appendDraft(panel, view);
 }
 
+const DRAFT_POLL_MS = 2000;
+const DRAFT_POLL_LIMIT = 20;
+
+function appendDraftPending(panel) {
+  if (typeof document === "undefined" || !panel.appendChild) return;
+  const note = document.createElement("p");
+  note.className = "draft-pending meta";
+  note.textContent = ui("draft_pending", "Borrador en preparación…");
+  panel.appendChild(note);
+  const caseId = panel.dataset.caseId || "";
+  const polls = Number(panel.dataset.draftPolls || "0");
+  if (!caseId || polls >= DRAFT_POLL_LIMIT || typeof setTimeout !== "function") return;
+  panel.dataset.draftPolls = String(polls + 1);
+  setTimeout(() => refreshDraft(panel, caseId), DRAFT_POLL_MS);
+}
+
+async function refreshDraft(panel, caseId) {
+  if (panel.hidden || panel.dataset.caseId !== caseId) return;
+  const response = await fetch(
+    `/api/handoff/${encodeURIComponent(caseId)}?language=${consoleState.language}`,
+    { headers: { authorization: `Bearer ${agentToken()}` } },
+  );
+  if (!response.ok || panel.hidden || panel.dataset.caseId !== caseId) return;
+  const body = await response.json();
+  const view = body.view || {};
+  const pending = panel.querySelector ? panel.querySelector(".draft-pending") : null;
+  if (view.reply_draft_status === "pending" && !view.reply_draft) {
+    if (pending && pending.remove) pending.remove();
+    appendDraftPending(panel);
+    return;
+  }
+  if (pending && pending.remove) pending.remove();
+  appendDraft(panel, view);
+}
+
 function appendDraft(panel, view) {
+  if (!view.reply_draft && view.reply_draft_status === "pending" && !view.reply_sent) {
+    appendDraftPending(panel);
+    return;
+  }
   if (!view.reply_draft || typeof document === "undefined" || !panel.appendChild) return;
   const form = document.createElement("form");
   form.className = "draft";
@@ -612,6 +651,7 @@ async function togglePacket(panel, caseId, card) {
   );
   if (trailResponse.ok) trail = await trailResponse.json();
   panel.dataset.caseId = caseId;
+  panel.dataset.draftPolls = "0";
   renderPacket(panel, body.view || {}, trail);
   panel.dataset.loaded = "1";
   enableResolve(card || panel.parentElement);
@@ -676,6 +716,9 @@ function applyConsoleLanguage() {
   }
   for (const resolve of document.querySelectorAll('[data-action="resolve"]')) {
     resolve.textContent = pack.resolve;
+  }
+  for (const pending of document.querySelectorAll(".draft-pending")) {
+    pending.textContent = pack.draft_pending;
   }
   for (const send of document.querySelectorAll(".draft button")) {
     send.textContent = pack.send_reply;

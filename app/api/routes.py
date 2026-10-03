@@ -325,6 +325,7 @@ def transactions(request: Request, language: str = "es") -> dict[str, Any]:
 def open_case(
     body: CaseIn,
     request: Request,
+    background: BackgroundTasks,
     eval_runner_token: str | None = Header(default=None, alias="EVAL_RUNNER_TOKEN"),
 ) -> JSONResponse:
     settings = _settings(request)
@@ -350,16 +351,19 @@ def open_case(
     header_match = accepts_qa_test_token(
         _settings(request).qa_test_token, request.headers.get("x-test-token", "")
     )
-    result = request.app.state.engine.open_case(
-        customer_key,
-        body.transaction_key,
-        body.message,
-        body.language,
-        eval_run_id,
-        case_source,
-        is_test=False if is_eval else _traffic_is_test(request),
-        demo_attack=body.demo_attack,
-    )
+    engine = request.app.state.engine
+    with engine.deferred_drafts() as pending:
+        result = engine.open_case(
+            customer_key,
+            body.transaction_key,
+            body.message,
+            body.language,
+            eval_run_id,
+            case_source,
+            is_test=False if is_eval else _traffic_is_test(request),
+            demo_attack=body.demo_attack,
+        )
+    _schedule_drafts(background, engine, pending)
     response = JSONResponse(result.as_dict())
     if header_match and not is_eval:
         _arm_test_cookie(response, request)
@@ -367,9 +371,24 @@ def open_case(
 
 
 @router.post("/cases/{case_id}/actions")
-def act(case_id: str, body: ActionIn, request: Request) -> dict[str, Any]:
+def act(
+    case_id: str, body: ActionIn, request: Request, background: BackgroundTasks
+) -> dict[str, Any]:
     customer_key = _customer(request)
-    return request.app.state.engine.act(customer_key, case_id, body.action).as_dict()
+    engine = request.app.state.engine
+    with engine.deferred_drafts() as pending:
+        result = engine.act(customer_key, case_id, body.action)
+    _schedule_drafts(background, engine, pending)
+    return result.as_dict()
+
+
+def _schedule_drafts(background: BackgroundTasks, engine: Any, case_ids: list[str]) -> None:
+    """Write reply drafts after the customer response is ready.
+
+    A draft that still fails here is written on the first console open.
+    """
+    for case_id in case_ids:
+        background.add_task(engine.ensure_reply_draft, case_id)
 
 
 @router.get("/cases/{case_id}")
@@ -481,6 +500,10 @@ def handoff_case(
     if evidence:
         view["band_evidence"] = evidence
     _attach_reply(request, case_id, view)
+    if view.get("reply_draft_status") == "pending":
+        engine = request.app.state.engine
+        if not engine.draft_in_progress(case_id):
+            background.add_task(engine.ensure_reply_draft, case_id)
     _record_console(background, request, case_id, "open")
     return {
         "handoff": row,
@@ -505,6 +528,7 @@ def _attach_reply(request: Request, case_id: str, view: dict[str, Any]) -> None:
     sent = str(case.get("reply_sent") or "") if case else ""
     view["reply_draft"] = draft
     view["reply_sent"] = sent
+    view["reply_draft_status"] = "ready" if (draft or sent) else "pending"
     if not draft:
         view["reply_grounded"] = False
         view["reply_unsupported"] = []

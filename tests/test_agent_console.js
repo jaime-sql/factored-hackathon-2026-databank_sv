@@ -743,7 +743,66 @@ async function checkLoadQueue() {
   assert.equal(titleTexts.includes(full), false);
 }
 
+async function checkDraftPendingThenReady() {
+  const panel = fakeElement();
+  panel.dataset.caseId = "case-slow";
+  const timers = [];
+  context.setTimeout = (fn, ms) => {
+    timers.push({ fn, ms });
+    return timers.length;
+  };
+  context.renderPacket(panel, {
+    band: "review",
+    score_line: "Puntaje: 1.02× umbral · encima → revisión",
+    amount: "10 MXN",
+    merchant: "U•••",
+    recommended_next_step: "Revisar",
+    reply_draft: "",
+    reply_sent: "",
+    reply_draft_status: "pending",
+  });
+  const first = [];
+  walkTags(panel, first);
+  const placeholder = first.find((node) => String(node.className).includes("draft-pending"));
+  assert.ok(placeholder, "pending placeholder shown");
+  assert.equal(placeholder.textContent, "Borrador en preparación…");
+  assert.equal(first.some((node) => node.className === "draft"), false);
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].ms, 2000);
+  let polls = 0;
+  context.fetch = async (url) => {
+    polls += 1;
+    assert.ok(String(url).includes("/api/handoff/case-slow"), String(url));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        view: {
+          reply_draft: "Hola. Harbor Desk vio el cargo.",
+          reply_sent: "",
+          reply_draft_status: "ready",
+          reply_grounded: true,
+          reply_unsupported: [],
+        },
+      }),
+    };
+  };
+  await timers[0].fn();
+  assert.equal(polls, 1);
+  const after = [];
+  walkTags(panel, after);
+  const ready = after.find((node) => node.className === "draft");
+  assert.ok(ready, "draft appears after the poll");
+  assert.equal(ready.children.find((node) => node.tagName === "TEXTAREA").value, "Hola. Harbor Desk vio el cargo.");
+  assert.equal(timers.length, 1, "no more polls once the draft is ready");
+
+  const i18nText = fs.readFileSync("app/i18n.py", "utf8");
+  assert.match(i18nText, /"draft_pending": "Rascunho em preparação…"/);
+  assert.match(i18nText, /"draft_pending": "Borrador en preparación…"/);
+}
+
 checkDraftFactsAndSend()
+  .then(() => checkDraftPendingThenReady())
   .then(() => checkLoadQueue())
   .then(() => console.log("agent console js ok"))
   .catch((error) => {

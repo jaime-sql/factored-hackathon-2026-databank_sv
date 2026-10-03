@@ -11,6 +11,9 @@ Routing order, from the vendored thresholds:
 from __future__ import annotations
 
 import logging
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -168,6 +171,51 @@ class Engine:
         self.thresholds = thresholds
         self.settings = settings
         self.triage = triage or LightGBMTriage()
+        self._draft_local = threading.local()
+        self._draft_lock = threading.Lock()
+        self._drafting: set[str] = set()
+
+    @contextmanager
+    def deferred_drafts(self) -> Iterator[list[str]]:
+        """Collect reply drafts instead of writing them inside this request.
+
+        The caller runs ``ensure_reply_draft`` for each case id after the
+        response is ready, so the customer never waits on the draft model.
+        Outside this block drafts are written inline (CLI, evals, tests).
+        """
+        pending: list[str] = []
+        previous = getattr(self._draft_local, "pending", None)
+        self._draft_local.pending = pending
+        try:
+            yield pending
+        finally:
+            self._draft_local.pending = previous
+
+    def draft_in_progress(self, case_id: str) -> bool:
+        with self._draft_lock:
+            return case_id in self._drafting
+
+    def ensure_reply_draft(self, case_id: str) -> bool:
+        """Write the reply draft once. Returns True when this call wrote it."""
+        with self._draft_lock:
+            if case_id in self._drafting:
+                return False
+            self._drafting.add(case_id)
+        try:
+            case = self.ops.get_case(case_id)
+            if case is None or case.get("reply_draft") or case.get("reply_sent"):
+                return False
+            row = self.ops.get_handoff(case_id)
+            if row is None:
+                return False
+            packet = HandoffPacket.model_validate(row["packet"])
+            return self._record_reply_draft(case_id, packet)
+        except Exception as exc:
+            logger.warning("reply draft was not stored (%s)", type(exc).__name__)
+            return False
+        finally:
+            with self._draft_lock:
+                self._drafting.discard(case_id)
 
     def open_case(
         self,
@@ -842,20 +890,27 @@ class Engine:
             {"packet_case_id": case_id},
             "verified" if ok else "failed",
         )
-        self._record_reply_draft(case_id, packet)
+        pending = getattr(self._draft_local, "pending", None)
+        if pending is not None:
+            pending.append(case_id)
+            return
+        self.ensure_reply_draft(case_id)
 
-    def _record_reply_draft(self, case_id: str, packet: HandoffPacket) -> None:
+    def _record_reply_draft(self, case_id: str, packet: HandoffPacket) -> bool:
         """Append a reply_draft audit row without replacing the routing tip."""
         try:
             from app.reply.draft import compose_draft
 
             case = self.ops.get_case(case_id)
             if case is None:
-                return
+                return False
             customer = self.bank.get_customer(packet.customer_key)
             if customer is None:
-                return
+                return False
             draft = compose_draft(packet, customer.customer_country, self.settings)
+            latest = self.ops.get_case(case_id)
+            if latest is not None and (latest.get("reply_draft") or latest.get("reply_sent")):
+                return False
             now = datetime.now(UTC)
             self.ops.update_case(case_id, {"reply_draft": draft.text, "updated_at": now})
             audit_id = new_case_id()
@@ -907,8 +962,10 @@ class Engine:
                         "demo_attack": bool(case.get("demo_attack")),
                     }
                 )
+            return True
         except Exception as exc:
             logger.warning("reply draft was not stored (%s)", type(exc).__name__)
+            return False
 
     def record_console_action(self, case_id: str, action: str, source: str | None) -> None:
         """Append a console tip. It does not supersede the routing decision."""
