@@ -1,0 +1,18 @@
+# Pinned runtime deps for pipeline/*.py (Python 3.12). Direct imports: duckdb, pandas (+pyarrow for DuckDB<->pandas),
+# requests (databricks_load.py), psycopg[binary] (trust_check.py, load_supabase.py; not used by run_all.sh). Rest are transitive pins.
+# pandas 3.x matters: its microsecond timestamps keep fixtures/synthetic_duplicates.parquet byte-identical to the loaded data.
+# Regenerate: uv pip compile --python 3.12 from: duckdb==1.5.6 pandas==3.0.6 pyarrow requests psycopg[binary]==3.3.6
+certifi==2026.7.22
+charset-normalizer==3.5.2
+duckdb==1.5.6
+idna==3.20
+numpy==2.5.3
+pandas==3.0.6
+psycopg[binary]==3.3.6
+psycopg-binary==3.3.6
+pyarrow==25.0.1
+python-dateutil==2.9.0.post0
+requests==2.34.2
+six==1.17.0
+typing-extensions==4.16.0
+urllib3==2.8.0
