@@ -409,6 +409,7 @@ const RAW_ENUMS = [
 ];
 
 function assertNoRawEnums(text, label) {
+  for (const phrase of APPROVED_ENGLISH) text = String(text).split(phrase).join("");
   for (const token of RAW_ENUMS) {
     assert.equal(text.includes(token), false, `${label} still shows ${token}`);
   }
@@ -425,8 +426,13 @@ function renderedText(document) {
   return [blob(document), ...why, ...trail].join("\n");
 }
 
-// Approved demo chip copy keeps the band name the judges see in the console.
-const APPROVED_ENGLISH = ["Bloqueo · HIGH", "Bloqueio · HIGH"];
+// Approved copy that keeps the band and status names the judges see elsewhere.
+const APPROVED_ENGLISH = [
+  "Bloqueo · HIGH",
+  "Bloqueio · HIGH",
+  "(incluye Pending/Reversed)",
+  "(inclui Pending/Reversed)",
+];
 
 function assertNoEnglish(text, label, extra = []) {
   for (const phrase of APPROVED_ENGLISH) text = String(text).split(phrase).join("");
@@ -1119,9 +1125,12 @@ async function testSimulatorSlider() {
   const fairness = document.createElement("section");
   fairness.id = "fairness";
   fairness.hidden = true;
+  const trust = document.createElement("section");
+  trust.id = "trust";
+  trust.hidden = true;
   const raw = document.createElement("pre");
   raw.id = "raw";
-  document.body.append(toggle, evalLabel, tiles, simulator, fairness, raw);
+  document.body.append(toggle, evalLabel, tiles, simulator, fairness, trust, raw);
   const curve = {
     show_cost: false,
     split: "validation",
@@ -1156,6 +1165,8 @@ async function testSimulatorSlider() {
       },
     ],
   };
+  curve.n_charges = 10000;
+  curve.fraud_in_rule = 6;
   run("static/js/metrics.js", document, async (url) => {
     const href = String(url);
     if (href.includes("/api/i18n")) throw new Error("pages must not fetch /api/i18n");
@@ -1176,6 +1187,10 @@ async function testSimulatorSlider() {
             AR: { n: 5, low_share: 1, review_share: 0, high_share: 0, missed_fraud: { k: 0, n: 0 } },
           },
         },
+        trust: [
+          { label_es: "Tablas", label_pt: "Tabelas", value: "6/6", ok: true, checked_at: "2026-10-03T16:30:00Z" },
+          { label_es: "RLS", label_pt: "RLS", value: "17/17", ok: true, checked_at: "2026-10-03T16:33:35Z" },
+        ],
         k11_fairness_handoff: [
           { dimension: "country", groups: [{ group: "MX", n: 40 }, { group: "AR", n: 4 }] },
         ],
@@ -1184,6 +1199,10 @@ async function testSimulatorSlider() {
     return jsonResponse(404, {});
   });
   await flush();
+  const trustNote = trust.querySelector("p.trust-note").textContent;
+  assert.equal(trustNote, catalog.es.trust_note.replace("{when}", "3 oct, 10:33 CST"));
+  assert.ok(trustNote.startsWith("Verificado en la última ejecución del pipeline (3 oct, 10:33 CST): confirma que cada tabla"));
+  assert.equal(/en vivo|ao vivo/.test(trustNote + catalog.pt.trust_note), false);
   assert.equal(simulator.hidden, false);
   const slider = simulator.querySelector('input[type="range"]');
   assert.ok(slider);
@@ -1192,7 +1211,7 @@ async function testSimulatorSlider() {
   assert.ok(readout.includes("0.5"), readout);
   assert.ok(readout.includes("40"), readout);
   assert.ok(readout.includes("0.01–0.4"), readout);
-  assert.ok(readout.includes("100"), readout);
+  assert.ok(readout.includes(`${catalog.es.sim_wrong}: 7.00`), readout);
   assert.equal(readout.includes("Costo por caso"), false, readout);
   const section = simulator.textContent;
   assert.ok(section.includes(catalog.es.sim_validation), section);

@@ -291,3 +291,4 @@ header, main { min-width: 0; }
 .raw-wrap { margin-top: 1rem; font-family: system-ui, "Segoe UI", sans-serif; }
 .raw-wrap summary { cursor: pointer; text-decoration: underline; }
 .fair-escalation-note { font-size: 0.82rem; color: #5c544a; margin: 0.4rem 0 0; }
+.trust-note { font-size: 0.82rem; color: #5c544a; margin: 0.4rem 0 0; }

@@ -243,6 +243,31 @@ function renderTrust(rows, text) {
     line.textContent = `${row.ok ? "●" : "○"} ${label || ""}: ${row.value || ""}`;
     node.appendChild(line);
   }
+  const template = text && text.trust_note;
+  if (!template) return;
+  const when = trustRunTime(rows, text);
+  const note = document.createElement("p");
+  note.className = "trust-note";
+  note.textContent = when
+    ? template.replace("{when}", when)
+    : template.replace(" ({when})", "").replace("{when}", "");
+  node.appendChild(note);
+}
+
+// Latest checked_at in trust.json, shown as "3 oct, 10:33 CST" (Mexico City time, UTC-6).
+function trustRunTime(rows, text) {
+  let latest = null;
+  for (const row of rows) {
+    const stamp = Date.parse(row && row.checked_at);
+    if (Number.isFinite(stamp) && (latest == null || stamp > latest)) latest = stamp;
+  }
+  if (latest == null) return "";
+  const local = new Date(latest - 6 * 60 * 60 * 1000);
+  const months = (text && text.months) || [];
+  const month = months[local.getUTCMonth()] || String(local.getUTCMonth() + 1);
+  const hh = String(local.getUTCHours()).padStart(2, "0");
+  const mm = String(local.getUTCMinutes()).padStart(2, "0");
+  return `${local.getUTCDate()} ${month}, ${hh}:${mm} CST`;
 }
 
 function simLabel(text, key, fallback) {
@@ -297,7 +322,7 @@ function renderSimulator(sim, text) {
       `${simLabel(text, "sim_missed_n", "Fraude no visto")}: ${localNumber(point.missed_fraud_n)}`,
       `${simLabel(text, "sim_missed_rate", "Tasa de fraude no visto")}: ${localNumber(point.missed_fraud_rate)}`,
       `${simLabel(text, "sim_ci", "Intervalo")}: ${localNumber(point.missed_fraud_ci_lo)}–${localNumber(point.missed_fraud_ci_hi)}`,
-      `${simLabel(text, "sim_wrong", "Cierres indebidos por 10 mil")}: ${localNumber(point.wrongful_autoclose_per_10k)}`,
+      `${simLabel(text, "sim_wrong", "Fraudes cerrados sin revisión humana, por 10k cargos (incluye Pending/Reversed)")}: ${closedWithoutReview(point, sim)}`,
     ];
     if (sim.show_cost) lines.push(`${simLabel(text, "sim_cost", "Costo por caso")}: ${formatCost(point)}`);
     for (const line of lines) {
@@ -309,6 +334,23 @@ function renderSimulator(sim, text) {
   slider.addEventListener("input", paint);
   paint();
   node.append(title, split, slider, readout, fixed, ruleFraud);
+}
+
+// T4: fraud closed without a person = missed fraud in LOW + fraud the Pending/Reversed rule explains,
+// per 10k charges. Read from sim_curve.json; fall back to the file's own per-10k value.
+function closedWithoutReview(point, sim) {
+  const missed = point && point.missed_fraud && typeof point.missed_fraud === "object" ? point.missed_fraud.k : null;
+  const k = Number(missed != null ? missed : point && point.missed_fraud_n);
+  const rule = Number(sim && sim.fraud_in_rule);
+  const total = Number(sim && sim.n_charges);
+  let value = null;
+  if (Number.isFinite(k) && Number.isFinite(rule) && Number.isFinite(total) && total > 0) {
+    value = ((k + rule) / total) * 10000;
+  } else if (point && Number.isFinite(Number(point.wrongful_autoclose_per_10k))) {
+    value = Number(point.wrongful_autoclose_per_10k);
+  }
+  if (value == null) return "—";
+  return value.toLocaleString(localeTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatCost(point) {

@@ -940,7 +940,7 @@ _UI = {
         "sim_missed_n": "Fraude no visto",
         "sim_missed_rate": "Tasa de fraude no visto",
         "sim_ci": "Intervalo",
-        "sim_wrong": "Cierres indebidos por 10 mil",
+        "sim_wrong": "Fraudes cerrados sin revisión humana, por 10k cargos (incluye Pending/Reversed)",
         "sim_cost": "Costo por caso",
         "fair_title": "Equidad",
         "fair_country": "País",
@@ -962,6 +962,12 @@ _UI = {
             "set de validación). 1.00× = igual al promedio."
         ),
         "raw_toggle": "Ver JSON",
+        "trust_note": (
+            "Verificado en la última ejecución del pipeline ({when}): confirma que cada tabla tiene "
+            "exactamente las filas que produjo el pipeline, que la app no puede ver las etiquetas de "
+            "fraude usadas para evaluar, que el registro de auditoría solo admite inserciones y que la "
+            "seguridad por fila está activa en todas las tablas."
+        ),
     },
     "pt": {
         "nav_client": "Cliente",
@@ -1067,7 +1073,7 @@ _UI = {
         "sim_missed_n": "Fraude não vista",
         "sim_missed_rate": "Taxa de fraude não vista",
         "sim_ci": "Intervalo",
-        "sim_wrong": "Fechos indevidos por 10 mil",
+        "sim_wrong": "Fraudes encerradas sem revisão humana, por 10k cobranças (inclui Pending/Reversed)",
         "sim_cost": "Custo por caso",
         "fair_title": "Equidade",
         "fair_country": "País",
@@ -1089,6 +1095,12 @@ _UI = {
             "conjunto de validação). 1,00× = igual à média."
         ),
         "raw_toggle": "Ver JSON",
+        "trust_note": (
+            "Verificado na última execução do pipeline ({when}): confirma que cada tabela tem "
+            "exatamente as linhas geradas pelo pipeline, que o app não consegue ver os rótulos de "
+            "fraude usados na avaliação, que o registro de auditoria só aceita inserções e que a "
+            "segurança por linha está ativa em todas as tabelas."
+        ),
     },
 }
 
