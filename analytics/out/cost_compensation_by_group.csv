@@ -1,0 +1,16 @@
+cat_group,currency,complaints,n_comp,n_comp_gt0,sum_comp,median_comp
+Fees (Cobro indebido),(null),9086,658,658,167346.99,249.85
+Fees (Cobro indebido),ARS,1110,75,75,18679.69,219.02
+Fees (Cobro indebido),COP,1079,68,68,16996.15,232.91
+Fees (Cobro indebido),MXN,1116,77,77,21898.92,314.79
+Fees (Cobro indebido),USD,1162,67,67,17375.95,237.07
+Other categories,(null),27140,1837,1837,464710.28,252.54
+Other categories,ARS,3178,214,214,53396.77,247.61
+Other categories,COP,3256,212,212,52173.97,243.6
+Other categories,MXN,3239,218,218,53234.08,248.28
+Other categories,USD,3149,220,220,55137.04,264.15
+Transactions (Cargo no reconocido),(null),9093,675,675,175424.34,261.7
+Transactions (Cargo no reconocido),ARS,1114,71,71,15661.1,206.33
+Transactions (Cargo no reconocido),COP,1121,85,85,21722.19,261.01
+Transactions (Cargo no reconocido),MXN,1132,86,86,20834.92,236.61
+Transactions (Cargo no reconocido),USD,1120,78,78,20217.31,284.34

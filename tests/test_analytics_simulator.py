@@ -38,9 +38,7 @@ def test_fixture_matches_confirmed_schema() -> None:
     t_lows = [p["t_low"] for p in curve["points"]]
     assert t_lows == sorted(t_lows)
     for p in curve["points"]:
-        assert (
-            curve["n_high"] + curve["n_rule"] + p["n_low"] + p["n_review"] == curve["n_charges"]
-        )
+        assert curve["n_high"] + curve["n_rule"] + p["n_low"] + p["n_review"] == curve["n_charges"]
         assert p["automation_rate"] == pytest.approx(
             (curve["n_rule"] + p["n_low"]) / curve["n_charges"]
         )

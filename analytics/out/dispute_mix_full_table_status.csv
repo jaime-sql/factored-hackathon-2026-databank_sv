@@ -1,0 +1,5 @@
+transaction_status,n,is_fraud_train_val,high_gt30,high_gt30_fraud_train_val,high_gt30_nonfraud_train_val,pct_of_all
+Approved,4070681,3450.0,2196,1884,0,91.99262464610233
+Declined,221234,177.0,113,91,0,4.999629379201123
+Pending,88343,73.0,46,44,0,1.9964483680029506
+Reversed,44750,33.0,18,16,0,1.0112976066935924

@@ -1,0 +1,4 @@
+cat_group,complaints,final_status,final_pct,resolved,closed,rejected,open,in_process,escalated,n_with_open_and_close_ts,res_days_p50,res_days_p75,res_days_p90,res_days_mean,col_resolution_days_p50,col_resolution_days_p75,col_resolution_days_p90,sla_breached,sla_breach_pct_all,sla_breached_final,sla_breach_pct_final
+Fees (Cobro indebido),13553,3357,24.77,2738,486,133,4028,5468,700,3101,16.0,23.0,27.0,15.58,16.0,23.0,27.0,2680,19.77,648,19.3
+Other categories,39962,10013,25.06,7994,1572,447,12057,15948,1944,9186,16.0,23.0,28.0,15.67,16.0,23.0,28.0,8076,20.21,2056,20.53
+Transactions (Cargo no reconocido),13580,3456,25.45,2780,551,125,4040,5407,677,3200,15.0,23.0,27.0,15.48,15.0,23.0,27.0,2739,20.17,653,18.89

@@ -330,9 +330,10 @@ def open_case(
     settings = _settings(request)
     customer_key = _customer(request)
     presented_eval = (eval_runner_token or "").strip()
-    judge_request = agent_role(settings, _bearer(request)) == "judge" or agent_role(
-        settings, presented_eval
-    ) == "judge"
+    judge_request = (
+        agent_role(settings, _bearer(request)) == "judge"
+        or agent_role(settings, presented_eval) == "judge"
+    )
     if judge_request and body.model_fields_set & _EVAL_BODY_FIELDS:
         raise APIError(
             403,

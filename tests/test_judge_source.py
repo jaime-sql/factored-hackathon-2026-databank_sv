@@ -105,9 +105,7 @@ def test_judge_console_actions_are_tagged_and_stay_in_audit_live(tmp_path: Path)
         assert ("reply_draft", "judge") not in live_pairs
 
         tips = [
-            row
-            for row in client.app.state.ops.current_audit_cases()
-            if row["case_id"] == case_id
+            row for row in client.app.state.ops.current_audit_cases() if row["case_id"] == case_id
         ]
         assert len(tips) == 1
         assert tips[0]["decision"] == "handoff"

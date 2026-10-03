@@ -1,0 +1,4 @@
+country,complaints,final_status,final_pct,resolved,closed,rejected,open,in_process,escalated,n_with_open_and_close_ts,res_days_p50,res_days_p75,res_days_p90,res_days_mean,col_resolution_days_p50,col_resolution_days_p75,col_resolution_days_p90,sla_breached,sla_breach_pct_all,sla_breached_final,sla_breach_pct_final
+México,6760,1721,25.46,1378,275,68,2024,2672,343,1580,15.5,23.0,27.0,15.5,16.0,23.0,27.0,1369,20.25,325,18.88
+Colombia,4119,1033,25.08,823,175,35,1248,1650,188,966,15.0,23.0,28.0,15.37,15.0,23.0,28.0,823,19.98,182,17.62
+Argentina,2701,702,25.99,579,101,22,768,1085,146,654,16.0,22.0,27.0,15.58,16.0,22.0,27.0,547,20.25,146,20.8

@@ -1,0 +1,2 @@
+complaints,final_status,final_pct,resolved,closed,rejected,open,in_process,escalated,n_with_open_and_close_ts,res_days_p50,res_days_p75,res_days_p90,res_days_mean,col_resolution_days_p50,col_resolution_days_p75,col_resolution_days_p90,sla_breached,sla_breach_pct_all,sla_breached_final,sla_breach_pct_final
+67095,16826,25.08,13512,2609,705,20125,26823,3321,15487,16.0,23.0,28.0,15.61,16.0,23.0,28.0,13495,20.11,3357,19.95

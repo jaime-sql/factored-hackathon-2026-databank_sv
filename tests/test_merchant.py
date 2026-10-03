@@ -77,14 +77,10 @@ def test_category_titles_drop_the_prefix() -> None:
 
 
 def test_reply_low_translates_the_category_and_the_charge() -> None:
-    spanish = reply_low(
-        "es", "Café", "Food", "Bogotá", "1 may 2026", "10.00 USD"
-    )
+    spanish = reply_low("es", "Café", "Food", "Bogotá", "1 may 2026", "10.00 USD")
     assert "(Comida)" in spanish
     assert "(Food)" not in spanish
-    portuguese = reply_low(
-        "pt", "Café", "Food", "São Paulo", "1 mai 2026", "10.00 BRL"
-    )
+    portuguese = reply_low("pt", "Café", "Food", "São Paulo", "1 mai 2026", "10.00 BRL")
     assert "(Alimentação)" in portuguese
     assert "Food" not in portuguese
     empty = reply_low("pt", "", "", "São Paulo", "1 mai 2026", "10.00 BRL")
