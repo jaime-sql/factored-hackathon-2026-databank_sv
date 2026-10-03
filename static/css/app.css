@@ -189,6 +189,19 @@ pre.why-trail { margin: 0.8rem 0 0; }
   border-radius: 999px;
 }
 .test-badge[hidden] { display: none; }
+.demo-row button { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; text-align: left; }
+.demo-chip {
+  display: inline-block;
+  font-family: "Segoe UI", sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.demo-chip[data-outcome="high"] { color: #8a1f11; background: #fbeae6; }
+.demo-chip[data-outcome="review"] { color: #7a5200; background: #fdf3dc; }
+.demo-chip[data-outcome="pending"] { color: #3f3a34; background: #efeae2; }
 .test-arm { margin: 0.6rem 0 0; }
 button.linkish {
   background: transparent;

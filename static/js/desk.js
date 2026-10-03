@@ -118,6 +118,7 @@ function applyLanguage() {
     button.textContent = copy.dispute;
   }
   renderPersonas();
+  renderDemos();
 }
 
 function renderPersonas() {
@@ -135,6 +136,79 @@ function renderPersonas() {
     button.textContent = `${label}${suffix}`;
     button.addEventListener("click", () => signIn(persona.id));
     box.appendChild(button);
+  }
+}
+
+// Real charges from the challenge data that land in each outcome on every run.
+const DEMOS = [
+  { id: "high", persona: "teo", transaction: "TXN_c9d2185cbd2ab37f95d7" },
+  { id: "review", persona: "teo", transaction: "TXN_eef1352d123d275d7602" },
+  { id: "pending", persona: "maria", transaction: "TXN_ddcd20809f49f3b0a60c" },
+];
+const DEMO_FALLBACK = {
+  es: {
+    demo_title: "Demos rápidas",
+    demo_high: "Teo · Tijuana · cargo de riesgo alto",
+    demo_review: "Teo · Tijuana · cargo dudoso",
+    demo_pending: "María · Ciudad de México · cargo pendiente",
+    demo_chip_high: "Bloqueo · HIGH",
+    demo_chip_review: "Revisión humana",
+    demo_chip_pending: "Pendiente",
+    dispute: "No reconozco este cargo",
+  },
+  pt: {
+    demo_title: "Demos rápidas",
+    demo_high: "Teo · Tijuana · cobrança de risco alto",
+    demo_review: "Teo · Tijuana · cobrança duvidosa",
+    demo_pending: "María · Cidade do México · cobrança pendente",
+    demo_chip_high: "Bloqueio · HIGH",
+    demo_chip_review: "Revisão humana",
+    demo_chip_pending: "Pendente",
+    dispute: "Não reconheço esta cobrança",
+  },
+};
+
+function demoText(key) {
+  const copy = text();
+  if (copy && copy[key]) return copy[key];
+  return DEMO_FALLBACK[state.language === "pt" ? "pt" : "es"][key] || "";
+}
+
+function renderDemos() {
+  const box = document.getElementById("demos");
+  if (!box) return;
+  const title = document.getElementById("demos-title");
+  if (title) title.textContent = demoText("demo_title");
+  for (const old of Array.from(box.querySelectorAll ? box.querySelectorAll("button") : [])) old.remove();
+  for (const demo of DEMOS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("data-action", "demo");
+    button.setAttribute("data-demo", demo.id);
+    const label = document.createElement("span");
+    label.textContent = demoText(`demo_${demo.id}`);
+    const chip = document.createElement("span");
+    chip.className = "demo-chip";
+    chip.setAttribute("data-outcome", demo.id);
+    chip.textContent = demoText(`demo_chip_${demo.id}`);
+    button.append(label, chip);
+    button.addEventListener("click", () => runDemo(demo));
+    box.appendChild(button);
+  }
+}
+
+async function runDemo(demo) {
+  await signIn(demo.persona);
+  if (!state.token) return;
+  const shown = await postCase({
+    transaction_key: demo.transaction,
+    message: demoText("dispute"),
+    language: state.language,
+  });
+  const details = shown && shown.why ? await shown.why : null;
+  const target = details || (shown && shown.card);
+  if (target && typeof target.scrollIntoView === "function") {
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 }
 
@@ -278,9 +352,9 @@ async function postCase(body) {
     });
   } catch {
     showConnectError();
-    return;
+    return null;
   }
-  render(await response.json());
+  return render(await response.json());
 }
 
 async function openCase(transactionKey, message) {
@@ -407,6 +481,7 @@ function render(body) {
       }
     });
   }
+  return { card, why };
 }
 
 async function attachWhy(card, caseId, flags) {
