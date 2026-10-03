@@ -73,7 +73,24 @@ trap 'rm -rf "${src}"' EXIT
 git -C "${repo_root}" archive "${GIT_REF}" | tar -x -C "${src}"
 
 echo "Building ${GIT_REF} (${sha}) from git archive."
-run gcloud builds submit "${src}" --project "${GCP_PROJECT}" --tag "${image}"
+# --async plus polling: the deploy account cannot stream build logs, which makes a
+# blocking `builds submit` exit 1 even when the build succeeds.
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+  run gcloud builds submit "${src}" --project "${GCP_PROJECT}" --tag "${image}" --async
+else
+  build_id="$(gcloud builds submit "${src}" --project "${GCP_PROJECT}" --tag "${image}" \
+    --async --format='value(id)')"
+  status="QUEUED"
+  while [[ "${status}" == "QUEUED" || "${status}" == "WORKING" ]]; do
+    sleep 10
+    status="$(gcloud builds describe "${build_id}" --project "${GCP_PROJECT}" --format='value(status)')"
+  done
+  if [[ "${status}" != "SUCCESS" ]]; then
+    echo "Build ${build_id} ended with ${status}." >&2
+    exit 1
+  fi
+  echo "Build ${build_id}: SUCCESS"
+fi
 
 echo "Deploying ${sha} to ${SERVICE_NAME} as tag '${TAG}' with no traffic."
 run gcloud run deploy "${SERVICE_NAME}" \

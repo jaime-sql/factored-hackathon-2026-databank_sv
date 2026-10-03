@@ -54,6 +54,7 @@ def test_default_deploy_is_no_traffic_next_tag_on_the_live_service() -> None:
         assert f"{env}={secret}:latest" in deploy, env
     build = next(line for line in result.stdout.splitlines() if "builds submit" in line)
     assert "us-central1-docker.pkg.dev/databank-sv-123456/databank-sv/app:" in build
+    assert "--async" in build
 
 
 @needs_git
