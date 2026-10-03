@@ -1,0 +1,7 @@
+# Lint settings for the offline ML research scripts under ml/.
+# Inherits the repo config; these scripts run from ml/ with star imports from
+# scripts/common.py, set env vars before importing, and build long report strings.
+extend = "../pyproject.toml"
+
+[lint.per-file-ignores]
+"**/*.py" = ["E402", "E501", "E731", "F403", "F405", "UP031"]
