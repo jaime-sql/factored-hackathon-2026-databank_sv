@@ -58,7 +58,7 @@
 
 **Alternatives considered.** Making Databricks the only pipeline runtime, uploading unmasked layers, or having the app read directly from the challenge bucket.
 
-**Evidence.** Databricks counts match the local run: 4,425,008 transactions, 150,000 customers, and 400,000 products in each masked bronze and silver layer; gold contains 4,425,008 transactions, 150,000 customers, 400,000 products, and 4,291,915 fraud features. Names, document numbers, contact details, addresses, birth dates, and coordinates are dropped; IDs are replaced with salted keys. Credit score, income, occupation, marital status, and education are kept for fairness analysis. The full field treatment is documented in `docs/data-quality.md` §8.
+**Evidence.** Databricks counts match the local run: 4,425,008 transactions, 150,000 customers, and 400,000 products in each masked bronze and silver layer; gold contains 4,425,008 transactions, 150,000 customers, 4,291,915 fraud features, 4,291,915 fraud split rows, and 600 synthetic duplicates. Names, document numbers, contact details, addresses, birth dates, and coordinates are dropped; IDs are replaced with salted keys. Credit score, income, occupation, marital status, and education are kept for fairness analysis. The full field treatment is documented in `docs/data-quality.md` §8.
 
 ## 7. Keep the app stack narrow and auditable
 
