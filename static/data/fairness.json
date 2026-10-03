@@ -61,7 +61,18 @@
         "ci95_low": 0.04751674810296955,
         "ci95_high": 0.10743603979711333
       },
-      "small_sample": false
+      "small_sample": false,
+      "cause": {
+        "en": "Mexico's misses come from the model's LOW cut, not the rule. Mexico fraud has `fraud_score > 30` about as often as elsewhere (53% vs 51–58%), but Mexico charges score lower overall, so the single global t_low sends 18.6% of Mexico legit charges and 15.7% (21/134) of the Mexico fraud the model sees to LOW, vs 10.9–14.5% and 5.4–6.1% in Colombia and Argentina.",
+        "es": "Los fraudes perdidos en México vienen del corte LOW del modelo, no de la regla. El fraude mexicano tiene `fraud_score > 30` con una frecuencia parecida a la de los otros países (53% vs 51–58%), pero los cargos de México puntúan más bajo en general, así que el único t_low global manda a LOW el 18.6% de los cargos legítimos y el 15.7% (21/134) del fraude que ve el modelo en México, frente a 10.9–14.5% y 5.4–6.1% en Colombia y Argentina.",
+        "pt": "As fraudes perdidas no México vêm do corte LOW do modelo, não da regra. A fraude mexicana tem `fraud_score > 30` com frequência parecida à dos outros países (53% vs 51–58%), mas as transações do México recebem pontuações mais baixas em geral, então o único t_low global envia para LOW 18,6% das transações legítimas e 15,7% (21/134) da fraude que o modelo vê no México, contra 10,9–14,5% e 5,4–6,1% na Colômbia e na Argentina.",
+        "source": "docs/evaluation.md §4 (ML Engineer, validation only, Oct 3)"
+      },
+      "test_note": {
+        "en": "On the test set the gap narrows (Mexico 17/301 vs Argentina 8/116 and Colombia 4/157, Approved/Declined only) and is not flagged.",
+        "es": "En el set de prueba la brecha se reduce (México 17/301 vs Argentina 8/116 y Colombia 4/157, solo Aprobados/Rechazados) y no se marca.",
+        "pt": "No conjunto de teste a diferença diminui (México 17/301 vs Argentina 8/116 e Colômbia 4/157, apenas Aprovadas/Recusadas) e não é sinalizada."
+      }
     },
     "Colombia": {
       "n": 193041,
