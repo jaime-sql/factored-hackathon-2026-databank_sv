@@ -1166,6 +1166,8 @@ async function testSimulatorSlider() {
     ],
   };
   curve.n_charges = 10000;
+  curve.show_cost = true;
+  curve.points[1].cost_per_case = { low: 1.361034, mid: 2.722015, high: 4.533923 };
   curve.fraud_in_rule = 6;
   run("static/js/metrics.js", document, async (url) => {
     const href = String(url);
@@ -1203,6 +1205,7 @@ async function testSimulatorSlider() {
   assert.equal(trustNote, catalog.es.trust_note.replace("{when}", "3 oct, 10:33 CST"));
   assert.ok(trustNote.startsWith("Verificado en la última ejecución del pipeline (3 oct, 10:33 CST): confirma que cada tabla"));
   assert.equal(/en vivo|ao vivo/.test(trustNote + catalog.pt.trust_note), false);
+  assert.ok(catalog.pt.trust_note.replace("{when}", "3 out, 10:33 CST").startsWith("Verificado na última execução do pipeline (3 out, 10:33 CST): confirma que cada tabela"));
   assert.equal(simulator.hidden, false);
   const slider = simulator.querySelector('input[type="range"]');
   assert.ok(slider);
@@ -1212,7 +1215,7 @@ async function testSimulatorSlider() {
   assert.ok(readout.includes("40"), readout);
   assert.ok(readout.includes("0.01–0.4"), readout);
   assert.ok(readout.includes(`${catalog.es.sim_wrong}: 7.00`), readout);
-  assert.equal(readout.includes("Costo por caso"), false, readout);
+  assert.ok(readout.includes(`${catalog.es.sim_cost}: US$1.36 / US$2.72 / US$4.53`), readout);
   const section = simulator.textContent;
   assert.ok(section.includes(catalog.es.sim_validation), section);
   assert.equal(section.includes("validation"), false, section);

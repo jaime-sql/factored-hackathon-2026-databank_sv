@@ -254,7 +254,7 @@ function renderTrust(rows, text) {
   node.appendChild(note);
 }
 
-// Latest checked_at in trust.json, shown as "3 oct, 10:33 CST" (Mexico City time, UTC-6).
+// Latest checked_at in trust.json, shown as "3 oct, 10:33 CST" in America/Guatemala time.
 function trustRunTime(rows, text) {
   let latest = null;
   for (const row of rows) {
@@ -262,12 +262,36 @@ function trustRunTime(rows, text) {
     if (Number.isFinite(stamp) && (latest == null || stamp > latest)) latest = stamp;
   }
   if (latest == null) return "";
-  const local = new Date(latest - 6 * 60 * 60 * 1000);
+  let day;
+  let monthIndex;
+  let hh;
+  let mm;
+  try {
+    const parts = {};
+    const format = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Guatemala",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    for (const part of format.formatToParts(new Date(latest))) parts[part.type] = part.value;
+    day = Number(parts.day);
+    monthIndex = Number(parts.month) - 1;
+    hh = parts.hour;
+    mm = parts.minute;
+  } catch {
+    const local = new Date(latest - 6 * 60 * 60 * 1000);
+    day = local.getUTCDate();
+    monthIndex = local.getUTCMonth();
+    hh = String(local.getUTCHours()).padStart(2, "0");
+    mm = String(local.getUTCMinutes()).padStart(2, "0");
+  }
   const months = (text && text.months) || [];
-  const month = months[local.getUTCMonth()] || String(local.getUTCMonth() + 1);
-  const hh = String(local.getUTCHours()).padStart(2, "0");
-  const mm = String(local.getUTCMinutes()).padStart(2, "0");
-  return `${local.getUTCDate()} ${month}, ${hh}:${mm} CST`;
+  const month = months[monthIndex] || String(monthIndex + 1);
+  return `${day} ${month}, ${hh}:${mm} CST`;
 }
 
 function simLabel(text, key, fallback) {
@@ -358,9 +382,9 @@ function formatCost(point) {
   if (block && typeof block === "object") {
     return ["low", "mid", "high"]
       .map((key) => {
-        const row = block[key] || {};
-        const value = row.expected_cost_per_case_usd;
-        return value == null ? "—" : String(value);
+        const row = block[key];
+        const value = row && typeof row === "object" ? row.expected_cost_per_case_usd : row;
+        return value == null ? "—" : formatUsd(value);
       })
       .join(" / ");
   }
