@@ -26,6 +26,13 @@ function el(id) {
       this.children = [];
     },
     focus() {},
+    attributes: {},
+    setAttribute(name, value) {
+      this.attributes[name] = String(value);
+    },
+    getAttribute(name) {
+      return name in this.attributes ? this.attributes[name] : null;
+    },
   };
 }
 
@@ -106,8 +113,10 @@ setTimeout(async () => {
   assert.equal(nodes["test-badge"].hidden, true);
   assert.equal(nodes["test-mode-link"].textContent, "Modo de prueba");
 
+  assert.equal(nodes["test-mode-form"].hidden, true, "token field hidden until Modo de prueba");
   nodes["test-mode-link"].listeners.click[0]({ preventDefault() {} });
   assert.equal(nodes["test-mode-form"].hidden, false);
+  assert.equal(nodes["test-mode-link"].getAttribute("aria-expanded"), "true");
   nodes["test-token"].value = TOKEN;
   await nodes["test-mode-form"].listeners.submit[0]({ preventDefault() {} });
 
@@ -120,5 +129,18 @@ setTimeout(async () => {
   assert.equal(blob.includes(TOKEN), false);
   assert.equal(nodes["test-badge"].hidden, false);
   assert.equal(nodes["test-badge"].textContent, "MODO PRUEBA");
+  nodes["test-mode-link"].listeners.click[0]({ preventDefault() {} });
+  assert.equal(nodes["test-mode-form"].hidden, true, "second click hides the field again");
+  assert.equal(nodes["test-mode-link"].getAttribute("aria-expanded"), "false");
+
+  const html = fs.readFileSync("static/index.html", "utf8");
+  const form = html.slice(html.indexOf('<form id="test-mode-form"'), html.indexOf("</form>", html.indexOf('<form id="test-mode-form"')));
+  assert.ok(/<form id="test-mode-form"[^>]*\shidden[\s>]/.test(html), "form starts hidden");
+  assert.equal((html.match(/<label[^>]*for="test-token"/g) || []).length, 1, "one label for the token field");
+  assert.ok(/<label class="visually-hidden" id="test-token-label" for="test-token">/.test(form), form);
+  assert.ok(/<input id="test-token" type="password"/.test(form), form);
+  assert.ok(/aria-controls="test-mode-form"/.test(html));
+  const css = fs.readFileSync("static/css/app.css", "utf8");
+  assert.ok(/#composer input,\s*#test-token \{[^}]*border-radius: 999px/.test(css), "token field shares the composer input style");
   console.log("test mode js ok");
 }, 50);

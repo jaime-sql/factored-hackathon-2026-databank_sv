@@ -223,7 +223,9 @@ function bindTestArm() {
   if (link && form) {
     link.addEventListener("click", (event) => {
       event.preventDefault();
-      form.hidden = false;
+      form.hidden = !form.hidden;
+      link.setAttribute("aria-expanded", form.hidden ? "false" : "true");
+      if (form.hidden) return;
       const input = document.getElementById("test-token");
       if (input && input.focus) input.focus();
     });

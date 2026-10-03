@@ -115,7 +115,8 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
 details.why,
 details.why li { overflow-wrap: anywhere; }
 details.why { margin-top: 0.7rem; font-family: "Segoe UI", sans-serif; font-size: 0.92rem; }
-#composer input {
+#composer input,
+#test-token {
   flex: 1 1 12rem;
   min-width: 0;
   max-width: 100%;
@@ -197,8 +198,7 @@ button.linkish {
   font-size: 0.75rem;
   text-decoration: underline;
 }
-.test-arm-form { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; max-width: 24rem; align-items: center; }
-.test-arm-form label { flex: 1 0 100%; font-family: "Segoe UI", sans-serif; font-size: 0.75rem; }
+.test-arm-form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.4rem; max-width: 24rem; align-items: center; }
 .test-arm-form[hidden] { display: none; }
 #break-it { border-color: var(--warn); }
 .audit-row, .draft, .resolve-confirm, .resolve-result { margin-top: 0.8rem; }
