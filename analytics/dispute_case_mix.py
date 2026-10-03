@@ -17,18 +17,15 @@ Sources
 pending_reversed_high
 - /workspace/hack-ml/artifacts/thresholds.json   status_rule and current v2 bands
 - /workspace/hackathon-data/cache/bank.duckdb    (READ-ONLY; transaction_status counts)
-Run: .venv/bin/python dispute_case_mix.py   -> out/dispute_mix_*.csv, charts/05_dispute_case_mix.png
+Run: .venv/bin/python dispute_case_mix.py -> out/dispute_mix_*.csv
+Chart 05 is drawn separately by chart_05_dispute_mix.py.
 """
 
 import json
 import os
 
 import duckdb
-import matplotlib
 import pandas as pd
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT, CH = os.path.join(HERE, "out"), os.path.join(HERE, "charts")
@@ -267,131 +264,8 @@ ver["match"] = ver.reported == ver.from_source
 ver.to_csv(os.path.join(OUT, "dispute_mix_verification.csv"), index=False)
 
 
-def validation_missed_fraud():
-    """Validation missed-fraud k and n from the shipped curve.
-
-    ``static/data/sim_curve.json`` ``default_point_summary.missed_fraud`` is the
-    locked denominator (all validation fraud, including Pending/Reversed). If that
-    file cannot be read, use the locked 29/610.
-    """
-    path = os.path.join(os.path.dirname(HERE), "static", "data", "sim_curve.json")
-    k, n = 29, 610
-    try:
-        with open(path, encoding="utf-8") as handle:
-            missed = json.load(handle)["default_point_summary"]["missed_fraud"]
-        k, n = int(missed["k"]), int(missed["n"])
-    except (OSError, KeyError, TypeError, ValueError):
-        pass
-    if n <= 0:
-        return 29, 610
-    return k, n
-
-
-# ---------- chart ----------
-COLORS = {
-    "Rule-based answer": "#9AA5B1",
-    "HIGH (block + handoff)": "#D1495B",
-    "REVIEW (handoff)": "#EDAE49",
-    "LOW (AI resolves)": "#2E86AB",
-}
-op95 = "95% recall (v2 chosen)"
-m = mix[mix.operating_point == op95]
-rows = [
-    ("A  Base case\n(disputes mirror charge mix)", m[m.scenario.str.startswith("A")]),
-    ("B  Fraud-only bound\n(every dispute is fraud)", m[m.scenario.str.startswith("B")]),
-]
-fig, ax = plt.subplots(figsize=(12, 4.6), dpi=150)
-ypos = [1, 0]
-for y, (lab, d) in zip(ypos, rows):
-    left = 0
-    for _, r in d.iterrows():
-        w = r.pct
-        ax.barh(
-            y,
-            w,
-            left=left,
-            color=COLORS[r.segment],
-            height=0.55,
-            edgecolor="white",
-            linewidth=1.2,
-            label=r.segment if y == 1 else None,
-        )
-        if w >= 6:
-            ax.text(
-                left + w / 2,
-                y,
-                f"{w:.1f}%",
-                ha="center",
-                va="center",
-                fontsize=11,
-                color="white",
-                fontweight="bold",
-            )
-        left += w
-# callouts for thin segments
-a = dict(zip(rows[0][1].segment, rows[0][1].pct))
-bb = dict(zip(rows[1][1].segment, rows[1][1].pct))
-ax.annotate(
-    f"Rule-based {a['Rule-based answer']:.1f}%  |  HIGH {a['HIGH (block + handoff)']:.2f}%",
-    xy=(a["Rule-based answer"] / 2, 1.28),
-    xytext=(0.5, 1.5),
-    fontsize=9.5,
-    color="#333",
-    arrowprops=dict(arrowstyle="-", color="#777", lw=0.8),
-    va="center",
-)
-missed_k, missed_n = validation_missed_fraud()
-missed_pct = 100.0 * missed_k / missed_n
-ax.annotate(
-    f"LOW = fraud wrongly auto-handled: {missed_pct:.2f}% ({missed_k} of {missed_n})",
-    xy=(100 - bb["LOW (AI resolves)"] / 2, -0.28),
-    xytext=(60, -0.55),
-    fontsize=9.5,
-    color="#333",
-    arrowprops=dict(arrowstyle="-", color="#777", lw=0.8),
-    va="center",
-)
-ax.set_yticks(ypos)
-ax.set_yticklabels([r[0] for r in rows], fontsize=11)
-ax.set_xlim(0, 100)
-ax.set_ylim(-0.8, 1.75)
-ax.set_xticks(range(0, 101, 20))
-ax.set_xticklabels([f"{x}%" for x in range(0, 101, 20)], fontsize=9)
-for s in ["top", "right", "left"]:
-    ax.spines[s].set_visible(False)
-ax.tick_params(axis="y", length=0)
-fig.suptitle(
-    'Where "I don\'t recognize this charge" disputes would go',
-    x=0.02,
-    ha="left",
-    fontsize=15,
-    fontweight="bold",
-    y=0.985,
-)
-ax.set_title(
-    "A assumes disputes mirror the charge mix (rule-based share from all 4.43M tx; bands \
-measured on validation "
-    f"split, n=643,787).\nB is an extreme bound, not an estimate: every dispute is real \
-fraud (val fraud n={missed_n}).",
-    loc="left",
-    fontsize=9.5,
-    color="#555",
-    pad=26,
-)
-ax.legend(ncol=4, loc="upper left", bbox_to_anchor=(0, 1.13), frameon=False, fontsize=10)
-fig.text(
-    0.02,
-    0.015,
-    f"Base case: {fac95:.2f} wrongful auto-closes per 10k Approved/Declined charges ({
-        fac95 * p_ad:.2f} per 10k all charges). "
-    f"90%-recall sensitivity: LOW {100 * s90['share_all_in_low']:.1f}% of val, {fac90:.2f} \
-per 10k. "
-    "Complaints can't be linked to transactions.",
-    fontsize=8,
-    color="#777",
-)
-plt.tight_layout(rect=(0, 0.04, 1, 1))
-fig.savefig(os.path.join(CH, "05_dispute_case_mix.png"), bbox_inches="tight")
+# Chart 05 is drawn by analytics/chart_05_dispute_mix.py from static/data/sim_curve.json
+# (locked validation counts, 29/610). This script only writes the CSV tables above.
 
 pd.set_option("display.width", 200)
 pd.set_option("display.max_columns", 20)
