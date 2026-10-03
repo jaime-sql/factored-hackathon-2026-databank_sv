@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
+import app.panels as panels_module
 from app.panels import fairness_panel, simulator_panel, trust_panel
+from app.paths import project_root
 
 _CURVE = {
     "split": "time",
@@ -48,7 +52,18 @@ _CURVE = {
 }
 
 
-def test_metrics_health_and_hidden_panels(client: TestClient) -> None:
+@pytest.fixture
+def panel_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point the panels at a temp root, so real static/data files never change results."""
+    root = tmp_path / "panel_root"
+    data = root / "static" / "data"
+    data.mkdir(parents=True)
+    shutil.copy(project_root() / "static" / "data" / "fairness.json", data / "fairness.json")
+    monkeypatch.setattr(panels_module, "project_root", lambda: root)
+    return root
+
+
+def test_metrics_health_and_hidden_panels(client: TestClient, panel_root: Path) -> None:
     body = client.get("/api/metrics?language=es").json()
     assert body["health"]["llm_calls"] == 0
     assert body["health"]["latency_p50_ms"] is None
@@ -61,6 +76,21 @@ def test_metrics_health_and_hidden_panels(client: TestClient) -> None:
     mexico = fairness["by_customer_country"]["Mexico"]
     assert mexico["cause"]["es"] and mexico["cause"]["pt"]
     assert mexico["test_note"]["es"] and mexico["test_note"]["pt"]
+
+
+def test_metrics_shows_panels_when_files_exist(client: TestClient, panel_root: Path) -> None:
+    data = panel_root / "static" / "data"
+    (data / "trust.json").write_text(
+        json.dumps(
+            [{"label_es": "Corte al día", "label_pt": "Corte em dia", "value": "x", "ok": True}]
+        ),
+        encoding="utf-8",
+    )
+    (data / "sim_curve.json").write_text(json.dumps(_CURVE), encoding="utf-8")
+    body = client.get("/api/metrics?language=es").json()
+    assert body["trust"] is not None
+    assert body["trust"][0]["label_es"] == "Corte al día"
+    assert body["simulator"] is not None
 
 
 def test_panels_render_only_when_files_exist(tmp_path: Path) -> None:
