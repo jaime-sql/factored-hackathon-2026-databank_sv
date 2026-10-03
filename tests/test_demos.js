@@ -98,7 +98,7 @@ const context = {
     if (path.includes("/api/transactions")) return json({ transactions: [] });
     if (path.endsWith("/cases") && options.method === "POST") {
       const body = JSON.parse(options.body);
-      posts.push({ case: body.transaction_key, message: body.message, auth: options.headers.authorization });
+      posts.push({ case: body.transaction_key, message: body.message, auth: options.headers.authorization, demo: body.demo_case });
       return json({ case_id: `case-${body.transaction_key}`, reply: "ok", ...CASES[body.transaction_key] });
     }
     if (path.includes("/trail")) return json({ steps: [{ at: "1 oct", band: "high", reason: "x" }] });
@@ -118,7 +118,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(buttons.length, 3, "three demo buttons");
   assert.deepEqual(buttons.map((b) => b.getAttribute("data-demo")), ["high", "review", "pending"]);
   const chips = buttons.map((b) => b.children[1].textContent);
-  assert.deepEqual(chips, ["Bloqueo · HIGH", "Revisión humana", "Pendiente"]);
+  assert.deepEqual(chips, ["Bloqueo · riesgo alto", "Revisión humana", "Pendiente"]);
   assert.deepEqual(chips, [catalog.es.demo_chip_high, catalog.es.demo_chip_review, catalog.es.demo_chip_pending]);
   assert.equal(nodes["demos-title"].textContent, catalog.es.demo_title);
 
@@ -132,6 +132,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(posts[1].case, key);
     assert.equal(posts[1].message, catalog.es.dispute);
     assert.equal(posts[1].auth, `Bearer tok-${persona}`);
+    assert.equal(posts[1].demo, true, "demo buttons flag the case as a demo");
     const smooth = scrolls.find((s) => s.options && s.options.behavior === "smooth");
     assert.ok(smooth, "demo scrolls smoothly");
     assert.equal(smooth.className, "why", "scrolls to the ¿Por qué? panel");
@@ -142,7 +143,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
   await flush();
   const pt = nodes.demos.querySelectorAll("button");
   assert.equal(pt.length, 3, "language switch re-renders, not duplicates");
-  assert.deepEqual(pt.map((b) => b.children[1].textContent), ["Bloqueio · HIGH", "Revisão humana", "Pendente"]);
+  assert.deepEqual(pt.map((b) => b.children[1].textContent), ["Bloqueio · risco alto", "Revisão humana", "Pendente"]);
   assert.equal(pt[2].children[0].textContent, catalog.pt.demo_pending);
   console.log("demos ok");
 })().catch((error) => {

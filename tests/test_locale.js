@@ -427,12 +427,7 @@ function renderedText(document) {
 }
 
 // Approved copy that keeps the band and status names the judges see elsewhere.
-const APPROVED_ENGLISH = [
-  "Bloqueo · HIGH",
-  "Bloqueio · HIGH",
-  "(incluye Pending/Reversed)",
-  "(inclui Pending/Reversed)",
-];
+const APPROVED_ENGLISH = [];
 
 function assertNoEnglish(text, label, extra = []) {
   for (const phrase of APPROVED_ENGLISH) text = String(text).split(phrase).join("");
@@ -1140,7 +1135,7 @@ async function testSimulatorSlider() {
     fraud_in_rule: 1,
     points: [
       {
-        t_low: 0.1,
+        t_low: 0.0001993,
         is_default: false,
         n_low: 1,
         n_review: 9,
@@ -1152,22 +1147,25 @@ async function testSimulatorSlider() {
         wrongful_autoclose_per_10k: 0,
       },
       {
-        t_low: 0.2,
+        t_low: 0.000275603870032301,
         is_default: true,
-        n_low: 40,
-        n_review: 40,
-        automation_rate: 0.5,
-        missed_fraud_n: 1,
-        missed_fraud_rate: 0.1,
-        missed_fraud_ci_lo: 0.01,
-        missed_fraud_ci_hi: 0.4,
+        n_low: 99708,
+        n_review: 543754,
+        automation_rate: 0.180132,
+        missed_fraud_n: 29,
+        missed_fraud_rate: 0.047541,
+        missed_fraud_ci_lo: 0.033302,
+        missed_fraud_ci_hi: 0.067443,
         wrongful_autoclose_per_10k: 100,
       },
     ],
   };
-  curve.n_charges = 10000;
+  curve.n_charges = 663624;
+  curve.n_rule = 19832;
   curve.show_cost = true;
   curve.points[1].cost_per_case = { low: 1.361034, mid: 2.722015, high: 4.533923 };
+  curve.points[1].human_only = { low: 1.66, mid: 3.32, high: 5.53 };
+  curve.points[1].net_savings_per_case = { low: 0.298966, mid: 0.597985, high: 0.996077 };
   curve.fraud_in_rule = 6;
   run("static/js/metrics.js", document, async (url) => {
     const href = String(url);
@@ -1211,11 +1209,26 @@ async function testSimulatorSlider() {
   assert.ok(slider);
   assert.equal(slider.value, "1");
   const readout = simulator.querySelector(".sim-readout").textContent;
-  assert.ok(readout.includes("0.5"), readout);
-  assert.ok(readout.includes("40"), readout);
-  assert.ok(readout.includes("0.01–0.4"), readout);
-  assert.ok(readout.includes(`${catalog.es.sim_wrong}: 7.00`), readout);
-  assert.ok(readout.includes(`${catalog.es.sim_cost}: US$1.36 / US$2.72 / US$4.53`), readout);
+  assert.ok(readout.includes(`${catalog.es.sim_t}: 0.0002756`), readout);
+  assert.ok(readout.includes(`${catalog.es.sim_n_low}: 99,708`), readout);
+  assert.ok(readout.includes(`${catalog.es.sim_n_review}: 543,754`), readout);
+  assert.ok(readout.includes(`${catalog.es.sim_auto}: 18.0%`), readout);
+  assert.ok(readout.includes(`${catalog.es.sim_missed_rate}: 4.75%`), readout);
+  assert.ok(readout.includes(`${catalog.es.sim_ci}: 3.33%–6.74%`), readout);
+  assert.ok(readout.includes(`${catalog.es.sim_wrong}: 0.53`), readout);
+  assert.ok(
+    readout.includes(
+      `${catalog.es.sim_cost}: US$2.72 · ${catalog.es.sim_human_only}: US$3.32 · ${catalog.es.sim_saving}: US$0.60 (18.0%)`,
+    ),
+    readout,
+  );
+  assert.ok(
+    readout.includes(
+      `${catalog.es.sim_cost_low}: US$1.36 (${catalog.es.sim_human_only} US$1.66) · ${catalog.es.sim_cost_high}: US$4.53 (${catalog.es.sim_human_only} US$5.53)`,
+    ),
+    readout,
+  );
+  assert.ok(simulator.textContent.includes(`${catalog.es.sim_rule}: 19,832`), simulator.textContent);
   const section = simulator.textContent;
   assert.ok(section.includes(catalog.es.sim_validation), section);
   assert.equal(section.includes("validation"), false, section);
@@ -1223,14 +1236,26 @@ async function testSimulatorSlider() {
   slider.value = "0";
   slider.listeners.input[0]();
   const moved = simulator.querySelector(".sim-readout").textContent;
-  assert.ok(moved.includes("0.1"), moved);
+  assert.ok(moved.includes(`${catalog.es.sim_t}: 0.0001993`), moved);
+  assert.ok(moved.includes(`${catalog.es.sim_auto}: 10.0%`), moved);
   assert.equal(moved.includes("100"), false, moved);
-  assert.equal(moved.includes("40"), false, moved);
+  assert.equal(moved.includes("543,754"), false, moved);
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
   const ptReadout = simulator.querySelector(".sim-readout").textContent;
-  assert.ok(ptReadout.includes(`${catalog.pt.sim_t}: 0,2`), ptReadout);
-  assert.equal(ptReadout.includes("0.2"), false, ptReadout);
+  assert.ok(ptReadout.includes(`${catalog.pt.sim_t}: 0,0002756`), ptReadout);
+  assert.ok(ptReadout.includes(`${catalog.pt.sim_n_review}: 543.754`), ptReadout);
+  assert.ok(ptReadout.includes(`${catalog.pt.sim_auto}: 18,0%`), ptReadout);
+  assert.ok(ptReadout.includes(`${catalog.pt.sim_missed_rate}: 4,75%`), ptReadout);
+  assert.ok(
+    ptReadout.includes(
+      `${catalog.pt.sim_cost}: US$2,72 · ${catalog.pt.sim_human_only}: US$3,32 · ${catalog.pt.sim_saving}: US$0,60 (18,0%)`,
+    ),
+    ptReadout,
+  );
+  assert.ok(ptReadout.includes(`${catalog.pt.sim_cost_high}: US$4,53`), ptReadout);
+  assert.equal(ptReadout.includes("0.0002756"), false, ptReadout);
+  assertNoEnglish(ptReadout, "simulator pt");
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
   const rows = [...fairness.querySelectorAll("tbody tr"), ...fairness.querySelectorAll("tr")];

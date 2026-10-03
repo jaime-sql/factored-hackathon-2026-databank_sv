@@ -154,7 +154,7 @@ const DEMO_FALLBACK = {
     demo_high: "Teo · Tijuana · cargo de riesgo alto",
     demo_review: "Teo · Tijuana · cargo dudoso",
     demo_pending: "María · Ciudad de México · cargo pendiente",
-    demo_chip_high: "Bloqueo · HIGH",
+    demo_chip_high: "Bloqueo · riesgo alto",
     demo_chip_review: "Revisión humana",
     demo_chip_pending: "Pendiente",
     dispute: "No reconozco este cargo",
@@ -164,7 +164,7 @@ const DEMO_FALLBACK = {
     demo_high: "Teo · Tijuana · cobrança de risco alto",
     demo_review: "Teo · Tijuana · cobrança duvidosa",
     demo_pending: "María · Cidade do México · cobrança pendente",
-    demo_chip_high: "Bloqueio · HIGH",
+    demo_chip_high: "Bloqueio · risco alto",
     demo_chip_review: "Revisão humana",
     demo_chip_pending: "Pendente",
     dispute: "Não reconheço esta cobrança",
@@ -207,6 +207,7 @@ async function runDemo(demo) {
     transaction_key: demo.transaction,
     message: demoText("dispute"),
     language: state.language,
+    demo_case: true,
   });
   const details = shown && shown.why ? await shown.why : null;
   const target = details || (shown && shown.card);

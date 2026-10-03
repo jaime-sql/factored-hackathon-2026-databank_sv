@@ -328,27 +328,27 @@ function renderSimulator(sim, text) {
   const fixed = document.createElement("p");
   fixed.className = "sim-fixed";
   fixed.textContent = [
-    `${simLabel(text, "sim_high", "Riesgo alto")}: ${sim.n_high}`,
-    `${simLabel(text, "sim_fraud_high", "Fraude en riesgo alto")}: ${sim.fraud_in_high}`,
-    `${simLabel(text, "sim_rule", "Regla")}: ${sim.n_rule}`,
+    `${simLabel(text, "sim_high", "Riesgo alto")}: ${simCount(sim.n_high)}`,
+    `${simLabel(text, "sim_fraud_high", "Fraude en riesgo alto")}: ${simCount(sim.fraud_in_high)}`,
+    `${simLabel(text, "sim_rule", "Regla")}: ${simCount(sim.n_rule)}`,
   ].join(" · ");
   const ruleFraud = document.createElement("p");
   ruleFraud.className = "sim-fixed";
-  ruleFraud.textContent = `${simLabel(text, "sim_fraud_rule", "Fraude en la regla")}: ${sim.fraud_in_rule}`;
+  ruleFraud.textContent = `${simLabel(text, "sim_fraud_rule", "Fraude en la regla")}: ${simCount(sim.fraud_in_rule)}`;
   function paint() {
     const point = points[Number(slider.value)] || points[start];
     readout.replaceChildren();
     const lines = [
-      `${simLabel(text, "sim_t", "Umbral")}: ${localNumber(point.t_low)}`,
-      `${simLabel(text, "sim_n_low", "Bajo")}: ${localNumber(point.n_low)}`,
-      `${simLabel(text, "sim_n_review", "Revisión")}: ${localNumber(point.n_review)}`,
-      `${simLabel(text, "sim_auto", "Automatización")}: ${localNumber(point.automation_rate)}`,
-      `${simLabel(text, "sim_missed_n", "Fraude no visto")}: ${localNumber(point.missed_fraud_n)}`,
-      `${simLabel(text, "sim_missed_rate", "Tasa de fraude no visto")}: ${localNumber(point.missed_fraud_rate)}`,
-      `${simLabel(text, "sim_ci", "Intervalo")}: ${localNumber(point.missed_fraud_ci_lo)}–${localNumber(point.missed_fraud_ci_hi)}`,
-      `${simLabel(text, "sim_wrong", "Fraudes cerrados sin revisión humana, por 10k cargos (incluye Pending/Reversed)")}: ${closedWithoutReview(point, sim)}`,
+      `${simLabel(text, "sim_t", "Umbral")}: ${simThreshold(point.t_low)}`,
+      `${simLabel(text, "sim_n_low", "Bajo")}: ${simCount(point.n_low)}`,
+      `${simLabel(text, "sim_n_review", "Revisión")}: ${simCount(point.n_review)}`,
+      `${simLabel(text, "sim_auto", "Automatización")}: ${simPercent(point.automation_rate, 1)}`,
+      `${simLabel(text, "sim_missed_n", "Fraude no visto")}: ${simCount(point.missed_fraud_n)}`,
+      `${simLabel(text, "sim_missed_rate", "Tasa de fraude no visto")}: ${simPercent(point.missed_fraud_rate, 2)}`,
+      `${simLabel(text, "sim_ci", "Intervalo")}: ${simPercent(point.missed_fraud_ci_lo, 2)}–${simPercent(point.missed_fraud_ci_hi, 2)}`,
+      `${simLabel(text, "sim_wrong", "Fraudes cerrados sin revisión humana, por 10k cargos (incluye pendientes y revertidos)")}: ${closedWithoutReview(point, sim)}`,
     ];
-    if (sim.show_cost) lines.push(`${simLabel(text, "sim_cost", "Costo por caso")}: ${formatCost(point)}`);
+    if (sim.show_cost) lines.push(...costLines(point, text));
     for (const line of lines) {
       const row = document.createElement("p");
       row.textContent = line;
@@ -375,6 +375,68 @@ function closedWithoutReview(point, sim) {
   }
   if (value == null) return "—";
   return value.toLocaleString(localeTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function simCount(value) {
+  const number = Number(value);
+  if (value == null || value === "" || !Number.isFinite(number)) return "—";
+  return number.toLocaleString(localeTag(), { maximumFractionDigits: 0 });
+}
+
+// Threshold with 4 significant digits (0.0002756 / PT 0,0002756).
+function simThreshold(value) {
+  const number = Number(value);
+  if (value == null || value === "" || !Number.isFinite(number)) return "—";
+  return number.toLocaleString(localeTag(), { maximumSignificantDigits: 4 });
+}
+
+// A 0-1 rate as a percentage: 0.180132 -> 18.0% (PT 18,0%).
+function simPercent(value, digits) {
+  const number = Number(value);
+  if (value == null || value === "" || !Number.isFinite(number)) return "—";
+  const shown = (number * 100).toLocaleString(localeTag(), {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  return `${shown}%`;
+}
+
+function scenarioValue(block, key) {
+  if (!block || typeof block !== "object") return null;
+  const row = block[key];
+  const value = row && typeof row === "object" ? row.expected_cost_per_case_usd : row;
+  const number = Number(value);
+  return value == null || value === "" || !Number.isFinite(number) ? null : number;
+}
+
+// Cost per case next to the human-only price and the saving, all from sim_curve.json.
+// Mid scenario on the first line; low and high scenarios on the second.
+function costLines(point, text) {
+  const label = simLabel(text, "sim_cost", "Costo por caso");
+  const humanLabel = simLabel(text, "sim_human_only", "solo revisión humana");
+  const block = point && point.cost_per_case;
+  const human = point && point.human_only;
+  if (!block || typeof block !== "object" || !human || typeof human !== "object") {
+    return [`${label}: ${formatCost(point)}`];
+  }
+  const cost = scenarioValue(block, "mid");
+  const base = scenarioValue(human, "mid");
+  let saving = scenarioValue(point.net_savings_per_case, "mid");
+  if (saving == null && cost != null && base != null) saving = base - cost;
+  const parts = [`${label}: ${formatUsd(cost)}`, `${humanLabel}: ${formatUsd(base)}`];
+  if (saving != null && base) {
+    parts.push(
+      `${simLabel(text, "sim_saving", "ahorro")}: ${formatUsd(saving)} (${simPercent(saving / base, 1)})`,
+    );
+  }
+  const scenario = (key, name, fallback) =>
+    `${simLabel(text, name, fallback)}: ${formatUsd(scenarioValue(block, key))} (${humanLabel} ${formatUsd(
+      scenarioValue(human, key),
+    )})`;
+  return [
+    parts.join(" · "),
+    [scenario("low", "sim_cost_low", "Escenario bajo"), scenario("high", "sim_cost_high", "Escenario alto")].join(" · "),
+  ];
 }
 
 function formatCost(point) {

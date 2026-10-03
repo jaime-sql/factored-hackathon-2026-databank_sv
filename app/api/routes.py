@@ -62,6 +62,15 @@ class CaseIn(BaseModel):
     is_eval_case: bool | None = None
     case_id: str | None = None
     demo_attack: bool = False
+    demo_case: bool = False
+
+
+# Home demo buttons. A demo_case request for one of these charges is stored as
+# is_test, so audit_live and Métricas leave it out. Keep in sync with DEMOS in
+# static/js/desk.js.
+DEMO_TRANSACTIONS = frozenset(
+    {"TXN_c9d2185cbd2ab37f95d7", "TXN_eef1352d123d275d7602", "TXN_ddcd20809f49f3b0a60c"}
+)
 
 
 class ActionIn(BaseModel):
@@ -351,6 +360,7 @@ def open_case(
     header_match = accepts_qa_test_token(
         _settings(request).qa_test_token, request.headers.get("x-test-token", "")
     )
+    demo_case = body.demo_case and body.transaction_key in DEMO_TRANSACTIONS
     engine = request.app.state.engine
     with engine.deferred_drafts() as pending:
         result = engine.open_case(
@@ -360,7 +370,7 @@ def open_case(
             body.language,
             eval_run_id,
             case_source,
-            is_test=False if is_eval else _traffic_is_test(request),
+            is_test=False if is_eval else (_traffic_is_test(request) or demo_case),
             demo_attack=body.demo_attack,
         )
     _schedule_drafts(background, engine, pending)

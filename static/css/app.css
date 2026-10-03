@@ -189,6 +189,17 @@ pre.why-trail { margin: 0.8rem 0 0; }
   border-radius: 999px;
 }
 .test-badge[hidden] { display: none; }
+.demo-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .demo-row button { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; text-align: left; }
 .demo-chip {
   display: inline-block;
@@ -280,6 +291,21 @@ html, body { max-width: 100%; overflow-x: clip; }
 header, main { min-width: 0; }
 .sim-table { display: block; max-width: 100%; overflow-wrap: anywhere; }
 @media (max-width: 700px) {
+  .demo-title {
+    position: static;
+    flex-basis: 100%;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #5c544a;
+  }
   header { flex-direction: column; align-items: start; }
   .sim-table { overflow-x: auto; }
   .sim-table th, .sim-table td { overflow-wrap: normal; word-break: normal; }
