@@ -282,11 +282,15 @@ def open_session(body: SessionIn, request: Request) -> JSONResponse:
 
 @router.api_route("/api/test-mode", methods=["GET", "POST"])
 def test_mode(request: Request) -> JSONResponse:
-    """Arm test traffic. A wrong token is the same 200 with the flag left off."""
+    """Arm test traffic. A wrong token is the same 200 with the flag left off.
+
+    ``accepted`` says whether the token sent with this request matched, so the
+    page can confirm or reject it even when an earlier token already armed test mode.
+    """
     matched = accepts_qa_test_token(
         _settings(request).qa_test_token, request.headers.get("x-test-token", "")
     )
-    response = JSONResponse({"is_test": _traffic_is_test(request)})
+    response = JSONResponse({"is_test": _traffic_is_test(request), "accepted": bool(matched)})
     if matched:
         _arm_test_cookie(response, request)
     return response

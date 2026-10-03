@@ -94,7 +94,7 @@ def test_flag_set_unset_and_wrong_token(qa_client: TestClient, client: TestClien
         headers={"X-Test-Token": "not-the-token"},
     )
     assert wrong.status_code == 200
-    assert wrong.json() == {"is_test": False}
+    assert wrong.json() == {"is_test": False, "accepted": False}
     assert "error" not in wrong.json()
     assert QA_TOKEN not in wrong.text
     assert "not-the-token" not in wrong.text
@@ -104,9 +104,12 @@ def test_flag_set_unset_and_wrong_token(qa_client: TestClient, client: TestClien
 
     armed = qa_client.post("/api/test-mode", headers={"X-Test-Token": QA_TOKEN})
     assert armed.status_code == 200
-    assert armed.json() == {"is_test": True}
+    assert armed.json() == {"is_test": True, "accepted": True}
     assert QA_TOKEN not in armed.text
     assert qa_client.cookies.get("hd_test")
+    # Once armed, a wrong token still reads is_test (the cookie) but is not accepted.
+    again = qa_client.post("/api/test-mode", headers={"X-Test-Token": "not-the-token"})
+    assert again.json() == {"is_test": True, "accepted": False}
     session = qa_client.post("/api/session", json={"persona": "maria"})
     assert session.status_code == 200
     assert session.json()["is_test"] is True

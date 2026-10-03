@@ -105,6 +105,15 @@ function applyLanguage() {
   if (testToken && copy.test_token) testToken.placeholder = copy.test_token;
   const testTokenLabel = document.getElementById("test-token-label");
   if (testTokenLabel && copy.test_token) testTokenLabel.textContent = copy.test_token;
+  for (const [id, key] of [
+    ["test-ok-chip", "test_ok"],
+    ["test-mode-change", "test_change"],
+    ["test-token-error", "test_invalid"],
+    ["test-mode-hint", "test_hint"],
+  ]) {
+    const node = document.getElementById(id);
+    if (node && copy[key] && !(node.dataset && node.dataset.custom === "1")) node.textContent = copy[key];
+  }
   const breakIt = document.getElementById("break-it");
   if (breakIt && copy.break_it) breakIt.textContent = copy.break_it;
   for (const item of document.querySelectorAll("details.why li")) {
@@ -307,6 +316,46 @@ async function refreshTestMode() {
   showTestBadge(state.testMode);
 }
 
+function testCopy(key, es, pt) {
+  const copy = text();
+  if (copy && copy[key]) return copy[key];
+  return state.language === "pt" ? pt : es;
+}
+
+function setHidden(id, hidden) {
+  const node = document.getElementById(id);
+  if (node) node.hidden = hidden;
+  return node;
+}
+
+// Chip only after the server accepts the token; red error and aria-invalid when it refuses.
+function showTestArmed(withHint) {
+  const form = document.getElementById("test-mode-form");
+  const link = document.getElementById("test-mode-link");
+  const input = document.getElementById("test-token");
+  if (form) form.hidden = true;
+  if (link) link.setAttribute("aria-expanded", "false");
+  if (input) input.setAttribute("aria-invalid", "false");
+  setHidden("test-token-error", true);
+  const chip = document.getElementById("test-ok-chip");
+  if (chip) chip.textContent = testCopy("test_ok", "Modo de prueba activo ✓", "Modo de teste ativo ✓");
+  setHidden("test-ok-row", false);
+  setHidden("test-mode-change", false);
+  const hint = setHidden("test-mode-hint", !withHint);
+  if (hint) hint.textContent = testCopy("test_hint", "Ahora elige un cliente y escribe tu mensaje.", "Agora escolha um cliente e escreva sua mensagem.");
+}
+
+function showTestRejected(message) {
+  const input = document.getElementById("test-token");
+  if (input) input.setAttribute("aria-invalid", "true");
+  const error = setHidden("test-token-error", false);
+  if (error) {
+    error.textContent = message || testCopy("test_invalid", "Token no válido", "Token inválido");
+    if (error.dataset) error.dataset.custom = message ? "1" : "0";
+  }
+  if (input && input.focus) input.focus();
+}
+
 function bindTestArm() {
   const link = document.getElementById("test-mode-link");
   const form = document.getElementById("test-mode-form");
@@ -320,18 +369,50 @@ function bindTestArm() {
       if (input && input.focus) input.focus();
     });
   }
+  const change = document.getElementById("test-mode-change");
+  if (change && form) {
+    change.addEventListener("click", () => {
+      form.hidden = false;
+      change.hidden = true;
+      setHidden("test-mode-hint", true);
+      if (link) link.setAttribute("aria-expanded", "true");
+      const input = document.getElementById("test-token");
+      if (input && input.focus) input.focus();
+    });
+  }
   if (!form) return;
+  let busy = false;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const input = document.getElementById("test-token");
+    const send = document.getElementById("test-mode-send");
     const token = input ? String(input.value || "") : "";
     if (input) input.value = "";
-    if (!token) return;
-    state.testToken = token;
-    await fetch("/api/test-mode", {
-      method: "POST",
-      headers: { "X-Test-Token": token },
-    });
+    if (!token || busy) return;
+    busy = true;
+    if (send) send.disabled = true;
+    let accepted = false;
+    let failed = false;
+    try {
+      const response = await fetch("/api/test-mode", {
+        method: "POST",
+        headers: { "X-Test-Token": token },
+      });
+      const body = await response.json();
+      accepted = Boolean(response.ok && body && body.accepted === true);
+    } catch {
+      failed = true;
+    }
+    busy = false;
+    if (send) send.disabled = false;
+    if (accepted) {
+      state.testToken = token;
+      state.testMode = true;
+      showTestBadge(true);
+      showTestArmed(true);
+      return;
+    }
+    showTestRejected(failed ? connectError() : "");
     await refreshTestMode();
     if (!state.testMode) state.testToken = "";
   });
@@ -573,7 +654,9 @@ document.getElementById("lang").addEventListener("click", () => {
 function bootstrap() {
   applyLanguage();
   bindTestArm();
-  refreshTestMode();
+  refreshTestMode().then(() => {
+    if (state.testMode) showTestArmed(false);
+  });
   loadPersonas();
 }
 
