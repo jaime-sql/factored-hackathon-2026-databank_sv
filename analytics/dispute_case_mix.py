@@ -19,6 +19,7 @@ pending_reversed_high
 - /workspace/hackathon-data/cache/bank.duckdb    (READ-ONLY; transaction_status counts)
 Run: .venv/bin/python dispute_case_mix.py   -> out/dispute_mix_*.csv, charts/05_dispute_case_mix.png
 """
+
 import json
 import os
 
@@ -49,15 +50,20 @@ assert thr["version"] == v2["version"], (thr["version"], v2["version"])
 assert thr["t_low"] == v2["t_low"]
 for b in BANDS:
     assert thr["val"]["bands"][b] == v2["bands"][b], b
-assert thr["selection"]["sensitivity_90"]["share_all_in_low"] == \
-v2["sensitivity_low_90"]["share_all_in_low"]
+assert (
+    thr["selection"]["sensitivity_90"]["share_all_in_low"]
+    == v2["sensitivity_low_90"]["share_all_in_low"]
+)
 assert thr["status_rule"]["order"] == [
     "high_rule (fraud_score > 30)",
     "Pending/Reversed shortcut -> out_of_scope",
     "model REVIEW/LOW",
 ]
-assert pr["rule"] == "fraud_score > 30 (missing -> not HIGH); runs before the Pending/Reversed \
+assert (
+    pr["rule"]
+    == "fraud_score > 30 (missing -> not HIGH); runs before the Pending/Reversed \
 shortcut"
+)
 
 # ---------- full table: status and score counts; fraud labels only train+val ----------
 # The TEST split is not read for labels. Full-table score counts are still used for routing/mix.
@@ -83,15 +89,21 @@ n_rev = int(st.loc[st.transaction_status == "Reversed", "n"].iloc[0])
 n_ad = N_ALL - n_pend - n_rev
 n_pr = n_pend + n_rev
 n_pr_high = int(st.loc[st.transaction_status.isin(["Pending", "Reversed"]), "high_gt30"].sum())
-n_pr_high_fraud_train_val = int(st.loc[st.transaction_status.isin(["Pending", "Reversed"]), \
-"high_gt30_fraud_train_val"].sum())
-n_pr_high_nonfraud_train_val = int(st.loc[st.transaction_status.isin(["Pending", "Reversed"]), \
-"high_gt30_nonfraud_train_val"].sum())
-n_pr_fraud_train_val = int(st.loc[st.transaction_status.isin(["Pending", "Reversed"]), \
-"is_fraud_train_val"].sum())
+n_pr_high_fraud_train_val = int(
+    st.loc[st.transaction_status.isin(["Pending", "Reversed"]), "high_gt30_fraud_train_val"].sum()
+)
+n_pr_high_nonfraud_train_val = int(
+    st.loc[
+        st.transaction_status.isin(["Pending", "Reversed"]), "high_gt30_nonfraud_train_val"
+    ].sum()
+)
+n_pr_fraud_train_val = int(
+    st.loc[st.transaction_status.isin(["Pending", "Reversed"]), "is_fraud_train_val"].sum()
+)
 st["pct_of_all"] = 100 * st.n / N_ALL
 st.to_csv(os.path.join(OUT, "dispute_mix_full_table_status.csv"), index=False)
 p_rule, p_pr_high, p_ad = (n_pr - n_pr_high) / N_ALL, n_pr_high / N_ALL, n_ad / N_ALL
+
 
 # ---------- VAL band table (95% operating point + 90% sensitivity) ----------
 def band_rows(bands, label, t_low):
@@ -100,55 +112,94 @@ def band_rows(bands, label, t_low):
     rows = []
     for b in BANDS:
         d = bands[b]
-        rows.append(dict(operating_point=label, t_low_raw=t_low, band=b.upper(), n=d["n"], \
-        val_n=n_val,
-                         share_pct=100 * d["share"], fraud=d["fraud"], val_fraud=f_val,
-                         fraud_rate_pct=100 * d["fraud_rate"], share_of_fraud_pct=100 * \
-                         d["share_of_all_fraud"]))
-    return pd.DataFrame(rows), bands["false_auto_close_per_10k_tx"], \
-    bands["false_auto_close_per_10k_auto_handled"]
+        rows.append(
+            dict(
+                operating_point=label,
+                t_low_raw=t_low,
+                band=b.upper(),
+                n=d["n"],
+                val_n=n_val,
+                share_pct=100 * d["share"],
+                fraud=d["fraud"],
+                val_fraud=f_val,
+                fraud_rate_pct=100 * d["fraud_rate"],
+                share_of_fraud_pct=100 * d["share_of_all_fraud"],
+            )
+        )
+    return (
+        pd.DataFrame(rows),
+        bands["false_auto_close_per_10k_tx"],
+        bands["false_auto_close_per_10k_auto_handled"],
+    )
+
 
 val95, fac95, fah95 = band_rows(v2["bands"], "95% recall (v2 chosen)", v2["t_low"])
-val90, fac90, fah90 = band_rows(v2["sensitivity_low_90"]["bands"], "90% recall (sensitivity)",
-                                v2["sensitivity_low_90"]["t_low"])
+val90, fac90, fah90 = band_rows(
+    v2["sensitivity_low_90"]["bands"], "90% recall (sensitivity)", v2["sensitivity_low_90"]["t_low"]
+)
 val = pd.concat([val95, val90], ignore_index=True)
 val.to_csv(os.path.join(OUT, "dispute_mix_val_bands.csv"), index=False)
 
 # ---------- A) base case and B) fraud-only bound ----------
-SEG = {"RULE": "Rule-based answer", "HIGH": "HIGH (block + handoff)",
-       "REVIEW": "REVIEW (handoff)", "LOW": "LOW (AI resolves)"}
+SEG = {
+    "RULE": "Rule-based answer",
+    "HIGH": "HIGH (block + handoff)",
+    "REVIEW": "REVIEW (handoff)",
+    "LOW": "LOW (AI resolves)",
+}
 mix_rows, fac_rows = [], []
 for vb, fac, fah in [(val95, fac95, fah95), (val90, fac90, fah90)]:
     op = vb.operating_point.iloc[0]
     sh = dict(zip(vb.band, vb.share_pct / 100))
     fr = dict(zip(vb.band, vb.share_of_fraud_pct / 100))
-    base = {"RULE": p_rule,
-            "HIGH": p_pr_high + p_ad * sh["HIGH"],
-            "REVIEW": p_ad * sh["REVIEW"],
-            "LOW": p_ad * sh["LOW"]}
+    base = {
+        "RULE": p_rule,
+        "HIGH": p_pr_high + p_ad * sh["HIGH"],
+        "REVIEW": p_ad * sh["REVIEW"],
+        "LOW": p_ad * sh["LOW"],
+    }
     bound = {"RULE": 0.0, **{b: fr[b] for b in ["HIGH", "REVIEW", "LOW"]}}
     for scen, dist, basis, n_basis in [
-        ("A base case: disputes mirror the charge mix", base,
-         f"Pending/Reversed score <=30 = rule-based; {n_pr_high:,} Pending/Reversed score >30 = \
+        (
+            "A base case: disputes mirror the charge mix",
+            base,
+            f"Pending/Reversed score <=30 = rule-based; {n_pr_high:,} Pending/Reversed score >30 = \
 HIGH; "
-         f"Approved/Declined bands = VAL shares over {n_ad:,} tx (full table)", N_ALL),
-        ("B fraud-only bound (extreme, not an estimate)", bound,
-         "VAL fraud cases (Approved/Declined only); Pending/Reversed outside VAL scope", \
-         int(vb.val_fraud.iloc[0]))]:
+            f"Approved/Declined bands = VAL shares over {n_ad:,} tx (full table)",
+            N_ALL,
+        ),
+        (
+            "B fraud-only bound (extreme, not an estimate)",
+            bound,
+            "VAL fraud cases (Approved/Declined only); Pending/Reversed outside VAL scope",
+            int(vb.val_fraud.iloc[0]),
+        ),
+    ]:
         for k in ["RULE", "HIGH", "REVIEW", "LOW"]:
-            mix_rows.append(dict(scenario=scen, operating_point=op, segment=SEG[k], pct=100 * \
-            dist[k],
-                                 basis=basis, basis_n=n_basis))
+            mix_rows.append(
+                dict(
+                    scenario=scen,
+                    operating_point=op,
+                    segment=SEG[k],
+                    pct=100 * dist[k],
+                    basis=basis,
+                    basis_n=n_basis,
+                )
+            )
     # wrongful auto-closes (fraud landing in LOW), base case
-    fac_rows.append(dict(operating_point=op,
-                         per_10k_approved_declined_val=fac,
-                         per_10k_all_charges_base_case=fac * p_ad,
-                         per_10k_auto_handled_val=fah,
-                         fraud_in_low_val=int(vb.loc[vb.band == "LOW", "fraud"].iloc[0]),
-                         val_n=int(vb.val_n.iloc[0]),
-                         note="all-charges figure assumes the rule-based path (Pending/Reversed) \
+    fac_rows.append(
+        dict(
+            operating_point=op,
+            per_10k_approved_declined_val=fac,
+            per_10k_all_charges_base_case=fac * p_ad,
+            per_10k_auto_handled_val=fah,
+            fraud_in_low_val=int(vb.loc[vb.band == "LOW", "fraud"].iloc[0]),
+            val_n=int(vb.val_n.iloc[0]),
+            note="all-charges figure assumes the rule-based path (Pending/Reversed) \
 causes no wrongful "
-                              "fraud closes; it is not model-scored"))
+            "fraud closes; it is not model-scored",
+        )
+    )
 mix = pd.DataFrame(mix_rows)
 mix.to_csv(os.path.join(OUT, "dispute_mix_scenarios.csv"), index=False)
 fac_df = pd.DataFrame(fac_rows)
@@ -172,8 +223,11 @@ checks = [
     ("LOW fraud n", 29, b["low"]["fraud"]),
     ("LOW share of fraud %", 4.8, round(100 * b["low"]["share_of_all_fraud"], 1)),
     ("wrongful auto-closes /10k tx", 0.45, round(b["false_auto_close_per_10k_tx"], 2)),
-    ("wrongful auto-closes /10k auto-handled", 2.9, \
-    round(b["false_auto_close_per_10k_auto_handled"], 1)),
+    (
+        "wrongful auto-closes /10k auto-handled",
+        2.9,
+        round(b["false_auto_close_per_10k_auto_handled"], 1),
+    ),
     ("90%: LOW share %", 25.8, round(100 * s90["share_all_in_low"], 1)),
     ("90%: wrongful /10k tx", 0.92, round(s90["false_auto_close_per_10k_tx"], 2)),
     ("full table tx", 4425008, N_ALL),
@@ -182,18 +236,30 @@ checks = [
     ("Reversed n", 44750, n_rev),
     ("Reversed %", 1.01, round(100 * n_rev / N_ALL, 2)),
     ("Train+val Pending/Reversed fraud n", 106, n_pr_fraud_train_val),
-    ("Train+val Pending fraud caught by HIGH", 44, int(st.loc[st.transaction_status == "Pending", \
-    "high_gt30_fraud_train_val"].iloc[0])),
-    ("Train+val Reversed fraud caught by HIGH", 16, int(st.loc[st.transaction_status == "Reversed",\
-     "high_gt30_fraud_train_val"].iloc[0])),
+    (
+        "Train+val Pending fraud caught by HIGH",
+        44,
+        int(st.loc[st.transaction_status == "Pending", "high_gt30_fraud_train_val"].iloc[0]),
+    ),
+    (
+        "Train+val Reversed fraud caught by HIGH",
+        16,
+        int(st.loc[st.transaction_status == "Reversed", "high_gt30_fraud_train_val"].iloc[0]),
+    ),
     ("Train+val Pending/Reversed fraud caught by HIGH", 60, n_pr_high_fraud_train_val),
     ("Train+val Pending/Reversed non-fraud sent HIGH", 0, n_pr_high_nonfraud_train_val),
     ("VAL Pending/Reversed fraud n", 11, pr["val"]["Pending+Reversed"]["fraud"]),
-    ("VAL Pending/Reversed fraud caught HIGH", 5, \
-    pr["val"]["Pending+Reversed"]["fraud_caught_high"]),
+    (
+        "VAL Pending/Reversed fraud caught HIGH",
+        5,
+        pr["val"]["Pending+Reversed"]["fraud_caught_high"],
+    ),
     ("Train Pending/Reversed fraud n", 95, pr["train"]["Pending+Reversed"]["fraud"]),
-    ("Train Pending/Reversed fraud caught HIGH", 55, \
-    pr["train"]["Pending+Reversed"]["fraud_caught_high"]),
+    (
+        "Train Pending/Reversed fraud caught HIGH",
+        55,
+        pr["train"]["Pending+Reversed"]["fraud_caught_high"],
+    ),
 ]
 
 ver = pd.DataFrame(checks, columns=["metric", "reported", "from_source"])
@@ -201,35 +267,67 @@ ver["match"] = ver.reported == ver.from_source
 ver.to_csv(os.path.join(OUT, "dispute_mix_verification.csv"), index=False)
 
 # ---------- chart ----------
-COLORS = {"Rule-based answer": "#9AA5B1", "HIGH (block + handoff)": "#D1495B",
-          "REVIEW (handoff)": "#EDAE49", "LOW (AI resolves)": "#2E86AB"}
+COLORS = {
+    "Rule-based answer": "#9AA5B1",
+    "HIGH (block + handoff)": "#D1495B",
+    "REVIEW (handoff)": "#EDAE49",
+    "LOW (AI resolves)": "#2E86AB",
+}
 op95 = "95% recall (v2 chosen)"
 m = mix[mix.operating_point == op95]
-rows = [("A  Base case\n(disputes mirror charge mix)", m[m.scenario.str.startswith("A")]),
-        ("B  Fraud-only bound\n(every dispute is fraud)", m[m.scenario.str.startswith("B")])]
+rows = [
+    ("A  Base case\n(disputes mirror charge mix)", m[m.scenario.str.startswith("A")]),
+    ("B  Fraud-only bound\n(every dispute is fraud)", m[m.scenario.str.startswith("B")]),
+]
 fig, ax = plt.subplots(figsize=(12, 4.6), dpi=150)
 ypos = [1, 0]
 for y, (lab, d) in zip(ypos, rows):
     left = 0
     for _, r in d.iterrows():
         w = r.pct
-        ax.barh(y, w, left=left, color=COLORS[r.segment], height=0.55, edgecolor="white", \
-        linewidth=1.2,
-                label=r.segment if y == 1 else None)
+        ax.barh(
+            y,
+            w,
+            left=left,
+            color=COLORS[r.segment],
+            height=0.55,
+            edgecolor="white",
+            linewidth=1.2,
+            label=r.segment if y == 1 else None,
+        )
         if w >= 6:
-            ax.text(left + w / 2, y, f"{w:.1f}%", ha="center", va="center", fontsize=11,
-                    color="white", fontweight="bold")
+            ax.text(
+                left + w / 2,
+                y,
+                f"{w:.1f}%",
+                ha="center",
+                va="center",
+                fontsize=11,
+                color="white",
+                fontweight="bold",
+            )
         left += w
 # callouts for thin segments
 a = dict(zip(rows[0][1].segment, rows[0][1].pct))
 bb = dict(zip(rows[1][1].segment, rows[1][1].pct))
-ax.annotate(f"Rule-based {a['Rule-based answer']:.1f}%  |  HIGH {a['HIGH (block + handoff)']:.2f}%",
-            xy=(a['Rule-based answer'] / 2, 1.28), xytext=(0.5, 1.5), fontsize=9.5, color="#333",
-            arrowprops=dict(arrowstyle="-", color="#777", lw=0.8), va="center")
-ax.annotate(f"LOW = fraud wrongly auto-handled: {bb['LOW (AI resolves)']:.1f}% (29 of 599)",
-            xy=(100 - bb['LOW (AI resolves)'] / 2, -0.28), xytext=(60, -0.55), fontsize=9.5, \
-            color="#333",
-            arrowprops=dict(arrowstyle="-", color="#777", lw=0.8), va="center")
+ax.annotate(
+    f"Rule-based {a['Rule-based answer']:.1f}%  |  HIGH {a['HIGH (block + handoff)']:.2f}%",
+    xy=(a["Rule-based answer"] / 2, 1.28),
+    xytext=(0.5, 1.5),
+    fontsize=9.5,
+    color="#333",
+    arrowprops=dict(arrowstyle="-", color="#777", lw=0.8),
+    va="center",
+)
+ax.annotate(
+    f"LOW = fraud wrongly auto-handled: {bb['LOW (AI resolves)']:.1f}% (29 of 599)",
+    xy=(100 - bb["LOW (AI resolves)"] / 2, -0.28),
+    xytext=(60, -0.55),
+    fontsize=9.5,
+    color="#333",
+    arrowprops=dict(arrowstyle="-", color="#777", lw=0.8),
+    va="center",
+)
 ax.set_yticks(ypos)
 ax.set_yticklabels([r[0] for r in rows], fontsize=11)
 ax.set_xlim(0, 100)
@@ -239,20 +337,36 @@ ax.set_xticklabels([f"{x}%" for x in range(0, 101, 20)], fontsize=9)
 for s in ["top", "right", "left"]:
     ax.spines[s].set_visible(False)
 ax.tick_params(axis="y", length=0)
-fig.suptitle("Where \"I don't recognize this charge\" disputes would go", x=0.02, ha="left",
-             fontsize=15, fontweight="bold", y=0.985)
-ax.set_title("A assumes disputes mirror the charge mix (rule-based share from all 4.43M tx; bands \
+fig.suptitle(
+    'Where "I don\'t recognize this charge" disputes would go',
+    x=0.02,
+    ha="left",
+    fontsize=15,
+    fontweight="bold",
+    y=0.985,
+)
+ax.set_title(
+    "A assumes disputes mirror the charge mix (rule-based share from all 4.43M tx; bands \
 measured on validation "
-             "split, n=643,787).\nB is an extreme bound, not an estimate: every dispute is real \
+    "split, n=643,787).\nB is an extreme bound, not an estimate: every dispute is real \
 fraud (val fraud n=599).",
-             loc="left", fontsize=9.5, color="#555", pad=26)
+    loc="left",
+    fontsize=9.5,
+    color="#555",
+    pad=26,
+)
 ax.legend(ncol=4, loc="upper left", bbox_to_anchor=(0, 1.13), frameon=False, fontsize=10)
-fig.text(0.02, 0.015,
-         f"Base case: {fac95:.2f} wrongful auto-closes per 10k Approved/Declined charges ({fac95 * \
-         p_ad:.2f} per 10k all charges). "
-         f"90%-recall sensitivity: LOW {100 * s90['share_all_in_low']:.1f}% of val, {fac90:.2f} \
+fig.text(
+    0.02,
+    0.015,
+    f"Base case: {fac95:.2f} wrongful auto-closes per 10k Approved/Declined charges ({
+        fac95 * p_ad:.2f} per 10k all charges). "
+    f"90%-recall sensitivity: LOW {100 * s90['share_all_in_low']:.1f}% of val, {fac90:.2f} \
 per 10k. "
-         "Complaints can't be linked to transactions.", fontsize=8, color="#777")
+    "Complaints can't be linked to transactions.",
+    fontsize=8,
+    color="#777",
+)
 plt.tight_layout(rect=(0, 0.04, 1, 1))
 fig.savefig(os.path.join(CH, "05_dispute_case_mix.png"), bbox_inches="tight")
 
