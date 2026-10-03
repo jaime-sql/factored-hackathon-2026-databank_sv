@@ -353,6 +353,11 @@ function installTour() {
       const above = rect.top - box.height - margin;
       if (above >= floor) top = above;
     }
+    // A target taller than the window (the metrics JSON block) fits neither
+    // below nor above it. Keep the box on screen so its buttons stay reachable.
+    if (top + box.height > window.innerHeight - margin) {
+      top = Math.max(floor, window.innerHeight - box.height - margin);
+    }
     if (top < floor) top = floor;
     let left = rect.left;
     if (left + box.width > window.innerWidth - margin) left = window.innerWidth - box.width - margin;
