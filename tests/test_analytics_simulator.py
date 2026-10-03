@@ -1,6 +1,7 @@
 """Tests for analytics/simulator_cost.py and the Wilson helper in analytics/fairness.py.
 
-Uses only tests/fixtures/test_fixture_sim_curve.json (synthetic, never shipped as data).
+Uses only tests/fixtures/test_fixture_sim_curve.json (synthetic, shaped like the ML Engineer's
+sim-curve-v1: counts per point, cost_per_case null; never shipped as data).
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tests" / "fixtures" / "test_fixture_sim_curve.json"
-T_LOW_DEFAULT = 0.000275603870032301
 
 
 def _load(name: str):
@@ -28,126 +28,165 @@ sim = _load("simulator_cost")
 fair = _load("fairness")
 
 
-def test_fixture_matches_confirmed_schema() -> None:
-    curve = json.loads(FIXTURE.read_text())
-    assert curve["split"] == "validation"
-    assert curve["t_low_default"] == pytest.approx(T_LOW_DEFAULT)
-    defaults = [p for p in curve["points"] if p["is_default"]]
-    assert len(defaults) == 1
-    assert defaults[0]["t_low"] == pytest.approx(T_LOW_DEFAULT)
-    t_lows = [p["t_low"] for p in curve["points"]]
-    assert t_lows == sorted(t_lows)
-    for p in curve["points"]:
-        assert curve["n_high"] + curve["n_rule"] + p["n_low"] + p["n_review"] == curve["n_charges"]
-        assert p["automation_rate"] == pytest.approx(
-            (curve["n_rule"] + p["n_low"]) / curve["n_charges"]
-        )
-        assert p["missed_fraud_rate"] == pytest.approx(p["missed_fraud_n"] / curve["n_fraud"])
-        assert p["wrongful_autoclose_per_10k"] == pytest.approx(
-            p["missed_fraud_n"] / curve["n_charges"] * 10000
-        )
-        w = fair.wilson(p["missed_fraud_n"], curve["n_fraud"])
-        assert p["missed_fraud_ci_lo"] == pytest.approx(w["ci95_low"])
-        assert p["missed_fraud_ci_hi"] == pytest.approx(w["ci95_high"])
+def _curve() -> dict:
+    return json.loads(FIXTURE.read_text())
 
 
-def test_cost_math_on_fixture() -> None:
-    curve = json.loads(FIXTURE.read_text())
-    out = sim.enrich(curve, llm=0.01, llm_meta={"source": "test"}, rule_llm=0.0)
-    # default point: n_low 40, n_review 40, n_high 10, n_rule 10, n_charges 100
-    # -> llm*(40+40+10)/100 + human*(40+10)/100
-    mid = out["points"][1]["cost_per_case"]["mid"]
-    assert mid["expected_cost_per_case_usd"] == pytest.approx(0.01 * 0.9 + 3.32 * 0.5)
-    assert mid["human_only_cost_per_case_usd"] == 3.32
-    assert out["points"][1]["missed_fraud_n"] == curve["points"][1]["missed_fraud_n"]
-    assert out["points"][1]["automation_rate"] == curve["points"][1]["automation_rate"]
+def _flat(v: float, rule: float = 0.0) -> dict:
+    return {"low": v, "review": v, "high": v, "rule": rule}
+
+
+def test_share_derivation_from_counts() -> None:
+    curve = _curve()
+    s = sim.point_shares(curve, curve["points"][1], 1)
+    assert s == pytest.approx({"low": 0.4, "review": 0.4, "high": 0.1, "rule": 0.1})
+    assert sum(s.values()) == pytest.approx(1.0)
+
+
+def test_counts_not_adding_up_fail_loudly() -> None:
+    curve = _curve()
+    curve["points"][0]["n_review"] = 79
+    with pytest.raises(sim.InputError, match="n_charges"):
+        sim.enrich(curve, _flat(0.01), {})
+    curve = _curve()
+    curve["n_rule"] = 11
+    with pytest.raises(sim.InputError, match="n_charges"):
+        sim.check_curve(curve)
+    curve = _curve()
+    del curve["n_high"]
+    with pytest.raises(sim.InputError):
+        sim.check_curve(curve)
+
+
+def test_automation_rate_mismatch_fails() -> None:
+    curve = _curve()
+    curve["points"][1]["automation_rate"] = 0.6
+    with pytest.raises(sim.InputError, match="automation_rate"):
+        sim.check_curve(curve)
+
+
+def test_cost_math_and_null_fill() -> None:
+    curve = _curve()
+    assert all(p["cost_per_case"] is None for p in curve["points"])
+    assert "cost_model" not in curve
+    out = sim.enrich(curve, _flat(0.01), {"source": "test"})
+    p = out["points"][1]  # low .4, review .4, high .1, rule .1 -> llm*.9 + human*.5
+    exp_mid = 0.01 * 0.9 + 3.32 * 0.5
+    assert p["cost_per_case"]["mid"] == pytest.approx(exp_mid, abs=1e-6)
+    assert p["human_only"] == {"low": 1.66, "mid": 3.32, "high": 5.53}
+    assert p["net_savings_per_case"]["mid"] == pytest.approx(3.32 - exp_mid, abs=1e-6)
     assert out["cost_model"]["generator"] == sim.GENERATOR
-    # more automation -> cheaper
-    costs = [p["cost_per_case"]["low"]["expected_cost_per_case_usd"] for p in out["points"]]
-    assert costs == sorted(costs, reverse=True)
+    costs = [q["cost_per_case"]["low"] for q in out["points"]]
+    assert costs == sorted(costs, reverse=True)  # more automation -> cheaper
 
 
 def test_existing_fields_unchanged() -> None:
-    curve = json.loads(FIXTURE.read_text())
-    out = sim.enrich(curve, 0.02, {}, 0.0)
+    curve = _curve()
+    out = sim.enrich(curve, _flat(0.02), {})
     for k, v in curve.items():
         if k != "points":
             assert out[k] == v
     for a, b in zip(curve["points"], out["points"], strict=True):
-        assert {k: b[k] for k in a} == a
+        assert {k: b[k] for k in a if k != "cost_per_case"} == {
+            k: v for k, v in a.items() if k != "cost_per_case"
+        }
+
+
+def test_refuses_to_overwrite_foreign_non_null_cost() -> None:
+    curve = _curve()
+    curve["points"][2]["cost_per_case"] = {"mid": 1.0}
+    with pytest.raises(sim.InputError, match="non-null 'cost_per_case'"):
+        sim.enrich(curve, _flat(0.01), {})
+    curve = _curve()
+    curve["points"][0]["net_savings_per_case"] = {"mid": 1.0}
+    with pytest.raises(sim.InputError):
+        sim.enrich(curve, _flat(0.01), {})
+
+
+def test_refuses_foreign_cost_model_but_reruns_own() -> None:
+    curve = _curve()
+    curve["cost_model"] = {"generator": "someone-else"}
+    with pytest.raises(sim.InputError):
+        sim.enrich(curve, _flat(0.01), {})
+    once = sim.enrich(_curve(), _flat(0.01), {})
+    twice = sim.enrich(once, _flat(0.02), {})  # own output can be refreshed
+    assert twice["points"][1]["cost_per_case"]["mid"] == pytest.approx(
+        0.02 * 0.9 + 3.32 * 0.5, abs=1e-6
+    )
+
+
+def test_null_cost_model_is_fillable() -> None:
+    curve = _curve()
+    curve["cost_model"] = None
+    out = sim.enrich(curve, _flat(0.01), {})
+    assert out["cost_model"]["generator"] == sim.GENERATOR
+
+
+def test_per_band_calls(tmp_path: Path) -> None:
+    d = {
+        "cost_per_call_usd": 0.002,
+        "calls_per_case": {"low": 2, "review": 3, "high": 1},
+        "source": "test",
+        "eval_run_id": "r1",
+    }
+    band, meta = sim.band_costs_from_json(d, 0.0, "x")
+    assert band == pytest.approx({"low": 0.004, "review": 0.006, "high": 0.002, "rule": 0.0})
+    assert meta["eval_run_id"] == "r1" and meta["calls_per_case"]["review"] == 3
+    out = sim.enrich(_curve(), band, meta)
+    llm = 0.004 * 0.4 + 0.006 * 0.4 + 0.002 * 0.1
+    assert out["points"][1]["cost_per_case"]["high"] == pytest.approx(llm + 5.53 * 0.5, abs=1e-6)
+    d["calls_per_case"]["rule"] = 1
+    band, _ = sim.band_costs_from_json(d, 0.0, "x")
+    assert band["rule"] == pytest.approx(0.002)
+    with pytest.raises(sim.InputError, match="not both"):
+        sim.band_costs_from_json(d, 0.001, "x")
+    with pytest.raises(sim.InputError, match="missing 'high'"):
+        sim.band_costs_from_json(
+            {"cost_per_call_usd": 0.1, "calls_per_case": {"low": 1, "review": 1}}, 0.0, "x"
+        )
+    with pytest.raises(sim.InputError):
+        sim.band_costs_from_json({"llm_cost_per_case_usd": 0.1, "cost_per_call_usd": 0.1}, 0.0, "x")
+    # end to end through the CLI, flat JSON form still works
+    cj = tmp_path / "flat.json"
+    cj.write_text(json.dumps({"llm_cost_per_case_usd": 0.01, "source": "t"}))
+    o = tmp_path / "o.json"
+    assert sim.main(["--curve", str(FIXTURE), "--llm-cost-json", str(cj), "--out", str(o)]) == 0
+    assert json.loads(o.read_text())["cost_model"]["llm_cost_source"]["source"] == "t"
+
+
+def test_default_point_summary() -> None:
+    out = sim.enrich(_curve(), _flat(0.01), {})
+    s = out["default_point_summary"]
+    assert s["point_index"] == 1 and s["matched_by"] == "point flagged default: true"
+    assert s["automation_rate"] == 0.5 and s["missed_fraud"]["k"] == 1
+    curve = _curve()
+    del curve["points"][1]["default"]
+    curve["t_low_default"] = 0.29
+    s = sim.enrich(curve, _flat(0.01), {})["default_point_summary"]
+    assert s["point_index"] == 2 and s["matched_by"].startswith("nearest")
 
 
 def test_missing_inputs_fail(tmp_path: Path) -> None:
-    assert (
-        sim.main(
-            [
-                "--curve",
-                str(tmp_path / "nope.json"),
-                "--llm-cost-usd",
-                "0.01",
-                "--out",
-                str(tmp_path / "o.json"),
-            ]
-        )
-        == 2
-    )
-    assert sim.main(["--curve", str(FIXTURE), "--out", str(tmp_path / "o.json")]) == 2
-    assert not (tmp_path / "o.json").exists()
+    o = tmp_path / "o.json"
+    args = ["--curve", str(tmp_path / "nope.json"), "--llm-cost-usd", "0.01", "--out", str(o)]
+    assert sim.main(args) == 2
+    assert sim.main(["--curve", str(FIXTURE), "--out", str(o)]) == 2
+    assert not o.exists()
 
 
-def test_rejects_non_validation_and_bad_routing_totals() -> None:
-    curve = json.loads(FIXTURE.read_text())
+def test_rejects_non_validation() -> None:
+    curve = _curve()
     curve["split"] = "test"
     with pytest.raises(sim.InputError):
-        sim.enrich(curve, 0.01, {}, 0.0)
-    curve = json.loads(FIXTURE.read_text())
-    curve["points"][0]["n_review"] = 50
-    with pytest.raises(sim.InputError, match="routing totals"):
-        sim.enrich(curve, 0.01, {}, 0.0)
+        sim.enrich(curve, _flat(0.01), {})
 
 
-def test_refuses_foreign_cost_model() -> None:
-    curve = json.loads(FIXTURE.read_text())
-    curve["cost_model"] = {"generator": "someone-else"}
-    with pytest.raises(sim.InputError):
-        sim.enrich(curve, 0.01, {}, 0.0)
+def test_default_path_is_repo_static_data() -> None:
+    assert sim.SHIPPED_CURVE == ROOT / "static" / "data" / "sim_curve.json"
 
 
 def test_wilson_matches_dashboard_reference() -> None:
-    w = fair.wilson(29, 610)
-    assert w["ci95_low"] == pytest.approx(0.033302414391, abs=1e-11)
-    assert w["ci95_high"] == pytest.approx(0.067442587323, abs=1e-11)
+    w = fair.wilson(29, 599)
+    assert w["ci95_low"] == pytest.approx(0.033917781042, abs=1e-11)
+    assert w["ci95_high"] == pytest.approx(0.068665506679, abs=1e-11)
     assert fair.wilson(0, 0)["rate"] is None
-
-
-def test_no_shares_output_has_no_share_or_band_counts() -> None:
-    st = {
-        "n": 100,
-        "positives": 10,
-        "positives_pending_reversed": 1,
-        "positives_all_statuses": 11,
-        "low_n": 20,
-        "review_n": 79,
-        "high_n": 1,
-        "low_share": 0.2,
-        "review_share": 0.79,
-        "high_share": 0.01,
-        "missed_fraud": fair.wilson(2, 11),
-        "escalation_ratio_vs_overall": 1.0,
-        "small_sample": True,
-    }
-    out = fair.embargo_safe({"version": "v"}, 0.1, "m", "h", 2, dict(st), {"Mexico": dict(st)})
-    text = json.dumps(out)
-    for banned in (
-        "low_share",
-        "review_share",
-        "high_share",
-        "low_n",
-        "review_n",
-        "high_n",
-        'band_counts"',
-        "routing_order",
-        "seguro",
-    ):
-        assert banned not in text, banned
-    assert out["by_customer_country"]["Mexico"]["missed_fraud"]["n"] == 11

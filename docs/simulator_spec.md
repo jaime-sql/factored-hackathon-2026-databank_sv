@@ -26,15 +26,20 @@ The slider starts at the real 95%-recall threshold from `triage/artifacts/thresh
 **`t_low` = 0.000275603870032301** (raw LightGBM score; `score_space` in the same file; selection in
 `selection.low_recall_target` = 0.95, `selection.t_low_changed` = false; same value at `val.low.t_low`).
 The curve carries that value as top-level `t_low_default` and flags the matching point with
-`is_default = true`. The app selects that point. If no point matches exactly, show the nearest one
+`default: true`. The app selects that point. If no point matches exactly, show the nearest one
 and log a warning; the confirmed curve includes the exact `t_low_default` as one of the cut points.
+
+**Locked default point (validation set):** `cut` = `t_low_default` = 0.000275603870032301, automation
+**18.01%** (`automation_rate` 0.180132 = (19,832 rule + 99,708 LOW) / 663,624 charges), missed fraud
+**29/610** (4.75%, Wilson 95% CI 3.33% to 6.74%). These are the numbers for the tile, the deck and
+`docs/analytics.md`; test (16.03% automation, 29/583 missed) is a check only and never feeds the curve.
 
 Cross-check at the start point (ML scope, from `thresholds.json`, not a new figure): fraud in LOW
 `val.low.fraud_in_low` = 29 of 610 val fraud, all statuses (599 Approved/Declined + 11 Pending/Reversed;
 Wilson 95% CI 3.33% to 6.74%, same as dashboard_spec K4). The missed-fraud tile shows fraud in LOW over all
 610, with two separate constant lines under it: fraud caught by HIGH (`fraud_in_high`, including
 Pending/Reversed fraud scoring above 30) and fraud explained by the Pending/Reversed rule (`fraud_in_rule`),
-both over `n_fraud` and read from the curve, never hardcoded. Cross-check: 5 of the 11 Pending/Reversed
+both over `n_fraud_total` and read from the curve, never hardcoded. Cross-check: 5 of the 11 Pending/Reversed
 fraud route to HIGH, 6 take the rule path. Also
 wrongful auto-close `val.low.false_auto_close_per_10k_tx` = 0.45 per 10k charges. The routing-order
 curve may use a larger denominator (it includes Pending/Reversed charges); the tiles show whatever the
@@ -44,52 +49,59 @@ slider; the automation rate comes only from the ML Engineer's routing-order curv
 ## 3. Input: the ML Engineer's curve (confirmed schema)
 
 The ML Engineer creates and pushes `static/data/sim_curve.json`. Field names below are the confirmed
-schema. `analytics/simulator_cost.py` reads them as-is and does not rename them.
+schema (`sim-curve-v1`). `analytics/simulator_cost.py` reads them as-is and does not rename them.
 
 ```jsonc
 {
+  "version": "sim-curve-v1-2026-10-03",
   "split": "validation",
-  "model_version": "string",
+  "model": {"name": "...", "model_sha256": "...", "thresholds_version": "v2-rule-high-2026-09-29"},
   "t_low_default": 0.000275603870032301,
-  "n_charges": 0,
-  "n_fraud": 0,
-  "n_high": 0,                         // constant; the slider does not move HIGH
-  "n_rule": 0,                         // constant; the slider does not move the rule path
-  "fraud_in_high": 0,                  // constant
-  "fraud_in_rule": 0,                  // constant
-  "points": [                          // about 200 cut points, sorted by t_low ascending
+  "n_charges": 663624,
+  "n_fraud_total": 610,
+  "n_high": 330,                       // constant; the slider does not move HIGH
+  "n_rule": 19832,                     // constant; the slider does not move the rule path
+  "fraud_in_high": 330,                // constant
+  "fraud_in_rule": 6,                  // constant
+  "points": [                          // 200 cut points, sorted by cut ascending
     {
-      "t_low": 0.0,                    // raw LightGBM score cut; one point equals t_low_default
-      "is_default": false,             // true only for the t_low_default point
+      "cut": 0.0,                      // raw LightGBM score cut; one point equals t_low_default
+      "default": true,                 // present (true) only on the t_low_default point
       "n_low": 0,
       "n_review": 0,
       "automation_rate": 0.0,          // (n_rule + n_low) / n_charges
-      "missed_fraud_n": 0,             // fraud in LOW
-      "missed_fraud_rate": 0.0,        // missed_fraud_n / n_fraud
-      "missed_fraud_ci_lo": 0.0,       // Wilson 95%
-      "missed_fraud_ci_hi": 0.0,       // Wilson 95%
-      "wrongful_autoclose_per_10k": 0.0   // missed_fraud_n / n_charges * 10000
+      "missed_fraud": {                // fraud in LOW / n_fraud_total, Wilson 95%
+        "k": 0, "n": 610, "rate": 0.0, "ci_low": 0.0, "ci_high": 0.0
+      },
+      "recall_outside_low": 0.0,       // 1 - missed_fraud.rate
+      "fraud_in_low_per_10k_low": 0.0, // fraud in LOW per 10,000 LOW charges (null when n_low = 0)
+      "cost_per_case": null            // null until analytics/simulator_cost.py fills it
     }
   ]
 }
 ```
 
-Definitions, routing order:
+Definitions, routing order. Shares are counts over `n_charges`:
 
+- `low = n_low / n_charges`, `review = n_review / n_charges`, `high = n_high / n_charges`,
+  `rule = n_rule / n_charges`
 - `automation_rate = (n_rule + n_low) / n_charges`
-- `missed_fraud_rate = fraud in LOW / n_fraud` (`missed_fraud_n / n_fraud`), with a Wilson 95% interval
-  in `missed_fraud_ci_lo` and `missed_fraud_ci_hi`
-- `wrongful_autoclose_per_10k = fraud in LOW / n_charges * 10000`
+- `missed_fraud.rate = fraud in LOW / n_fraud_total` (`missed_fraud.k / missed_fraud.n`), with a Wilson
+  95% interval in `missed_fraud.ci_low` and `missed_fraud.ci_high`
 - At the default point, and at every other point, `n_charges = n_high + n_rule + n_low + n_review`
 
-Checks the script runs (it exits non-zero and writes nothing if one fails): `split` is `validation`;
-`points` exists, is non-empty, and is sorted by `t_low`; exactly one point has `is_default = true`
-and its `t_low` equals `t_low_default`; for every point
-`n_high + n_rule + n_low + n_review = n_charges`; the three rate formulas above hold (tolerance 1e-6).
+Checks the script runs (it exits non-zero and writes nothing if one fails): `split` is `validation`
+and does not mention test; `n_charges`, `n_high` and `n_rule` exist; `points` exists and is
+non-empty; for every point the four counts are integers >= 0 and
+`n_high + n_rule + n_low + n_review = n_charges` exactly; `automation_rate` matches
+`(n_rule + n_low) / n_charges` within 1e-5 (the curve rounds it to 6 decimals).
 
-## 4. Output: enriched curve (same file, fields added)
+## 4. Output: enriched curve (same file, fields filled)
 
-`analytics/simulator_cost.py --in-place` adds two keys and **never changes the ML Engineer's fields**:
+`analytics/simulator_cost.py --in-place` fills three per-point fields and two top-level keys and
+**never changes the ML Engineer's other fields**. A null or absent `cost_per_case` / `cost_model` is
+filled. A non-null value is overwritten only if the existing `cost_model` was written by this
+script; otherwise the script stops. All money is USD per charge, one value per human-cost scenario.
 
 ```jsonc
 {
@@ -97,45 +109,68 @@ and its `t_low` equals `t_low_default`; for every point
   "cost_model": {
     "generator": "analytics/simulator_cost.py",
     "generated_at_utc": "...",
-    "llm_cost_per_case_usd": 0.0,            // measured, Oct 2 eval run; required, no default
-    "llm_cost_source": {"source": "...", "eval_run_id": "..."},
-    "llm_cost_label": "measured on the eval set (Oct 2 eval run)",
-    "rule_path_llm_cost_usd": 0.0,
+    "llm_cost_per_case_usd_by_band": {"low": 0.0, "review": 0.0, "high": 0.0, "rule": 0.0},
+    "llm_cost_source": {"source": "...", "eval_run_id": "...", "form": "...",
+                        "cost_per_call_usd": 0.0, "calls_per_case": {"...": 0}},
+    "llm_cost_label": "measured from 22 QA audit rows (live calls)",
     "human_cost_per_resolution_usd": {"low": 1.66, "mid": 3.32, "high": 5.53},
     "human_cost_source": "...",
-    "formula": "...",
+    "shares": "...", "formula": "...", "fields": "...",
     "assumptions": ["A1 ...", "A2 ...", "A3 ..."]
+  },
+  "default_point_summary": {           // the t_low_default point, to quote one number
+    "point_index": 14, "matched_by": "point flagged default: true",
+    "cut": 0.000275603870032301, "t_low_default": 0.000275603870032301,
+    "automation_rate": 0.180132, "missed_fraud": {"k": 29, "n": 610, "...": "..."},
+    "shares": {"low": 0.0, "review": 0.0, "high": 0.0, "rule": 0.0},
+    "cost_per_case": {"low": 0.0, "mid": 0.0, "high": 0.0},
+    "human_only": {"low": 1.66, "mid": 3.32, "high": 5.53},
+    "net_savings_per_case": {"low": 0.0, "mid": 0.0, "high": 0.0},
+    "net_savings_pct_vs_human_only": {"low": 0.0, "mid": 0.0, "high": 0.0},
+    "quote_mid": "At the default cut (18.01% automation), expected $X per charge vs ..."
   },
   "points": [
     {
       "...": "ML Engineer fields unchanged",
-      "cost_per_case": {
-        "low":  {"human_cost_per_resolution_usd": 1.66, "expected_cost_per_case_usd": 0.0,
-                 "human_only_cost_per_case_usd": 1.66, "saving_per_case_usd": 0.0,
-                 "saving_pct_vs_human_only": 0.0},
-        "mid":  {"...": "same fields at 3.32"},
-        "high": {"...": "same fields at 5.53"}
-      }
+      "cost_per_case": {"low": 0.0, "mid": 0.0, "high": 0.0},        // expected cost per charge
+      "human_only": {"low": 1.66, "mid": 3.32, "high": 5.53},        // human-only cost per charge
+      "net_savings_per_case": {"low": 0.0, "mid": 0.0, "high": 0.0}  // human_only - cost_per_case
     }
   ]
 }
 ```
 
+The default point is the one flagged `default: true`; if none, the point whose `cut` equals
+`t_low_default`; if none, the nearest cut (`matched_by` says which).
+
 Cost model per charge (counts over `n_charges`, routing order):
 
 | path | cost |
 |---|---|
-| LOW (AI resolves) | LLM cost |
-| REVIEW (handoff) | LLM cost + human cost |
-| HIGH (block offer + handoff) | LLM cost + human cost (A1: the agent still runs its LLM turn) |
-| Pending/Reversed rule path | `rule_path_llm_cost_usd`, default **0**, no human (A2: template-only, as in dashboard_spec K9) |
+| LOW (AI resolves) | LLM cost (low band) |
+| REVIEW (handoff) | LLM cost (review band) + human cost |
+| HIGH (block offer + handoff) | LLM cost (high band) + human cost (A1: the agent still runs its LLM turn) |
+| Pending/Reversed rule path | LLM cost (rule band), default **0**, no human (A2: template-only, as in dashboard_spec K9) |
 | Human-only baseline | human cost for every charge (A3) |
 
-`expected = llm*(n_low+n_review+n_high)/n_charges + rule_llm*n_rule/n_charges + human*(n_review+n_high)/n_charges`.
+`expected = (llm_low*n_low + llm_review*n_review + llm_high*n_high + llm_rule*n_rule)/n_charges + human*(n_review+n_high)/n_charges`;
+`net_savings_per_case = human - expected`.
 
 Human cost per dispute resolution: **$1.66 / $3.32 / $5.53** (low / mid at $12/hr / high), from
-`analytics/out/cost_proj_per_resolution.csv` on main (Queja, mean handle time). The LLM cost per case
-is a CLI arg or a JSON file and has no default: the script fails until the measured value exists.
+`analytics/out/cost_proj_per_resolution.csv` on main (Queja, mean handle time). The LLM cost has no
+default: the script fails until the measured value exists. It comes from `--llm-cost-usd X` (flat, same
+cost for LOW/REVIEW/HIGH) or `--llm-cost-json eval_cost.json` in one of two forms:
+
+```jsonc
+// flat: same LLM cost per case for LOW / REVIEW / HIGH; rule band = --rule-path-llm-cost (default 0)
+{"llm_cost_per_case_usd": 0.0, "source": "...", "eval_run_id": "..."}
+
+// per band: llm cost for a band = cost_per_call_usd * calls_per_case[band]
+// "rule" is optional; absent -> --rule-path-llm-cost (default 0, A2). Giving both is an error.
+{"cost_per_call_usd": 0.0,
+ "calls_per_case": {"low": 0, "review": 0, "high": 0, "rule": 0},
+ "source": "...", "eval_run_id": "..."}
+```
 
 ## 5. UI tiles (one set per cut)
 
@@ -144,17 +179,17 @@ cost line). Show `k / n` next to every rate.
 
 | # | Tile | Value from | ES label | PT label |
 |---|---|---|---|---|
-| T0 | Slider | `t_low` | Umbral de riesgo bajo / revisión | Limite entre risco baixo e revisão |
-| T0b | Start marker | `is_default` | Umbral actual (95 % de recall) | Limite atual (95% de recall) |
+| T0 | Slider | `cut` | Umbral de riesgo bajo / revisión | Limite entre risco baixo e revisão |
+| T0b | Start marker | `default` | Umbral actual (95 % de recall) | Limite atual (95% de recall) |
 | T1 | Automation rate | `automation_rate` = `(n_rule + n_low) / n_charges` | Casos que resuelve la IA | Casos que a IA resolve |
 | T1b | Subtitle | fixed | Riesgo bajo: la IA explica y puede cerrar | Risco baixo: a IA explica e pode encerrar |
 | T2 | Handoff share | `n_review / n_charges` | Pasan a una persona (revisión) | Passam para uma pessoa (revisão) |
 | T2b | Fixed counts note | `n_high`, `n_rule` | Riesgo alto y cargos pendientes/revertidos: no cambian con el umbral | Risco alto e cobranças pendentes/estornadas: não mudam com o limite |
-| T3 | Missed fraud with CI | `missed_fraud_rate`, `missed_fraud_ci_lo`, `missed_fraud_ci_hi`, `missed_fraud_n / n_fraud` | Fraude que la IA cerraría (IC 95 %) | Fraude que a IA encerraria (IC 95%) |
-| T4 | Wrongful auto-closes | `wrongful_autoclose_per_10k` | Cierres automáticos erróneos por cada 10 000 cargos | Encerramentos automáticos indevidos a cada 10.000 cobranças |
-| T5 | Cost per case (3 scenarios) | `cost_per_case.{low,mid,high}.expected_cost_per_case_usd` | Costo por caso (escenario bajo / medio / alto) | Custo por caso (cenário baixo / médio / alto) |
-| T5b | Human-only line | `human_only_cost_per_case_usd` | Solo personas | Só pessoas |
-| T5c | Saving | `saving_per_case_usd`, `saving_pct_vs_human_only` | Ahorro por caso frente a solo personas | Economia por caso frente a só pessoas |
+| T3 | Missed fraud with CI | `missed_fraud.rate`, `missed_fraud.ci_low`, `missed_fraud.ci_high`, `missed_fraud.k / missed_fraud.n` | Fraude que la IA cerraría (IC 95 %) | Fraude que a IA encerraria (IC 95%) |
+| T4 | Wrongful auto-closes, all (includes Pending/Reversed) | `(missed_fraud.k + fraud_in_rule) / n_charges * 10000`, computed by the app (the curve has no such field; `fraud_in_low_per_10k_low` is per 10k LOW auto-closes, not all charges). Captain decision Oct 3: count every wrongful auto-close, LOW plus the 6 rule-explained Pending/Reversed frauds. Default cut on validation: 0.53. | Fraudes cerrados sin revisión humana, por 10k cargos (incluye Pending/Reversed) | Fraudes encerradas sem revisão humana, a cada 10 mil cobranças (inclui Pending/Reversed) |
+| T5 | Cost per case (3 scenarios) | `cost_per_case.{low,mid,high}` | Costo por caso (escenario bajo / medio / alto) | Custo por caso (cenário baixo / médio / alto) |
+| T5b | Human-only line | `human_only.{low,mid,high}` | Solo personas | Só pessoas |
+| T5c | Saving | `net_savings_per_case.{low,mid,high}`; % = `net_savings_per_case / human_only` (precomputed for the default point in `default_point_summary.net_savings_pct_vs_human_only`) | Ahorro por caso frente a solo personas | Economia por caso frente a só pessoas |
 | T5d | Cost footnote | `cost_model` | Costo humano por disputa resuelta: US$1,66 / 3,32 / 5,53 (supuesto, salario de US$12/h en el medio). Costo de IA medido en el conjunto de evaluación. PROYECCIÓN. | Custo humano por disputa resolvida: US$ 1,66 / 3,32 / 5,53 (premissa, salário de US$ 12/h no meio). Custo de IA medido no conjunto de avaliação. PROJEÇÃO. |
 | T6 | Data tag | fixed | Conjunto de validación (no es tráfico real) | Conjunto de validação (não é tráfego real) |
 
