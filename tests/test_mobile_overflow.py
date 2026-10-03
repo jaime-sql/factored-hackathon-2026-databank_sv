@@ -106,11 +106,15 @@ const READY = {
       await navigate(base + path);
       await evaluate(`localStorage.setItem('hd_lang', ${JSON.stringify(lang)})`);
       await reload();
-      await waitFor(`document.documentElement.lang === ${JSON.stringify(lang)}`, `${path} ${lang} lang`);
+      await waitFor(
+        `document.documentElement.lang === ${JSON.stringify(lang)}`,
+        `${path} ${lang} lang`,
+      );
       await waitFor(READY[path], `${path} rendered`);
       await settle();
       const size = JSON.parse(await evaluate(
-        "JSON.stringify({scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, body: document.body.scrollWidth})"
+        "JSON.stringify({scroll: document.documentElement.scrollWidth, "
+        + "client: document.documentElement.clientWidth, body: document.body.scrollWidth})"
       ));
       if (size.scroll > size.client + 1 || size.body > size.client + 1) {
         failures.push({ lang, page: path, ...size });
