@@ -14,6 +14,7 @@ AUDIT_TABLES = (
     "audit_current",
     "audit_llm_call_current",
 )
+INSERT_ONLY_TABLES = ("test_cases",)
 
 
 class AuditImmutable(RuntimeError):
@@ -40,3 +41,6 @@ def assert_statement_allowed(sql: str) -> None:
                 raise AuditImmutable(
                     f"{table} is append-only; insert a row with supersedes_audit_id"
                 )
+        for table in INSERT_ONLY_TABLES:
+            if re.search(rf"\b{table}\b", lowered):
+                raise AuditImmutable(f"{table} accepts INSERT and SELECT only")

@@ -4,26 +4,56 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Harbor Desk</title>
+  <style>html.i18n-pending body{visibility:hidden}</style>
+  <script>
+    (function () {
+      var lang = "es";
+      try {
+        if (localStorage.getItem("hd_lang") === "pt") lang = "pt";
+      } catch (e) {}
+      document.documentElement.lang = lang;
+      document.documentElement.classList.add("i18n-pending");
+    })();
+  </script>
+  <script src="/static/js/catalog.js"></script>
+  <link rel="icon" href="/favicon.ico" />
   <link rel="stylesheet" href="/static/css/app.css" />
 </head>
-<body>
+<body data-tour-page="client">
   <header>
     <div>
-      <h1>Harbor Desk</h1>
-      <p class="lede">Un cargo a la vez. El asistente no mueve dinero: explica, bloquea la tarjeta solo si usted lo confirma, o pasa el caso a una persona.</p>
+      <div class="title-line">
+        <h1 id="page-title">Harbor Desk</h1>
+        <span id="test-badge" class="test-badge" hidden>MODO PRUEBA</span>
+      </div>
+      <p class="lede" id="lede">Un cargo a la vez. El asistente no mueve dinero: explica, bloquea la tarjeta solo si usted lo confirma, o pasa el caso a una persona.</p>
     </div>
     <nav>
       <a href="/">Cliente</a>
       <a href="/agent">Consola</a>
       <a href="/metrics">Métricas</a>
       <button type="button" id="lang">Español</button>
+      <button type="button" id="tour">¿Cómo funciona?</button>
     </nav>
   </header>
   <main>
     <section id="personas" class="row"></section>
     <section id="charges"></section>
+    <form id="composer" class="row">
+      <input id="message" type="text" maxlength="500" autocomplete="off" placeholder="Mensaje" />
+      <button type="submit" id="send">Enviar</button>
+    </form>
     <section id="thread"></section>
+    <p class="test-arm">
+      <button type="button" id="test-mode-link" class="linkish">Modo de prueba</button>
+    </p>
+    <form id="test-mode-form" class="test-arm-form" hidden>
+      <label id="test-token-label" for="test-token">Token de prueba</label>
+      <input id="test-token" type="password" autocomplete="off" maxlength="200" placeholder="Token de prueba" />
+      <button type="submit" id="test-mode-send">Activar</button>
+    </form>
   </main>
   <script src="/static/js/desk.js"></script>
+  <script src="/static/js/tour.js"></script>
 </body>
 </html>

@@ -1,0 +1,17 @@
+{
+  "version": "PLACEHOLDER — not validation data",
+  "note": "Test fixture only. Not produced by validation. Do not copy into triage/artifacts.",
+  "bands": {
+    "review": {
+      "threshold": 0.000275603870032301,
+      "val_fraud_rate": 0.012,
+      "ci": [0.008, 0.017]
+    },
+    "high": {
+      "threshold": 30,
+      "val_fraud_rate": 0.41,
+      "ci_low": 0.33,
+      "ci_high": 0.49
+    }
+  }
+}

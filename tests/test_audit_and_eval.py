@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.eval_access import DEMO_SAMPLE_LABEL
+from app.i18n import ui_copy
 from app.ops.guard import AuditImmutable
 from tests.conftest import login
 
@@ -107,12 +108,21 @@ def test_metrics_exclude_eval_until_the_demo_sample_toggle(client: TestClient) -
     assert quiet["eval_toggle_label"] == DEMO_SAMPLE_LABEL
     assert quiet["k1_volume"]["total"] == 1
     assert quiet["excluded_eval_cases"] == 1
-    included = client.get("/api/metrics?include_eval=true").json()
+    anonymous = client.get("/api/metrics?include_eval=1").json()
+    assert anonymous["include_eval"] is False
+    assert anonymous["k1_volume"]["total"] == 1
+    assert anonymous["excluded_eval_cases"] == 1
+    included = client.get(
+        "/api/metrics?include_eval=1",
+        headers={"Authorization": "Bearer demo-agent-local"},
+    ).json()
+    assert included["include_eval"] is True
     assert included["k1_volume"]["total"] == 2
     assert included["excluded_eval_cases"] == 0
     page = client.get("/metrics")
     assert page.status_code == 200
-    assert DEMO_SAMPLE_LABEL in page.text
+    assert ui_copy("es")["eval_toggle"] in page.text
+    assert DEMO_SAMPLE_LABEL not in page.text
 
 
 def test_audit_rows_are_append_only(client: TestClient) -> None:
@@ -129,6 +139,21 @@ def test_audit_rows_are_append_only(client: TestClient) -> None:
             (opened["case_id"],),
         )
     assert client.app.state.ops.audit_case_count(opened["case_id"]) == before
+    with pytest_raises():
+        client.app.state.ops.execute(
+            "UPDATE test_cases SET reason = 'changed' WHERE case_id = ?",
+            (opened["case_id"],),
+        )
+    with pytest_raises():
+        client.app.state.ops.execute(
+            "DELETE FROM audit_case WHERE case_id = ?",
+            (opened["case_id"],),
+        )
+    with pytest_raises():
+        client.app.state.ops.execute(
+            "DELETE FROM test_cases WHERE case_id = ?",
+            (opened["case_id"],),
+        )
     contested = client.post(
         f"/cases/{opened['case_id']}/actions",
         headers=headers,
@@ -180,6 +205,71 @@ def test_migration_grants_audit_current_to_eval_rw_if_the_role_exists() -> None:
     assert "case_source" in sql
     assert "statement_timeout = '15s'" in sql
     assert "app_rw" in sql
+    view_sql = sql[
+        sql.index("CREATE OR REPLACE VIEW app.audit_current") : sql.index(
+            "CREATE OR REPLACE VIEW app.audit_llm_call_current"
+        )
+    ]
+    assert "is_test" not in view_sql
+    assert "test_cases" not in view_sql
+    assert "eval_run_id" not in view_sql
+    assert "GRANT SELECT, INSERT ON app.test_cases TO app_rw" in sql
+    assert "REVOKE UPDATE, DELETE ON app.test_cases FROM app_rw" in sql
+    assert "GRANT SELECT ON app.audit_live TO app_rw" in sql
+    assert "GRANT SELECT ON app.audit_live TO eval_rw" in sql
+    assert "GRANT SELECT ON app.test_cases TO eval_rw" in sql
+    assert "GRANT UPDATE" not in sql
+    assert "GRANT DELETE" not in sql
+    sql002 = (ROOT / "migrations" / "002_is_test.sql").read_text(encoding="utf-8")
+    assert "CREATE OR REPLACE VIEW app.audit_current" not in sql002
+    assert "CREATE OR REPLACE VIEW app.audit_live" in sql002
+    for phrase in (
+        "ON app.audit_case TO",
+        "ON app.audit_llm_call TO",
+        "ON app.audit_event TO",
+        "ON app.audit_current TO",
+        "ON app.audit_case FROM",
+        "ON app.audit_llm_call FROM",
+        "ON app.audit_event FROM",
+    ):
+        assert phrase not in sql002, phrase
+    from app.ops.store import _sql_statements
+
+    parts = _sql_statements(ROOT / "migrations" / "002_is_test.sql")
+    do_blocks = [part for part in parts if "DO $$" in part]
+    assert len(do_blocks) == 1
+    assert "GRANT SELECT ON app.audit_live TO eval_rw" in do_blocks[0]
+    assert "GRANT SELECT ON app.test_cases TO eval_rw" in do_blocks[0]
+    assert "END $$" in do_blocks[0]
+
+
+def test_migration_003_leaves_app_rw_select_only_on_the_audit_views() -> None:
+    from app.ops.store import _privileges_are_select_only, _sql_statements
+
+    sql003 = (ROOT / "migrations" / "003_view_grants.sql").read_text(encoding="utf-8")
+    sql002 = (ROOT / "migrations" / "002_is_test.sql").read_text(encoding="utf-8")
+    revoke = (
+        "REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON "
+        "app.audit_current, app.audit_live, app.audit_llm_call_current FROM app_rw"
+    )
+    grant = (
+        "GRANT SELECT ON app.audit_current, app.audit_live, app.audit_llm_call_current TO app_rw"
+    )
+    assert revoke in sql003
+    assert grant in sql003
+    assert "alter default privileges" not in sql003.lower()
+    assert revoke not in sql002
+    parts = _sql_statements(ROOT / "migrations" / "003_view_grants.sql")
+    assert parts == [revoke, grant]
+    applied = "\n".join(parts).lower()
+    assert "eval_rw" not in applied
+    assert "default" not in applied
+    store = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
+    assert "003_view_grants.sql" in store
+    views = {"audit_current", "audit_live", "audit_llm_call_current"}
+    assert _privileges_are_select_only({name: {"SELECT"} for name in views})
+    assert not _privileges_are_select_only({name: {"SELECT", "INSERT"} for name in views})
+    assert not _privileges_are_select_only({"audit_current": {"SELECT"}})
 
 
 def test_app_code_does_not_read_eval_labels() -> None:

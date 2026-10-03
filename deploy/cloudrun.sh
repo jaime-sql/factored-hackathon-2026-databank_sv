@@ -12,6 +12,7 @@
 # Optional:
 #   EVAL_RUNNER_TOKEN
 #   DEMO_AGENT_TOKEN      required in production when Clerk keys are absent
+#   DEMO_JUDGE_TOKEN      optional queue-only token; leave unset to disable
 #   CLERK_SECRET_KEY / CLERK_PUBLISHABLE_KEY
 #   GCP_REGION (default us-central1)
 #   SERVICE_NAME (default harbor-desk)
@@ -66,6 +67,11 @@ if [[ -n "${DEMO_AGENT_TOKEN:-}" ]]; then
   agent_secret="${SERVICE_NAME}-demo-agent-token"
   upsert_secret "${agent_secret}" "${DEMO_AGENT_TOKEN}"
   secrets="${secrets},DEMO_AGENT_TOKEN=${agent_secret}:latest"
+fi
+if [[ -n "${DEMO_JUDGE_TOKEN:-}" ]]; then
+  judge_secret="${SERVICE_NAME}-demo-judge-token"
+  upsert_secret "${judge_secret}" "${DEMO_JUDGE_TOKEN}"
+  secrets="${secrets},DEMO_JUDGE_TOKEN=${judge_secret}:latest"
 fi
 if [[ -n "${CLERK_SECRET_KEY:-}" ]]; then
   clerk_secret="${SERVICE_NAME}-clerk-secret"

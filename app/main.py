@@ -11,12 +11,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
+from app.band_evidence import BandEvidenceSource
 from app.bank.fixture import PERSONAS, init_bank
 from app.bank.repository import SQLBankRepository
 from app.cases.engine import Engine
 from app.config import Settings, get_settings
 from app.errors import APIError
 from app.guardrails.pii import set_known_names
+from app.i18n import write_catalog_script
 from app.logging_config import configure_logging
 from app.ops.store import OpsStore
 from app.paths import project_root
@@ -52,6 +54,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.bank = bank
         app.state.ops = ops
         app.state.thresholds = ThresholdSource(threshold_path)
+        app.state.band_evidence = BandEvidenceSource(
+            root / "triage" / "artifacts" / "band_evidence.json"
+        )
         app.state.triage = LightGBMTriage()
         app.state.engine = Engine(bank, ops, app.state.thresholds, active, app.state.triage)
         yield
@@ -66,9 +71,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(router)
+    write_catalog_script()
     static = project_root() / "static"
     if static.exists():
         app.mount("/static", StaticFiles(directory=static), name="static")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon() -> FileResponse:
+        return FileResponse(static / "favicon.ico", media_type="image/x-icon")
 
     @app.get("/")
     def desk() -> FileResponse:

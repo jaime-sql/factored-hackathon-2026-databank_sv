@@ -16,6 +16,8 @@ jobs:
         with:
           enable-cache: true
           python-version: "3.12"
+      - name: Install LightGBM runtime
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgomp1
       - name: Install dependencies
         run: uv sync --frozen --all-groups
       - name: Lint

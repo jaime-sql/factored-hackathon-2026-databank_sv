@@ -19,6 +19,16 @@ _RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
         ),
     ),
     (
+        "ignore_rules",
+        re.compile(
+            r"\bignor(?:a|e|ar|as|em|ando)\s+"
+            r"(?:(?:as|os|las|los)\s+)?"
+            r"(?:tus|sus|tuas|suas|your|the|all|mis)\s+"
+            r"(?:reglas|regras|rules|instrucciones|instrucoes|instruções)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
         "disregard_instructions",
         re.compile(
             r"disregard\s+(?:your|the|all|any)?\s*(?:instructions|rules|prompts|guidelines)",

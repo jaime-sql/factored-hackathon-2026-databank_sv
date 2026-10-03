@@ -18,9 +18,14 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY app ./app
+# Vendored LightGBM booster lives at triage/artifacts/model.txt.
 COPY triage ./triage
 COPY static ./static
 COPY migrations ./migrations
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /app/data && chown -R appuser:appuser /app
 USER appuser

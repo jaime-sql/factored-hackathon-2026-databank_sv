@@ -54,3 +54,30 @@ class HandoffPacket(BaseModel):
     open_questions: list[str] = Field(default_factory=list)
     recommended_next_step: str
     synthetic_duplicate: bool = False
+
+
+def packet_is_complete(packet: HandoffPacket) -> bool:
+    """A reviewer can act only when the charge identity, time, and next step are filled.
+
+    merchant_name is required. Replies and packet_merchant fill it from category or type
+    when the bank name is null, so a blank name is an incomplete packet.
+    """
+    transaction = packet.transaction
+    required = (
+        packet.case_id,
+        packet.customer_key,
+        packet.language,
+        packet.recommended_next_step,
+        packet.triage.band,
+        packet.triage.model_version,
+        transaction.transaction_key,
+        transaction.merchant_name,
+        transaction.transaction_status,
+        transaction.currency,
+        transaction.transaction_ts_utc,
+        transaction.customer_tz,
+        transaction.transaction_ts_customer_local,
+    )
+    if any(not str(value).strip() for value in required):
+        return False
+    return bool(packet.verified_facts)

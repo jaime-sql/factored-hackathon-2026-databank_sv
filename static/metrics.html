@@ -4,28 +4,47 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Métricas · Harbor Desk</title>
+  <style>html.i18n-pending body{visibility:hidden}</style>
+  <script>
+    (function () {
+      var lang = "es";
+      try {
+        if (localStorage.getItem("hd_lang") === "pt") lang = "pt";
+      } catch (e) {}
+      document.documentElement.lang = lang;
+      document.documentElement.classList.add("i18n-pending");
+    })();
+  </script>
+  <script src="/static/js/catalog.js"></script>
+  <link rel="icon" href="/favicon.ico" />
   <link rel="stylesheet" href="/static/css/app.css" />
 </head>
-<body>
+<body data-tour-page="metrics">
   <header>
     <div>
-      <h1>Métricas</h1>
-      <p class="lede">El tablero deja fuera el tráfico de evaluación. Las tasas de seguridad que necesitan etiquetas viven en el informe offline.</p>
+      <div class="title-line">
+        <h1 id="page-title">Métricas</h1>
+        <span id="test-badge" class="test-badge" hidden>MODO PRUEBA</span>
+      </div>
+      <p class="lede" id="lede">El tablero deja fuera el tráfico de evaluación y el de prueba. Las tasas de seguridad que necesitan etiquetas viven en el informe fuera de línea.</p>
     </div>
     <nav>
       <a href="/">Cliente</a>
       <a href="/agent">Consola</a>
       <a href="/metrics">Métricas</a>
+      <button type="button" id="lang">Español</button>
+      <button type="button" id="tour">¿Cómo funciona?</button>
     </nav>
   </header>
   <main>
     <label class="toggle">
       <input id="include-eval" type="checkbox" />
-      <span id="eval-label">Demo sample (fraud-enriched, ~11x HIGH rate vs full data)</span>
+      <span id="eval-label">Muestra de demostración (enriquecida en fraude, tasa de riesgo alto cerca de 11 veces la de los datos completos)</span>
     </label>
     <div id="tiles" class="grid"></div>
     <pre id="raw"></pre>
   </main>
   <script src="/static/js/metrics.js"></script>
+  <script src="/static/js/tour.js"></script>
 </body>
 </html>

@@ -6,12 +6,32 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.bank.access import TRANSACTION_COLUMNS
+from app.bank.repository import synthetic_pair_sibling
 from app.thresholds_loader import ThresholdSource, preliminary_route
 from app.timeutil import present_time
 from app.triage_model import ScriptedTriage, fallback_score
 from tests.conftest import login
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_sqlite_personas_keep_synthetic_notes(client: TestClient) -> None:
+    body = client.get("/api/personas").json()
+    by_id = {row["id"]: row for row in body["personas"]}
+    assert by_id["maria"]["segment"] == "Basic"
+    assert by_id["maria"]["note"] == "Persona sintética"
+    assert by_id["maria"]["notes"]["pt"] == "Pessoa sintética"
+    assert by_id["teo"]["note"].startswith("Persona sintética")
+    assert "Mexico City" not in by_id["teo"]["note"]
+    assert by_id["lucia"]["label"] == "Lucía · Querétaro"
+    assert by_id["lucia"]["labels"]["pt"] == "Lucía · Querétaro"
+    assert by_id["lucia"]["segment"] == "Basic"
+    assert by_id["lucia"]["tz"] == "America/Mexico_City"
+    assert by_id["lucia"]["note"] == "Persona sintética, cargo duplicado"
+    assert by_id["maria"]["labels"]["pt"] == "María · Cidade do México"
+    assert synthetic_pair_sibling("SYN_0238_A") == "SYN_0238_B"
+    assert synthetic_pair_sibling("SYN_0238_B") == "SYN_0238_A"
+    assert synthetic_pair_sibling("tx_maria_dup_b") is None
 
 
 def test_high_rule_runs_before_pending_and_reversed(client: TestClient) -> None:
@@ -223,3 +243,48 @@ def test_customer_times_include_tijuana_and_hide_is_fraud(client: TestClient) ->
         json={"transaction_key": "tx_ana_home", "message": "No reconozco este cargo"},
     )
     assert hidden.status_code == 404
+
+
+def test_lucia_sqlite_duplicate_scores_low(client: TestClient) -> None:
+    import numpy as np
+    import pandas as pd
+
+    from app.bank.fixture import build_rows
+    from triage.score import band_of, score_raw
+
+    headers = login(client, "lucia")
+    listed = client.get("/api/transactions", headers=headers).json()
+    keys = {row["transaction_key"] for row in listed["transactions"]}
+    assert {"tx_lucia_source", "SYN_0112_A", "SYN_0112_B"} <= keys
+    pair = client.app.state.bank.get_duplicate("ck_mx_lucia", "SYN_0112_A")
+    assert pair is not None
+    assert pair.source_transaction_key == "tx_lucia_source"
+    assert pair.other_transaction_key == "SYN_0112_B"
+    assert client.app.state.bank.get_duplicate("ck_mx_lucia", "tx_lucia_source") is None
+
+    seen: list[object] = []
+
+    class Spy(ScriptedTriage):
+        def score(self, row: dict[str, object], config: object) -> object:
+            seen.append(row.get("fraud_score"))
+            return super().score(row, config)  # type: ignore[arg-type]
+
+    client.app.state.engine.triage = Spy({"SYN_0112_A": "low", "SYN_0112_B": "low"})
+    opened = client.post(
+        "/cases",
+        headers=headers,
+        json={"transaction_key": "SYN_0112_A", "message": "No reconozco este cargo"},
+    ).json()
+    assert opened["case_type"] == "duplicate_synthetic"
+    assert "SINTÉTICO" in opened["reply"]
+    assert "12:00" in opened["reply"]
+    assert "12:10" in opened["reply"]
+    source = client.app.state.bank.get_features("ck_mx_lucia", "tx_lucia_source")
+    assert source is not None
+    assert float(str(source["fraud_score"])) == 2.0
+    assert seen == [1.0]
+
+    _transactions, features, _duplicates = build_rows()
+    feature = next(row for row in features if row["transaction_key"] == "tx_lucia_source")
+    raw = score_raw(pd.DataFrame([feature]))
+    assert band_of(raw, np.array([feature["fraud_score"]]))[0] == "low"

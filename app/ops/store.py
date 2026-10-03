@@ -1,19 +1,30 @@
 """SQLite and Postgres operational store.
 
 Audit rows are inserted, never updated. A correction is a new row whose
-supersedes_audit_id points at the row it replaces. KPIs read audit_current,
-the tip of each chain. SQLite mirrors that rule in this process because it
-has no roles.
+supersedes_audit_id points at the row it replaces. audit_current is the tip
+of each chain and stays unfiltered for the eval runner. Desk KPIs read
+audit_live. SQLite mirrors that rule in this process because it has no roles.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import re
 import sqlite3
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from app.ops.guard import assert_statement_allowed
+
+logger = logging.getLogger(__name__)
+
+_SCHEMA_WARNING = (
+    "test-traffic schema is missing (is_test, test_cases, or audit_live); "
+    "run migrations/002_is_test.sql as the database owner. "
+    "Case inserts omit is_test, test marks are ignored, and metrics read audit_current."
+)
 
 _PRICES = (
     ("gpt-4o-mini", 0.15, 0.60, "2026-09-29", "https://openai.com/api/pricing/"),
@@ -56,8 +67,14 @@ class OpsStore:
         self.path = path
         self.dsn = dsn
         self.readback_tamper: Any = None
+        self.migrations_ok = True
+        self._schema_warned = False
         if backend == "sqlite":
             self._init_sqlite()
+        else:
+            self._ensure_postgres_is_test()
+            self._ensure_postgres_view_grants()
+        self.refresh_test_schema()
 
     def _q(self, sql: str) -> str:
         if self.backend == "postgres":
@@ -102,19 +119,82 @@ class OpsStore:
             conn.commit()
             return rows
 
-    def _write(self, sql: str, params: tuple[object, ...]) -> None:
+    def _write(self, sql: str, params: tuple[object, ...]) -> int:
         assert_statement_allowed(sql)
         params = self._params(params)
         query = self._q(sql)
         if self.backend == "sqlite":
             with sqlite3.connect(self.path) as conn:
-                conn.execute(query, params)
-            return
+                cursor = conn.execute(query, params)
+                return int(cursor.rowcount)
         from app.db import connect_app
 
         with connect_app(self.dsn) as conn:
-            conn.execute(query, params)
+            cursor = conn.execute(query, params)
             conn.commit()
+            return int(cursor.rowcount)
+
+    def refresh_test_schema(self) -> bool:
+        """True when is_test, test_cases, and audit_live are all present."""
+        try:
+            present = self._probe_test_schema()
+        except Exception:
+            present = False
+        if present:
+            self.migrations_ok = True
+            return True
+        self._mark_migrations_missing()
+        return False
+
+    def _mark_migrations_missing(self) -> None:
+        self.migrations_ok = False
+        if self._schema_warned:
+            return
+        self._schema_warned = True
+        logger.warning(_SCHEMA_WARNING)
+
+    def _probe_test_schema(self) -> bool:
+        if self.backend == "sqlite":
+            with sqlite3.connect(self.path) as conn:
+                return _sqlite_has_test_schema(conn)
+        columns = self.execute(
+            "SELECT table_name FROM information_schema.columns "
+            "WHERE table_schema = 'app' AND column_name = 'is_test' "
+            "AND table_name IN ('cases', 'audit_case', 'audit_llm_call')"
+        )
+        found = {str(row["table_name"]) for row in columns}
+        if found != {"cases", "audit_case", "audit_llm_call"}:
+            return False
+        tables = self.execute(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = 'app' AND table_name = 'test_cases'"
+        )
+        views = self.execute(
+            "SELECT table_name FROM information_schema.views "
+            "WHERE table_schema = 'app' AND table_name = 'audit_live'"
+        )
+        return bool(tables and views)
+
+    def _insert_with_optional_test(
+        self, table: str, columns: str, params: tuple[object, ...], *, is_test: bool
+    ) -> None:
+        without = (
+            f"INSERT INTO {self._table(table)} ({columns}) VALUES ({_placeholders(len(params))})"
+        )
+        if not self.migrations_ok:
+            self._write(without, params)
+            return
+        try:
+            self._write(
+                f"INSERT INTO {self._table(table)} ({columns}, is_test) "
+                f"VALUES ({_placeholders(len(params) + 1)})",
+                params + (is_test,),
+            )
+        except Exception as exc:
+            if not _missing_test_schema(exc):
+                raise
+            self._mark_migrations_missing()
+            self._write(without, params)
 
     def _init_sqlite(self) -> None:
         with sqlite3.connect(self.path) as conn:
@@ -133,7 +213,8 @@ class OpsStore:
                   latest_audit_id TEXT,
                   is_eval_case INTEGER NOT NULL DEFAULT 0,
                   eval_run_id TEXT,
-                  case_source TEXT
+                  case_source TEXT,
+                  is_test INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS audit_case (
                   audit_id TEXT PRIMARY KEY,
@@ -159,7 +240,8 @@ class OpsStore:
                   guardrail_flags TEXT NOT NULL,
                   is_eval_case INTEGER NOT NULL DEFAULT 0,
                   eval_run_id TEXT,
-                  case_source TEXT
+                  case_source TEXT,
+                  is_test INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS audit_llm_call (
                   audit_id TEXT PRIMARY KEY,
@@ -178,7 +260,8 @@ class OpsStore:
                   retry_attempt INTEGER NOT NULL,
                   prompt_version TEXT,
                   is_eval_case INTEGER NOT NULL,
-                  eval_run_id TEXT
+                  eval_run_id TEXT,
+                  is_test INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS audit_event (
                   audit_id TEXT PRIMARY KEY,
@@ -230,6 +313,12 @@ class OpsStore:
                   value REAL NOT NULL,
                   note TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS test_cases (
+                  case_id TEXT PRIMARY KEY,
+                  marked_at TEXT NOT NULL,
+                  reason TEXT
+                );
+                DROP VIEW IF EXISTS audit_live;
                 DROP VIEW IF EXISTS audit_current;
                 CREATE VIEW audit_current AS
                 SELECT * FROM audit_case AS a
@@ -256,16 +345,82 @@ class OpsStore:
                     "INSERT OR IGNORE INTO analytics_assumption VALUES (?, ?, ?)",
                     assumption,
                 )
+            _add_sqlite_is_test(conn)
+            conn.executescript(_SQLITE_AUDIT_VIEWS)
+
+    def _ensure_postgres_is_test(self) -> None:
+        """Apply migrations/002 when this role can. A refusal leaves startup up."""
+        try:
+            from app.db import connect_app
+            from app.paths import project_root
+
+            path = project_root() / "migrations" / "002_is_test.sql"
+            statements = _sql_statements(path)
+            with connect_app(self.dsn) as conn:
+                column = conn.execute(
+                    "SELECT 1 AS ok FROM information_schema.columns "
+                    "WHERE table_schema = 'app' AND table_name = 'audit_case' "
+                    "AND column_name = 'is_test'"
+                ).fetchone()
+                table = conn.execute(
+                    "SELECT 1 AS ok FROM information_schema.tables "
+                    "WHERE table_schema = 'app' AND table_name = 'test_cases'"
+                ).fetchone()
+                view = conn.execute(
+                    "SELECT 1 AS ok FROM information_schema.views "
+                    "WHERE table_schema = 'app' AND table_name = 'audit_live'"
+                ).fetchone()
+                if column and table and view:
+                    return
+                for statement in statements:
+                    try:
+                        conn.execute(statement)
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+                        logger.warning(
+                            "is_test migration was not applied; "
+                            "run migrations/002_is_test.sql as the database owner"
+                        )
+                        return
+        except Exception as exc:
+            logger.warning("is_test migration skipped (%s)", type(exc).__name__)
+
+    def _ensure_postgres_view_grants(self) -> None:
+        """Apply migrations/003 when this role can. A refusal leaves startup up.
+
+        migrations_ok stays the test-schema probe. View privileges are not
+        folded into that flag.
+        """
+        try:
+            from app.db import connect_app
+            from app.paths import project_root
+
+            path = project_root() / "migrations" / "003_view_grants.sql"
+            statements = _sql_statements(path)
+            with connect_app(self.dsn) as conn:
+                if _privileges_are_select_only(_view_privileges(conn)):
+                    return
+                for statement in statements:
+                    try:
+                        conn.execute(statement)
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+                        logger.warning(
+                            "view grants were not applied; "
+                            "run migrations/003_view_grants.sql as the database owner"
+                        )
+                        return
+        except Exception as exc:
+            logger.warning("view grants migration skipped (%s)", type(exc).__name__)
 
     def insert_case(self, row: dict[str, Any]) -> None:
-        sql = (
-            f"INSERT INTO {self._table('cases')} ("
+        self._insert_with_optional_test(
+            "cases",
             "case_id, customer_key, transaction_key, state, language, case_type, "
             "created_at, updated_at, closed_at, latest_audit_id, is_eval_case, "
-            "eval_run_id, case_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
-        self._write(
-            sql,
+            "eval_run_id, case_source",
             (
                 row["case_id"],
                 row["customer_key"],
@@ -281,7 +436,40 @@ class OpsStore:
                 row.get("eval_run_id"),
                 row.get("case_source"),
             ),
+            is_test=bool(row.get("is_test")),
         )
+
+    def insert_test_case(self, case_id: str, reason: str | None = None) -> int:
+        """Insert one case id. Returns the row count: 1 inserted, 0 already present."""
+        if not self.migrations_ok:
+            return 0
+        try:
+            return self._write(
+                f"INSERT INTO {self._table('test_cases')} (case_id, marked_at, reason) "
+                "VALUES (?, ?, ?) ON CONFLICT (case_id) DO NOTHING",
+                (case_id, _now(), reason),
+            )
+        except Exception as exc:
+            if not _missing_test_schema(exc):
+                raise
+            self._mark_migrations_missing()
+            return 0
+
+    def test_case_ids(self) -> set[str]:
+        if not self.migrations_ok:
+            return set()
+        try:
+            rows = self.execute(f"SELECT case_id FROM {self._table('test_cases')}")
+        except Exception as exc:
+            if not _missing_test_schema(exc):
+                raise
+            self._mark_migrations_missing()
+            return set()
+        return {str(row["case_id"]) for row in rows}
+
+    def list_cases(self) -> list[dict[str, Any]]:
+        rows = self.execute(f"SELECT * FROM {self._table('cases')}")
+        return [_normalize_case(row) for row in rows]
 
     def update_case(self, case_id: str, fields: dict[str, Any]) -> None:
         allowed = {
@@ -317,18 +505,14 @@ class OpsStore:
             flag_value = list(flags)
         else:
             flag_value = json.dumps(list(flags))
-        sql = (
-            f"INSERT INTO {self._table('audit_case')} ("
+        self._insert_with_optional_test(
+            "audit_case",
             "audit_id, case_id, supersedes_audit_id, recorded_at, case_type, "
             "customer_segment, final_resolution_status, case_created_at, case_closed_at, "
             "decision, automation_attempted, handoff_reason, handoff_packet_complete, "
             "language, country, accent_group, rule_or_model_version, prompt_version, "
             "fraud_score, model_risk_score, guardrail_flags, is_eval_case, eval_run_id, "
-            "case_source) VALUES ("
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
-        self._write(
-            sql,
+            "case_source",
             (
                 row["audit_id"],
                 row["case_id"],
@@ -355,12 +539,70 @@ class OpsStore:
                 row.get("eval_run_id"),
                 row.get("case_source"),
             ),
+            is_test=bool(row.get("is_test")),
         )
         return str(row["audit_id"])
 
     def current_audit_cases(self) -> list[dict[str, Any]]:
-        rows = self.execute(f"SELECT * FROM {self._table('audit_current')}")
-        return [_normalize_audit(row) for row in rows]
+        """Tips from audit_current. is_test comes from cases and test_cases.
+
+        audit_current keeps the column list it had when it was created, so a
+        later is_test column on audit_case is not on the view. The queue, the
+        packet, and the admin include filters read the flag from cases and
+        from test_cases membership instead.
+        """
+        raw = self.execute(f"SELECT * FROM {self._table('audit_current')}")
+        rows = [_normalize_audit(row) for row in raw]
+        if not rows:
+            return rows
+        flags = {str(row["case_id"]): bool(row.get("is_test")) for row in self.list_cases()}
+        marked = self.test_case_ids()
+        for row in rows:
+            case_id = str(row.get("case_id") or "")
+            row["is_test"] = flags.get(case_id, False) or case_id in marked
+        return rows
+
+    def live_audit_cases(self) -> list[dict[str, Any]]:
+        """audit_current minus insert-time test rows, marked case ids, and eval tips."""
+        if not self.migrations_ok:
+            return self.current_audit_cases()
+        try:
+            raw = self.execute(f"SELECT * FROM {self._table('audit_live')}")
+        except Exception as exc:
+            if not _missing_test_schema(exc):
+                raise
+            self._mark_migrations_missing()
+            return self.current_audit_cases()
+        return [_normalize_audit(row) for row in raw]
+
+    def audit_chain(self, case_id: str) -> list[dict[str, Any]]:
+        """Tip from audit_current, then each superseded parent. Read-only."""
+        tips = self.execute(
+            f"SELECT * FROM {self._table('audit_current')} WHERE case_id = ?",
+            (case_id,),
+        )
+        found: dict[str, dict[str, Any]] = {}
+        for tip in tips:
+            self._walk_supersedes(_normalize_audit(tip), found, 0)
+        return list(found.values())
+
+    def _walk_supersedes(
+        self, row: dict[str, Any], found: dict[str, dict[str, Any]], depth: int
+    ) -> None:
+        audit_id = str(row.get("audit_id") or "")
+        if not audit_id or audit_id in found or depth > 40:
+            return
+        found[audit_id] = row
+        previous = row.get("supersedes_audit_id")
+        if not previous:
+            return
+        older = self.execute(
+            f"SELECT * FROM {self._table('audit_case')} WHERE audit_id = ?",
+            (str(previous),),
+        )
+        if not older:
+            return
+        self._walk_supersedes(_normalize_audit(older[0]), found, depth + 1)
 
     def audit_case_count(self, case_id: str) -> int:
         rows = self.execute(
@@ -395,12 +637,11 @@ class OpsStore:
         )
 
     def append_llm_call(self, row: dict[str, Any]) -> None:
-        self._write(
-            f"INSERT INTO {self._table('audit_llm_call')} ("
+        self._insert_with_optional_test(
+            "audit_llm_call",
             "audit_id, llm_call_id, case_id, supersedes_audit_id, recorded_at, case_type, "
             "model, input_tokens, output_tokens, latency_ms, call_started_at, call_purpose, "
-            "call_status, retry_attempt, prompt_version, is_eval_case, eval_run_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "call_status, retry_attempt, prompt_version, is_eval_case, eval_run_id",
             (
                 row["audit_id"],
                 row["llm_call_id"],
@@ -420,6 +661,7 @@ class OpsStore:
                 bool(row.get("is_eval_case")),
                 row.get("eval_run_id"),
             ),
+            is_test=bool(row.get("is_test")),
         )
 
     def current_llm_calls(self) -> list[dict[str, Any]]:
@@ -517,6 +759,125 @@ class OpsStore:
         return {str(row["key"]): float(row["value"]) for row in rows}
 
 
+_SQLITE_AUDIT_VIEWS = """
+DROP VIEW IF EXISTS audit_live;
+DROP VIEW IF EXISTS audit_current;
+CREATE VIEW audit_current AS
+SELECT * FROM audit_case AS a
+WHERE NOT EXISTS (
+  SELECT 1 FROM audit_case AS newer
+  WHERE newer.supersedes_audit_id = a.audit_id
+);
+DROP VIEW IF EXISTS audit_llm_call_current;
+CREATE VIEW audit_llm_call_current AS
+SELECT * FROM audit_llm_call AS a
+WHERE NOT EXISTS (
+  SELECT 1 FROM audit_llm_call AS newer
+  WHERE newer.supersedes_audit_id = a.audit_id
+);
+CREATE VIEW audit_live AS
+SELECT cur.*
+FROM audit_current AS cur
+WHERE cur.eval_run_id IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_case AS src
+    WHERE src.audit_id = cur.audit_id AND src.is_test = 1
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM test_cases AS marked
+    WHERE marked.case_id = cur.case_id
+  );
+"""
+
+_SQL_COMMENT = re.compile(r"--.*?$", re.MULTILINE)
+
+
+def _add_sqlite_is_test(conn: sqlite3.Connection) -> None:
+    for table in ("cases", "audit_case", "audit_llm_call"):
+        columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+        if "is_test" not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0")
+
+
+def _sql_statements(path: Path) -> list[str]:
+    """Split a migration on semicolons that are outside dollar quotes."""
+    cleaned = _SQL_COMMENT.sub("", path.read_text(encoding="utf-8"))
+    statements: list[str] = []
+    buf: list[str] = []
+    in_dollar = False
+    index = 0
+    while index < len(cleaned):
+        if cleaned.startswith("$$", index):
+            in_dollar = not in_dollar
+            buf.append("$$")
+            index += 2
+            continue
+        char = cleaned[index]
+        if char == ";" and not in_dollar:
+            statement = "".join(buf).strip()
+            if statement:
+                statements.append(statement)
+            buf = []
+            index += 1
+            continue
+        buf.append(char)
+        index += 1
+    tail = "".join(buf).strip()
+    if tail:
+        statements.append(tail)
+    return statements
+
+
+_AUDIT_VIEWS = ("audit_current", "audit_live", "audit_llm_call_current")
+
+
+def _view_privileges(conn: Any) -> dict[str, set[str]]:
+    rows = conn.execute(
+        "SELECT table_name, privilege_type FROM information_schema.table_privileges "
+        "WHERE table_schema = 'app' AND grantee = 'app_rw' "
+        "AND table_name IN ('audit_current', 'audit_live', 'audit_llm_call_current')"
+    ).fetchall()
+    found: dict[str, set[str]] = {}
+    for row in rows:
+        name = str(row["table_name"])
+        found.setdefault(name, set()).add(str(row["privilege_type"]).upper())
+    return found
+
+
+def _privileges_are_select_only(found: dict[str, set[str]]) -> bool:
+    if set(found) != set(_AUDIT_VIEWS):
+        return False
+    return all(privileges == {"SELECT"} for privileges in found.values())
+
+
+def _placeholders(count: int) -> str:
+    return ", ".join("?" for _ in range(count))
+
+
+def _missing_test_schema(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    names = ("is_test", "test_cases", "audit_live")
+    markers = ("no such", "does not exist", "undefined")
+    return any(name in text for name in names) and any(marker in text for marker in markers)
+
+
+def _sqlite_has_test_schema(conn: sqlite3.Connection) -> bool:
+    def columns(table: str) -> set[str]:
+        return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+
+    names = {
+        str(row[0])
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")
+    }
+    return (
+        "is_test" in columns("cases")
+        and "is_test" in columns("audit_case")
+        and "is_test" in columns("audit_llm_call")
+        and "test_cases" in names
+        and "audit_live" in names
+    )
+
+
 def _as_bool(value: object) -> bool:
     if isinstance(value, bool):
         return value
@@ -533,11 +894,13 @@ def _as_optional_bool(value: object) -> bool | None:
 
 def _normalize_case(row: dict[str, Any]) -> dict[str, Any]:
     row["is_eval_case"] = _as_bool(row.get("is_eval_case"))
+    row["is_test"] = _as_bool(row.get("is_test"))
     return row
 
 
 def _normalize_audit(row: dict[str, Any]) -> dict[str, Any]:
     row["is_eval_case"] = _as_bool(row.get("is_eval_case"))
+    row["is_test"] = _as_bool(row.get("is_test"))
     row["automation_attempted"] = _as_bool(row.get("automation_attempted"))
     row["handoff_packet_complete"] = _as_optional_bool(row.get("handoff_packet_complete"))
     row["guardrail_flags"] = _flags_out(row.get("guardrail_flags"))

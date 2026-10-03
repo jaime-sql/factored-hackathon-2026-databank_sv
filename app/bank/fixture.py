@@ -15,13 +15,14 @@ from pathlib import Path
 
 from app.paths import project_root
 
-FIXTURE_VERSION = "2026-09-30-tz4-nofeat"
+FIXTURE_VERSION = "2026-09-30-lucia-dup"
 UTC_STAMP = "2026-01-15T18:00:00+00:00"
 
 PERSONAS: tuple[dict[str, str], ...] = (
     {
         "id": "ana",
         "customer_key": "ck_ar_ana",
+        "bank_customer_key": "CUS_bea1a374f5bcbe2b4b20",
         "label": "Ana · Argentina",
         "country": "Argentina",
         "segment": "Basic",
@@ -32,6 +33,7 @@ PERSONAS: tuple[dict[str, str], ...] = (
     {
         "id": "camilo",
         "customer_key": "ck_co_camilo",
+        "bank_customer_key": "CUS_b202620b1dbf4256f447",
         "label": "Camilo · Colombia",
         "country": "Colombia",
         "segment": "Plus",
@@ -42,9 +44,10 @@ PERSONAS: tuple[dict[str, str], ...] = (
     {
         "id": "maria",
         "customer_key": "ck_mx_maria",
+        "bank_customer_key": "CUS_75764d8a8e3d956f3320",
         "label": "María · Ciudad de México",
         "country": "Mexico",
-        "segment": "Premium",
+        "segment": "Basic",
         "accent": "centro",
         "tz": "America/Mexico_City",
         "note": "Synthetic persona",
@@ -52,12 +55,24 @@ PERSONAS: tuple[dict[str, str], ...] = (
     {
         "id": "teo",
         "customer_key": "ck_mx_teo",
+        "bank_customer_key": "CUS_e6543f8446563b61c837",
         "label": "Teo · Tijuana",
         "country": "Mexico",
         "segment": "Student",
         "accent": "noroeste",
         "tz": "America/Tijuana",
         "note": "Synthetic persona. MX is not Mexico City.",
+    },
+    {
+        "id": "lucia",
+        "customer_key": "ck_mx_lucia",
+        "bank_customer_key": "CUS_54f100f5046beb356091",
+        "label": "Lucía · Querétaro",
+        "country": "Mexico",
+        "segment": "Basic",
+        "accent": "bajio",
+        "tz": "America/Mexico_City",
+        "note": "Synthetic persona, duplicate charge",
     },
 )
 
@@ -149,6 +164,7 @@ def build_rows() -> tuple[
 ]:
     by_id = {p["id"]: p for p in PERSONAS}
     ana, camilo, maria, teo = by_id["ana"], by_id["camilo"], by_id["maria"], by_id["teo"]
+    lucia = by_id["lucia"]
     transactions = [
         _tx(
             "tx_ana_home",
@@ -350,6 +366,19 @@ def build_rows() -> tuple[
             currency="MXN",
             is_fraud_trap=0,
         ),
+        _tx(
+            "tx_lucia_source",
+            lucia,
+            merchant="Centro Comercial",
+            city="Querétaro",
+            country="Mexico",
+            status="Approved",
+            fraud_score=2,
+            amount=240,
+            currency="MXN",
+            is_fraud_trap=0,
+            category="Food",
+        ),
     ]
     # Shift the duplicate a few minutes so both times show. Keep the same UTC date.
     for tx in transactions:
@@ -396,7 +425,7 @@ def build_rows() -> tuple[
             "is_fraud": "0",
             "fraud_score": 3,
             "customer_country": "MX",
-            "customer_segment": "Premium",
+            "customer_segment": "Basic",
             "customer_accent": "centro",
         },
         {
@@ -429,11 +458,69 @@ def build_rows() -> tuple[
             "is_fraud": "0",
             "fraud_score": 3,
             "customer_country": "MX",
-            "customer_segment": "Premium",
+            "customer_segment": "Basic",
             "customer_accent": "centro",
         },
+        _synthetic_charge(
+            lucia,
+            transaction_key="SYN_0112_A",
+            role="original",
+            seconds_after=0,
+            when=UTC_STAMP,
+        ),
+        _synthetic_charge(
+            lucia,
+            transaction_key="SYN_0112_B",
+            role="duplicate",
+            seconds_after=600,
+            when="2026-01-15T18:10:00+00:00",
+        ),
     ]
     return transactions, features, duplicates
+
+
+def _synthetic_charge(
+    customer: dict[str, str],
+    *,
+    transaction_key: str,
+    role: str,
+    seconds_after: int,
+    when: str,
+) -> dict[str, object]:
+    """SYN pair only. The source charge stays in transactions and is not a pair member."""
+    return {
+        "case_id": "syn_dup_lucia",
+        "scenario": "true_duplicate",
+        "role": role,
+        "is_synthetic": 1,
+        "seconds_after_original": seconds_after,
+        "source_transaction_key": "tx_lucia_source",
+        "transaction_key": transaction_key,
+        "customer_key": customer["customer_key"],
+        "product_key": "card_lucia",
+        "product_type": "Tarjeta Débito",
+        "transaction_ts_utc": when,
+        "transaction_ts_local": "DO_NOT_DISPLAY",
+        "process_date": "2026-01-15",
+        "transaction_type": "Purchase",
+        "transaction_category": "Food",
+        "amount": 240,
+        "currency": "MXN",
+        "amount_usd": 12,
+        "channel": "POS",
+        "branch_id": "br_01",
+        "merchant_name": "Centro Comercial",
+        "merchant_category": "Food",
+        "transaction_country": "Mexico",
+        "transaction_city": "Querétaro",
+        "transaction_status": "Approved",
+        "response_code": "00",
+        "is_fraud": "0",
+        "fraud_score": 1,
+        "customer_country": "Mexico",
+        "customer_segment": "Basic",
+        "customer_accent": "bajio",
+    }
 
 
 def feature_names() -> list[str]:

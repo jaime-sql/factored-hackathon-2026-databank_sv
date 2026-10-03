@@ -40,6 +40,17 @@ def _limit(limit: int) -> int:
     return limit
 
 
+def synthetic_pair_sibling(transaction_key: str) -> str | None:
+    """The other SYN_*_A / SYN_*_B key. The source TXN_ is not the sibling."""
+    if not transaction_key.startswith("SYN_"):
+        return None
+    if transaction_key.endswith("_A"):
+        return f"{transaction_key[:-2]}_B"
+    if transaction_key.endswith("_B"):
+        return f"{transaction_key[:-2]}_A"
+    return None
+
+
 class SQLBankRepository:
     def __init__(self, backend: str, path: str = "", dsn: str = "") -> None:
         if backend not in {"sqlite", "postgres"}:
@@ -87,14 +98,27 @@ class SQLBankRepository:
             raise AccessError("isolation violation")
         return customer
 
+    def _charge_sql(self, where_transactions: str, where_duplicates: str) -> str:
+        columns = ", ".join(TRANSACTION_COLUMNS)
+        transactions = self._table("transactions")
+        duplicates = self._table("synthetic_duplicates")
+        return (
+            f"SELECT {columns} FROM ("
+            f"SELECT {columns} FROM {transactions} WHERE {where_transactions} "
+            "UNION ALL "
+            f"SELECT {columns} FROM {duplicates} WHERE {where_duplicates} "
+            "AND is_synthetic = 1 AND transaction_key NOT IN ("
+            f"SELECT transaction_key FROM {transactions} WHERE {where_transactions}"
+            ")) AS charges"
+        )
+
     def get_transactions(self, customer_key: str, limit: int = 50) -> list[Transaction]:
         key = validate_customer_key(customer_key)
         capped = _limit(limit)
-        columns = ", ".join(TRANSACTION_COLUMNS)
         rows = self._fetch(
-            f"SELECT {columns} FROM {self._table('transactions')} WHERE customer_key = ? "
-            "ORDER BY transaction_ts_utc DESC LIMIT ?",
-            (key, capped),
+            self._charge_sql("customer_key = ?", "customer_key = ?")
+            + " ORDER BY transaction_ts_utc DESC LIMIT ?",
+            (key, key, key, capped),
         )
         found = [Transaction.from_row(row) for row in rows]
         if any(tx.customer_key != key for tx in found):
@@ -105,11 +129,13 @@ class SQLBankRepository:
 
     def get_transaction(self, customer_key: str, transaction_key: str) -> Transaction | None:
         key = validate_customer_key(customer_key)
-        columns = ", ".join(TRANSACTION_COLUMNS)
         rows = self._fetch(
-            f"SELECT {columns} FROM {self._table('transactions')} "
-            "WHERE customer_key = ? AND transaction_key = ?",
-            (key, transaction_key),
+            self._charge_sql(
+                "customer_key = ? AND transaction_key = ?",
+                "customer_key = ? AND transaction_key = ?",
+            )
+            + " LIMIT 1",
+            (key, transaction_key, key, transaction_key, key, transaction_key),
         )
         if not rows:
             return None
@@ -159,7 +185,8 @@ class SQLBankRepository:
             raise AccessError("isolation violation")
         source = str(row["source_transaction_key"])
         current = str(row["transaction_key"])
-        other_key = source if current != source else ""
+        sibling = synthetic_pair_sibling(current)
+        other_key = sibling if sibling else (source if current != source else "")
         if not other_key:
             siblings = self._fetch(
                 "SELECT transaction_key, transaction_ts_utc FROM "

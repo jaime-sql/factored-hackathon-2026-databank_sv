@@ -4,6 +4,7 @@ Routing order, from the vendored thresholds:
 1. fraud_score > 30 is HIGH for every status, including Pending and Reversed.
 2. Otherwise Pending and Reversed get the fixed explanation.
 3. A charge with no fraud_features row is REVIEW, never LOW.
+   A SYN_* pair inherits its source transaction's features before that check.
 4. Otherwise the learned model returns REVIEW or LOW.
 """
 
@@ -15,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.bank.models import Customer, Transaction
-from app.bank.repository import BankRepository
+from app.bank.repository import BankRepository, synthetic_pair_sibling
 from app.config import Settings
 from app.errors import APIError
 from app.guardrails.injection import detect_injection
@@ -25,6 +26,7 @@ from app.handoff.packet import (
     HandoffPacket,
     TransactionFacts,
     TriageInfo,
+    packet_is_complete,
 )
 from app.i18n import (
     confirm_block_label,
@@ -36,6 +38,7 @@ from app.i18n import (
     next_step_block,
     next_step_contest,
     next_step_review,
+    packet_merchant,
     recognize_label,
     reply_block_failed,
     reply_blocked,
@@ -129,6 +132,7 @@ class CaseResult:
             "eval_run_id": self.eval_run_id,
             "case_source": self.case_source,
             "money_movement": "none",
+            "protected": "prompt_injection" in self.guardrail_flags,
         }
 
 
@@ -155,16 +159,21 @@ class Engine:
         language: str | None,
         eval_run_id: str | None,
         case_source: str | None,
+        is_test: bool = False,
     ) -> CaseResult:
+        if eval_run_id or case_source:
+            is_test = False
         lang = detect_language(message or "", language)
         flags: list[str] = []
         redacted, changed = _redact(message or "")
         if changed:
-            flags.append("pii_redacted_input")
+            flags.append("pii_masked")
         if detect_injection(redacted).blocked:
-            return self._injection(customer_key, lang, flags, eval_run_id, case_source)
+            return self._injection(
+                customer_key, lang, flags, eval_run_id, case_source, redacted, is_test
+            )
         if not transaction_key:
-            return self._clarify(customer_key, lang, flags, eval_run_id, case_source)
+            return self._clarify(customer_key, lang, flags, eval_run_id, case_source, is_test)
         customer = self.bank.get_customer(customer_key)
         if customer is None:
             raise APIError(404, "not_found", "Customer not found")
@@ -173,7 +182,9 @@ class Engine:
             raise APIError(404, "not_found", "Charge not found")
         features = self.bank.get_features(customer_key, transaction_key)
         duplicate = self.bank.get_duplicate(customer_key, transaction_key)
-        return self._route(customer, tx, features, duplicate, lang, flags, eval_run_id, case_source)
+        return self._route(
+            customer, tx, features, duplicate, lang, flags, eval_run_id, case_source, is_test
+        )
 
     def act(self, customer_key: str, case_id: str, action: str) -> CaseResult:
         case = self._own_case(customer_key, case_id)
@@ -207,11 +218,24 @@ class Engine:
         flags: list[str],
         eval_run_id: str | None,
         case_source: str | None,
+        is_test: bool = False,
     ) -> CaseResult:
+        if (
+            features is None
+            and synthetic_pair_sibling(tx.transaction_key)
+            and duplicate is not None
+            and duplicate.source_transaction_key
+        ):
+            # Demo choice: SYN_* has no fraud_features row, so the other model
+            # features come from source_transaction_key. The HIGH rule and the
+            # fraud_score copied onto that payload are this SYN row's own value.
+            features = self.bank.get_features(
+                customer.customer_key, str(duplicate.source_transaction_key)
+            )
         config = self.thresholds.get()
         route = preliminary_route(tx.fraud_score, tx.transaction_status, config)
         shown = present_time(tx.transaction_ts_utc, customer.tz, customer.customer_country, lang)
-        amount = money(tx.amount, tx.currency)
+        amount = money(tx.amount, tx.currency, customer.customer_country)
         scored: TriageScore | None = None
         if route == "high":
             band = "high"
@@ -287,35 +311,12 @@ class Engine:
                 "is_eval_case": is_eval,
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
+                "is_test": is_test and not is_eval,
             }
         )
-        self._audit(
-            case_id=case_id,
-            audit_id=audit_id,
-            supersedes=None,
-            case_type=case_type,
-            customer=customer,
-            status=status,
-            created=now,
-            closed=closed,
-            decision=decision,
-            automation=automation,
-            reason=reason,
-            packet_complete=None,
-            lang=lang,
-            version=version,
-            fraud_score=tx.fraud_score,
-            prob=prob,
-            flags=flags,
-            is_eval=is_eval,
-            eval_run_id=eval_run_id,
-            case_source=case_source,
-        )
-        self._event(
-            case_id, "step", "route", {"band": band, "case_type": case_type}, "not_applicable"
-        )
+        packet_complete: bool | None = None
         if decision == "handoff":
-            self._deliver_handoff(
+            packet_complete = self._deliver_handoff(
                 case_id,
                 customer,
                 tx,
@@ -332,6 +333,32 @@ class Engine:
                 reason or "fraud_model",
                 flags,
             )
+        self._audit(
+            case_id=case_id,
+            audit_id=audit_id,
+            supersedes=None,
+            case_type=case_type,
+            customer=customer,
+            status=status,
+            created=now,
+            closed=closed,
+            decision=decision,
+            automation=automation,
+            reason=reason,
+            packet_complete=packet_complete,
+            lang=lang,
+            version=version,
+            fraud_score=tx.fraud_score,
+            prob=prob,
+            flags=flags,
+            is_eval=is_eval,
+            eval_run_id=eval_run_id,
+            case_source=case_source,
+            is_test=is_test and not is_eval,
+        )
+        self._event(
+            case_id, "step", "route", {"band": band, "case_type": case_type}, "not_applicable"
+        )
         return CaseResult(
             case_id,
             reply,
@@ -372,7 +399,14 @@ class Engine:
                     ActionButton("confirm_block", confirm_block_label(lang), "primary"),
                     ActionButton("decline_block", decline_block_label(lang)),
                 ],
-                reply_high(lang, tx.merchant_name, amount, when),
+                reply_high(
+                    lang,
+                    tx.merchant_name,
+                    amount,
+                    when,
+                    category=tx.merchant_category,
+                    transaction_type=tx.transaction_type,
+                ),
             )
         if route == "pending":
             return (
@@ -383,7 +417,14 @@ class Engine:
                 None,
                 "pending_explained",
                 [ActionButton("contest", contest_label(lang), "primary")],
-                reply_pending(lang, tx.merchant_name, amount, when),
+                reply_pending(
+                    lang,
+                    tx.merchant_name,
+                    amount,
+                    when,
+                    category=tx.merchant_category,
+                    transaction_type=tx.transaction_type,
+                ),
             )
         if route == "reversed":
             return (
@@ -394,7 +435,14 @@ class Engine:
                 None,
                 "reversed_explained",
                 [ActionButton("contest", contest_label(lang), "primary")],
-                reply_reversed(lang, tx.merchant_name, amount, when),
+                reply_reversed(
+                    lang,
+                    tx.merchant_name,
+                    amount,
+                    when,
+                    category=tx.merchant_category,
+                    transaction_type=tx.transaction_type,
+                ),
             )
         if case_type == "duplicate_synthetic" and band == "low":
             other_when = when
@@ -414,7 +462,15 @@ class Engine:
                     ActionButton("recognize", recognize_label(lang)),
                     ActionButton("open_dispute", dispute_label(lang), "primary"),
                 ],
-                reply_duplicate(lang, tx.merchant_name, amount, when, other),
+                reply_duplicate(
+                    lang,
+                    tx.merchant_name,
+                    amount,
+                    when,
+                    other,
+                    category=tx.merchant_category,
+                    transaction_type=tx.transaction_type,
+                ),
             )
         if band == "low":
             return (
@@ -429,7 +485,13 @@ class Engine:
                     ActionButton("open_dispute", dispute_label(lang), "primary"),
                 ],
                 reply_low(
-                    lang, tx.merchant_name, tx.merchant_category, tx.transaction_city, when, amount
+                    lang,
+                    tx.merchant_name,
+                    tx.merchant_category,
+                    tx.transaction_city,
+                    when,
+                    amount,
+                    transaction_type=tx.transaction_type,
                 ),
             )
         return (
@@ -440,7 +502,13 @@ class Engine:
             "fraud_model",
             "handed_off",
             [],
-            reply_review(lang, tx.merchant_name, amount),
+            reply_review(
+                lang,
+                tx.merchant_name,
+                amount,
+                category=tx.merchant_category,
+                transaction_type=tx.transaction_type,
+            ),
         )
 
     def _confirm_block(self, case: dict[str, Any]) -> CaseResult:
@@ -646,6 +714,7 @@ class Engine:
             step,
             synthetic,
         )
+        complete = packet_is_complete(packet)
         self._store_handoff(case_id, packet, reason)
         self.ops.update_case(
             case_id,
@@ -663,7 +732,7 @@ class Engine:
             closed=now,
             status=status,
             reason=reason,
-            packet_complete=True,
+            packet_complete=complete,
             flags=flags,
             prob=prob,
             version=version,
@@ -686,7 +755,7 @@ class Engine:
         synthetic: bool,
         reason: str,
         flags: list[str],
-    ) -> None:
+    ) -> bool:
         del flags, reason
         packet = self._packet(
             case_id,
@@ -703,7 +772,9 @@ class Engine:
             step,
             synthetic,
         )
+        complete = packet_is_complete(packet)
         self._store_handoff(case_id, packet, "fraud_model")
+        return complete
 
     def _store_handoff(self, case_id: str, packet: HandoffPacket, reason: str) -> None:
         del reason
@@ -746,8 +817,11 @@ class Engine:
     ) -> HandoffPacket:
         safe_band = band if band in {"high", "review", "low", "out_of_scope"} else "review"
         language = lang if lang in {"es", "pt"} else "other"
+        merchant = packet_merchant(
+            lang, tx.merchant_name, tx.merchant_category, tx.transaction_type
+        )
         base = [
-            f"merchant={tx.merchant_name}",
+            f"merchant={merchant}",
             f"status={tx.transaction_status}",
             f"fraud_score={fraud_score}",
             f"utc={shown['utc']}",
@@ -763,7 +837,7 @@ class Engine:
             transaction=TransactionFacts(
                 transaction_key=tx.transaction_key,
                 product_key=tx.product_key,
-                merchant_name=tx.merchant_name,
+                merchant_name=merchant,
                 merchant_category=tx.merchant_category,
                 transaction_city=tx.transaction_city,
                 transaction_country=tx.transaction_country,
@@ -833,6 +907,7 @@ class Engine:
             is_eval=bool(case.get("is_eval_case")),
             eval_run_id=case.get("eval_run_id"),
             case_source=case.get("case_source"),
+            is_test=bool(case.get("is_test")) and not bool(case.get("is_eval_case")),
         )
         now = datetime.now(UTC)
         self.ops.update_case(str(case["case_id"]), {"latest_audit_id": audit_id, "updated_at": now})
@@ -860,6 +935,7 @@ class Engine:
         is_eval: bool,
         eval_run_id: str | None,
         case_source: str | None,
+        is_test: bool = False,
     ) -> None:
         self.ops.append_audit_case(
             {
@@ -887,6 +963,7 @@ class Engine:
                 "is_eval_case": is_eval,
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
+                "is_test": bool(is_test) and not is_eval,
             }
         )
 
@@ -897,8 +974,10 @@ class Engine:
         flags: list[str],
         eval_run_id: str | None,
         case_source: str | None,
+        redacted_message: str,
+        is_test: bool = False,
     ) -> CaseResult:
-        flags.append("injection_detected")
+        flags.append("prompt_injection")
         customer = self.bank.get_customer(customer_key)
         if customer is None:
             raise APIError(404, "not_found", "Customer not found")
@@ -921,6 +1000,7 @@ class Engine:
                 "is_eval_case": is_eval,
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
+                "is_test": is_test and not is_eval,
             }
         )
         self._audit(
@@ -934,7 +1014,7 @@ class Engine:
             closed=now,
             decision="abandoned",
             automation=False,
-            reason="injection_detected",
+            reason="prompt_injection",
             packet_complete=None,
             lang=lang,
             version=RULE_VERSION,
@@ -944,6 +1024,14 @@ class Engine:
             is_eval=is_eval,
             eval_run_id=eval_run_id,
             case_source=case_source,
+            is_test=is_test and not is_eval,
+        )
+        self._event(
+            case_id,
+            "guardrail",
+            "input",
+            {"message": redact(redacted_message)},
+            "verified",
         )
         return CaseResult(
             case_id,
@@ -966,6 +1054,7 @@ class Engine:
         flags: list[str],
         eval_run_id: str | None,
         case_source: str | None,
+        is_test: bool = False,
     ) -> CaseResult:
         customer = self.bank.get_customer(customer_key)
         if customer is None:
@@ -989,6 +1078,7 @@ class Engine:
                 "is_eval_case": is_eval,
                 "eval_run_id": eval_run_id,
                 "case_source": case_source,
+                "is_test": is_test and not is_eval,
             }
         )
         self._audit(
@@ -1012,6 +1102,7 @@ class Engine:
             is_eval=is_eval,
             eval_run_id=eval_run_id,
             case_source=case_source,
+            is_test=is_test and not is_eval,
         )
         return CaseResult(
             case_id,
