@@ -99,3 +99,9 @@
 **Alternatives considered.** Generating the draft inline before replying to the customer.
 
 **Evidence.** On preview `3ade50a`, REVIEW intake went from 3.2 s to 1.28 s and block-confirm went from 3.75 s to 2.51 s.
+
+## 11. Keep test traffic, labels and secrets out of the live path
+
+- `QA_TEST_TOKEN` marks a browser session as test traffic (`is_test` written at insert time) through the `X-Test-Token` header or `POST /api/test-mode`. The token is never accepted in the URL, and an empty value disables it. Eval runs never set the flag. Older demo ids go in `test_cases` (insert and select only). Métricas and the audit export read `audit_live` unless an admin asks for test or eval rows.
+- The console does not compute label-based safe or unsafe rates. Those need `eval.case_labels`, which `app_rw` cannot read.
+- `DATABASE_URL` and every token stay in the environment and Secret Manager. None is committed.

@@ -1,13 +1,14 @@
 # Analytics
 
-DRAFT, 2026-09-29. Owner: Data Analytics.
-Every number here comes from the script outputs listed under each section (`run.log`, `out/*.csv`) or from
-`/workspace/hackathon-data/data-quality.md`. Numbers are tagged:
+DRAFT, 2026-09-29. Owner: Data Analytics. Locked offline figures refreshed 2026-10-03; see §8.
+Every number here comes from the script outputs listed under each section (`run.log`, `out/*.csv`), from
+`/workspace/hackathon-data/data-quality.md`, or from the shipped files named in §8. Numbers are tagged:
 
 - **[FACT]** measured in the supplied (historical, largely synthetic) data;
 - **[ASSUMPTION]** chosen by the team, not in the data;
 - **[PROJECTION]** facts combined with assumptions; not a measured saving;
-- **[TBD]** waiting on the ML Engineer's eval run (Oct 2).
+- **[TBD]** not yet measured. The Oct 2 eval has landed; §8 replaces the old placeholders for automation,
+  missed fraud, cost per charge, and fairness.
 
 ## 1. Purpose
 
@@ -91,7 +92,7 @@ time 217.5–222.8 s across all country x segment cells. The data shows no histo
    are resolved on the contact (see §4).
 3. Part of the answer is deterministic and reliable in the data: Pending and Reversed statuses are clean (3.0% of
    transactions together), so those cases can be explained by rules, not by an LLM.
-4. The risky part has a usable signal: `fraud_score > 30` is the current HIGH rule (all 325 current VAL HIGH cases
+4. The risky part has a usable signal: `fraud_score > 30` is the current HIGH rule (all 330 validation HIGH cases
    are fraud, with zero legitimate flags), which gives a baseline for triage and a clear handoff rule.
 5. It fits the brief's required paths: normal (pending/reversed explanation), ambiguous/unsupported (`other`), and human
    intervention (triage handoff).
@@ -113,7 +114,8 @@ Source: `cost_projection.py` (assumptions block at the top), outputs `out/cost_p
 - A1. Fully loaded agent cost: **$6 / $12 / $20 per hour** (low / mid / high, LatAm contact center).
 - A2. Each dispute costs one Queja-type contact.
 - A3. Mean handle time is used (median results are within 1%, see `out/cost_proj_per_resolution.csv`).
-- A4. LLM cost per case: **[TBD]** from the ML Engineer's run (Oct 2); set `LLM_COST_PER_CASE_USD` in the script.
+- A4. LLM cost per call: **$6.52e-5**, the mean of 22 QA audit rows. LOW and the rule path make no LLM call.
+  The locked per-charge projection is in §8.
 
 **Results** [PROJECTION, from `out/cost_proj_per_resolution.csv`, `out/cost_proj_monthly_disputes.csv`]
 
@@ -133,14 +135,17 @@ Source: `cost_projection.py` (assumptions block at the top), outputs `out/cost_p
   counts one contact per dispute. The script's sensitivity table uses the per-contact basis; treat per resolution as the upper figure.
 - Sensitivity (`out/cost_proj_sensitivity_automation.csv`, per contact basis, 377.5 disputes/month): automating 25 / 50 / 75%
   of disputes avoids $68 / $137 / $205 per month (low) up to $228 / $456 / $684 (high), before LLM cost.
-  **Net savings = TBD** until LLM cost per case is known.
+  The operating point to quote is the default cut in §8: automation is **18.01%** on validation
+  (rule + LOW over all charges), and the locked per-charge saving is there too.
 - Only **safe** automated resolutions count toward cost avoided. Wrong auto-closes are unsafe outcomes, not savings.
 
-**Placeholders to fill after Oct 2** [TBD]
-- LLM cost per case (by case type): `TBD`
-- Safe-auto projection input (in-scope eval cases, derived from fidelity plus safety labels): `TBD` (k / n)
-- Wrong auto-close rate: `TBD` (k / n)
-- Net monthly savings (low / mid / high): `TBD`
+**Filled from the locked offline run** (detail and sources in §8)
+- LLM cost per call: **$6.52e-5** (mean of 22 QA audit rows). LOW = no call; REVIEW and HIGH = one call.
+- Missed fraud: **29/610 = 4.75%** (Wilson 95% CI 3.33–6.74%).
+- T4 wrongful auto-close, including the Pending/Reversed rule path: **0.53 per 10k charges**.
+- Net saving per charge (low / mid / high): **$0.30 / $0.60 / $1.00**.
+- Safe-auto fidelity on live eval cases remains **[TBD]** (`k / n` from `eval.case_labels`). Monthly net dollars
+  at 377.5 disputes/month are not re-derived here; quote the per-charge figure.
 
 ## 5. KPIs
 
@@ -161,7 +166,7 @@ and `pt_translated` is labeled machine-translated):
 - HARD ZERO: high-score fraud cases (`fraud_score > 30`) auto-resolved, joined through `case_labels.transaction_key` to
   `public.transactions`; any non-zero count is a red alert;
 - fraud auto-resolve rate: auto-resolved fraud cases / all fraud cases, per eval run and `case_source`, with its own 95%
-  Wilson CI. The val reference is 29/599 = 4.8414023372%, with CI **[3.3917781042%, 6.8665506679%]**; flag only when
+  Wilson CI. The val reference is 29/610 = 4.75%, with CI **[3.33%, 6.74%]**; flag only when
   the run CI is entirely above that interval;
 - PII-leak count;
 - injection success out of attempts (`k / n`, percentage);
@@ -172,6 +177,10 @@ sample"**. They must never be mixed with an eval-run result. Supporting KPIs are
 handoff rate and reasons, containment, time to resolution, cost, latency, guardrail events and reliability. Projection:
 human cost avoided (labeled PROJECTION). Fairness slices use the same fidelity/safety metrics by country, segment,
 language and `case_source`, with a disparity flag at > 5 points between groups with n >= 30 (heuristic).
+
+**Containment** (team decision, Oct 3). Contained = cases closed without a handoff ÷ closed cases. Cases still waiting
+on the customer ("clarifying") are excluded from the numerator and the denominator. Deck and docs quote the locked
+offline numbers in §8, never the live Métricas tiles.
 
 ## 6. Data limitations
 
@@ -195,7 +204,8 @@ language and `case_source`, with a disparity flag at > 5 points between groups w
   labels (México/Mexico, plus USA, Spain, Brazil); no MXN transaction currency; complaint currency is independent of
   customer country; row counts differ from the data dictionary (e.g. transactions 4,425,008 vs 5,000,000);
   handle time exists only for voice/video contacts.
-- **Cost model** depends on assumed wage rates and on one-contact-per-dispute; LLM cost is not yet measured.
+- **Cost model** still depends on assumed wage rates ($6 / $12 / $20 per hour) and on one human resolution per
+  charge that needs a person. The LLM call cost is measured ($6.52e-5). The per-charge projection is in §8.
 
 ## 7. Reproducibility
 
@@ -208,6 +218,72 @@ cd /workspace/hack-analytics
 
 - Both scripts open `/workspace/hackathon-data/cache/bank.duckdb` read-only and are deterministic.
 - All SQL used by `demand_metrics.py` is written to `demand_metrics.sql`.
-- To update the cost model, edit only the ASSUMPTIONS block at the top of `cost_projection.py` (e.g. set
-  `LLM_COST_PER_CASE_USD` after Oct 2) and re-run; the sensitivity table then fills the LLM cost and net savings columns.
+- To update the wage assumptions, edit only the ASSUMPTIONS block at the top of `cost_projection.py` and re-run.
+  The locked per-charge LLM and routing costs live in §8 (`static/data/sim_curve.json`).
 - `run.log` holds only the `demand_metrics.py` console output; the cost projection's results are in `out/cost_proj_*.csv`.
+
+## 8. Locked offline numbers
+
+Deck and docs quote only the offline validation and test numbers in this section, never the live Métricas tiles.
+The `audit_live` snapshot will be taken on Oct 5, before submission, labeled demo-seeded with its n.
+
+The default cut is `t_low` = 0.0002756 (`0.000275603870032301` in `static/data/sim_curve.json`).
+
+### Automation, safety, and ranking
+
+| metric | value | split |
+|---|---|---|
+| Automation (rule + LOW) / all charges | **18.01%** | validation |
+| Automation, check only | **16.03%** | test |
+| Missed fraud (fraud in LOW / all fraud) | **29/610 = 4.75%** (Wilson 95% CI 3.33–6.74%) | validation |
+| HIGH (`fraud_score > 30`) | **330 cases, all fraud** | validation |
+| PR-AUC, model vs rule (`fraud_score > 30`) | **0.584 vs 0.583, a tie.** Do not claim the model wins. | test |
+| T4 wrongful auto-close | **(29+6)/663,624 × 10,000 = 0.53 per 10k charges** (includes the Pending/Reversed rule path) | validation |
+
+Test is a check only. The curve and the thresholds stay on the validation cut.
+
+`sim_curve.json` stores `wrongful_autoclose_per_10k` = 0.436994, which is fraud in LOW only (29 / 663,624 × 10,000).
+T4 adds the 6 validation frauds on the rule path (`fraud_in_rule`) and rounds to 0.53.
+
+### Cost per charge [PROJECTION]
+
+Formula, per charge, at the default cut on the validation set:
+
+- LOW = $0 (no LLM call, no human).
+- REVIEW and HIGH = one LLM call ($6.52e-5, mean of 22 QA audit rows) + one human resolution.
+- Rule path = $0.
+- Human-only = one human resolution per charge ($1.66 / $3.32 / $5.53).
+
+Expected cost is **$2.72** vs **$3.32** human-only, saving **$0.60 (18.0%)**. The low and high scenarios save
+**$0.30** and **$1.00**.
+
+### Fairness (validation)
+
+Routing-to-human ratio (that country's REVIEW share ÷ the overall REVIEW share, Approved/Declined only):
+**Mexico 0.96×, Colombia 1.05×, Argentina 1.01×**.
+
+Mexico missed-fraud gap: **21/292 vs 8/318** (Colombia 4/181 + Argentina 4/137). Two-sided Fisher exact
+**p = 0.0074**, computed from those country rows. `fairness.json` stores the counts and the cause; the p-value follows from the counts.
+
+Cause, as written in `fairness.json`: Mexico's misses come from the model's low-risk threshold, not the rule.
+Mexico fraud has a fraud score above 30 about as often as elsewhere (53% vs 51–58%), but Mexico charges score
+lower overall, so the single low threshold shared by all countries sends 18.6% of Mexico legit charges and
+15.7% (21/134) of the Mexico fraud the model sees to low risk, vs 10.9–14.5% and 5.4–6.1% in Colombia and Argentina.
+
+### Containment
+
+Team decision, Oct 3. **Contained = cases closed without a handoff ÷ closed cases.** Cases still waiting on the
+customer ("clarifying") are excluded from the numerator and the denominator.
+
+### Sources
+
+| metric | file @ commit | split |
+|---|---|---|
+| Automation 18.01%, default cut, missed fraud 29/610 and its CI, HIGH 330, cost per charge, `fraud_in_rule` = 6, `n_charges` = 663,624 | `static/data/sim_curve.json` @ `598c341d4044e350549fdba55fff65e8e7f1713a` | validation |
+| T4 0.53 per 10k | same file: (`default_point_summary.missed_fraud.k` + `fraud_in_rule`) / `n_charges` × 10,000 @ `598c341d4044e350549fdba55fff65e8e7f1713a` | validation |
+| Routing ratios, Mexico 21/292, Colombia 4/181, Argentina 4/137, cause text | `static/data/fairness.json` @ `545d99c314678b1c0de1b375ef9ef7f50228da56` | validation |
+| Test automation 16.03%, test PR-AUC 0.584 vs 0.583 | `ml/artifacts/test_results.json` @ `6d97a4233055ffdaec11f8b8625c9d011dea5b79` (`extensions.routing_split.automation_rate`, `compare.models.lightgbm.pr_auc`, `compare.models.rule_fraud_score.pr_auc`) | test |
+
+Test automation and test PR-AUC are not in `sim_curve.json` or `fairness.json`. `sim_curve.json` is the validation
+curve only (`notes`: "Validation split only; test never read."). `fairness.json` has `"test_set_used": false`.
+Those two test figures were checked against `ml/artifacts/test_results.json` on main and match 16.03% and 0.584 vs 0.583.

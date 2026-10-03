@@ -266,6 +266,27 @@ ver = pd.DataFrame(checks, columns=["metric", "reported", "from_source"])
 ver["match"] = ver.reported == ver.from_source
 ver.to_csv(os.path.join(OUT, "dispute_mix_verification.csv"), index=False)
 
+
+def validation_missed_fraud():
+    """Validation missed-fraud k and n from the shipped curve.
+
+    ``static/data/sim_curve.json`` ``default_point_summary.missed_fraud`` is the
+    locked denominator (all validation fraud, including Pending/Reversed). If that
+    file cannot be read, use the locked 29/610.
+    """
+    path = os.path.join(os.path.dirname(HERE), "static", "data", "sim_curve.json")
+    k, n = 29, 610
+    try:
+        with open(path, encoding="utf-8") as handle:
+            missed = json.load(handle)["default_point_summary"]["missed_fraud"]
+        k, n = int(missed["k"]), int(missed["n"])
+    except (OSError, KeyError, TypeError, ValueError):
+        pass
+    if n <= 0:
+        return 29, 610
+    return k, n
+
+
 # ---------- chart ----------
 COLORS = {
     "Rule-based answer": "#9AA5B1",
@@ -319,8 +340,10 @@ ax.annotate(
     arrowprops=dict(arrowstyle="-", color="#777", lw=0.8),
     va="center",
 )
+missed_k, missed_n = validation_missed_fraud()
+missed_pct = 100.0 * missed_k / missed_n
 ax.annotate(
-    f"LOW = fraud wrongly auto-handled: {bb['LOW (AI resolves)']:.1f}% (29 of 599)",
+    f"LOW = fraud wrongly auto-handled: {missed_pct:.2f}% ({missed_k} of {missed_n})",
     xy=(100 - bb["LOW (AI resolves)"] / 2, -0.28),
     xytext=(60, -0.55),
     fontsize=9.5,
@@ -348,8 +371,8 @@ fig.suptitle(
 ax.set_title(
     "A assumes disputes mirror the charge mix (rule-based share from all 4.43M tx; bands \
 measured on validation "
-    "split, n=643,787).\nB is an extreme bound, not an estimate: every dispute is real \
-fraud (val fraud n=599).",
+    f"split, n=643,787).\nB is an extreme bound, not an estimate: every dispute is real \
+fraud (val fraud n={missed_n}).",
     loc="left",
     fontsize=9.5,
     color="#555",
