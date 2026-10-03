@@ -95,68 +95,31 @@ def test_guide_stays_below_the_nav(tmp_path: Path) -> None:
 
 
 _SCRIPT = r"""
-const http = require("http");
+const { openPage } = require("./tests/cdp_settle.js");
 const base = process.argv[1];
 const debugPort = process.argv[2];
-function get(path) {
-  return new Promise((resolve, reject) => {
-    http.get({ host: "127.0.0.1", port: debugPort, path }, (res) => {
-      let body = "";
-      res.on("data", (chunk) => { body += chunk; });
-      res.on("end", () => resolve(JSON.parse(body)));
-    }).on("error", reject);
-  });
-}
 (async () => {
-  const version = await get("/json/version");
-  const ws = new WebSocket(version.webSocketDebuggerUrl);
-  await new Promise((resolve) => ws.addEventListener("open", resolve));
-  let id = 0;
-  const pending = new Map();
-  ws.addEventListener("message", (event) => {
-    const message = JSON.parse(event.data);
-    if (message.id && pending.has(message.id)) pending.get(message.id)(message);
-  });
-  function call(method, params, sessionId) {
-    const next = ++id;
-    return new Promise((resolve) => {
-      pending.set(next, resolve);
-      const payload = { id: next, method, params };
-      if (sessionId) payload.sessionId = sessionId;
-      ws.send(JSON.stringify(payload));
-    });
-  }
-  const created = await call("Target.createTarget", { url: "about:blank" });
-  const session = await call("Target.attachToTarget", {
-    targetId: created.result.targetId,
-    flatten: true,
-  });
-  const sessionId = session.result.sessionId;
-  const send = (method, params) => call(method, params, sessionId);
-  await send("Page.enable");
-  await send("Runtime.enable");
-  await send("Emulation.setDeviceMetricsOverride", {
-    width: 1280,
-    height: 800,
-    deviceScaleFactor: 1,
-    mobile: false,
-  });
+  const page = await openPage(debugPort);
+  const { send, evaluate, waitFor, settle, navigate } = page;
   const failures = [];
   const sizes = [[1280, 800], [1440, 900]];
   for (const [width, height] of sizes) {
     await send("Emulation.setDeviceMetricsOverride", {
       width, height, deviceScaleFactor: 1, mobile: false,
     });
-    await send("Page.navigate", { url: base + "/" });
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const opened = await send("Runtime.evaluate", {
-      expression: "document.getElementById('tour').click(); 'ok'",
-      returnByValue: true,
-    });
-    if (!opened.result || !opened.result.result) failures.push({ width, height, step: "open" });
+    await navigate(base + "/");
+    // The header is final once the catalog and the persona pills have rendered.
+    await waitFor("document.querySelectorAll('#personas button').length > 0", "persona pills");
+    await settle();
+    await evaluate("document.getElementById('tour').click(); 'ok'");
     for (const step of [1, 2]) {
-      const measured = await send("Runtime.evaluate", {
-        expression: `(() => {
+      await waitFor(`(() => {
+        const tip = document.querySelector('.tour-tip');
+        const count = document.querySelector('.tour-count');
+        return tip && !tip.hidden && count && count.textContent.startsWith('${step}/');
+      })()`, `tour step ${step}`);
+      await settle();
+      const value = JSON.parse(await evaluate(`(() => {
           const tour = document.getElementById('tour');
           const tip = document.querySelector('.tour-tip');
           const header = document.querySelector('header');
@@ -179,34 +142,19 @@ function get(path) {
             tipTop: tipBox.top,
             headerBottom: headerBox.bottom,
           });
-        })()`,
-        returnByValue: true,
-      });
-      const value = JSON.parse(measured.result.result.value);
+        })()`));
       const covered = value.hidden || !value.count.startsWith(step + "/");
       const blocked = !value.hitTour || value.overlaps || value.tipTop < value.headerBottom - 1;
-      if (covered || blocked) {
-        failures.push({ width, height, step, ...value });
-      }
-      if (step === 1) {
-        await send("Runtime.evaluate", {
-          expression: "document.querySelectorAll('.tour-tip button')[1].click()",
-          returnByValue: true,
-        });
-      }
+      if (covered || blocked) failures.push({ width, height, step, ...value });
+      if (step === 1) await evaluate("document.querySelectorAll('.tour-tip button')[1].click()");
     }
-    const closed = await send("Runtime.evaluate", {
-      expression: `(() => {
-        document.getElementById('tour').click();
-        return JSON.stringify({ hidden: document.querySelector('.tour-tip').hidden });
-      })()`,
-      returnByValue: true,
+    await evaluate("document.getElementById('tour').click()");
+    await waitFor("document.querySelector('.tour-tip').hidden", "tour closed").catch(() => {
+      failures.push({ width, height, step: "close" });
     });
-    const after = JSON.parse(closed.result.result.value);
-    if (!after.hidden) failures.push({ width, height, step: "close", ...after });
   }
   console.log(JSON.stringify({ failures }));
-  ws.close();
+  page.ws.close();
 })().catch((error) => {
   console.error(error);
   process.exit(1);

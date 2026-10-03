@@ -154,7 +154,9 @@ class OpsStore:
         """True once the test schema has been seen. A miss is retried every 30s."""
         if self._migrations_ok:
             return True
-        if time.monotonic() - self._schema_checked_at < _SCHEMA_RETRY_SECONDS:
+        # Compare against the retry deadline, not an elapsed difference: (t + 30) - t
+        # can round to 29.999… for large monotonic values and skip the retry.
+        if time.monotonic() < self._schema_checked_at + _SCHEMA_RETRY_SECONDS:
             return False
         return self.refresh_test_schema()
 
