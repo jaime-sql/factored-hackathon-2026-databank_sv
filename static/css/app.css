@@ -18,6 +18,7 @@ body {
 }
 header, main { max-width: 960px; margin: 0 auto; padding: 1.25rem; }
 header { position: relative; z-index: 40; display: flex; justify-content: space-between; gap: 1rem; align-items: end; }
+[hidden] { display: none !important; }
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -127,6 +128,10 @@ details.why { margin-top: 0.7rem; font-family: system-ui, "Segoe UI", sans-serif
   background: var(--card);
 }
 .test-ok-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.5rem 0 0; }
+.test-ok-row[hidden],
+.test-mode-hint[hidden],
+.test-token-error[hidden],
+#test-mode-change[hidden] { display: none; }
 .test-ok-chip {
   display: inline-block;
   font: inherit;

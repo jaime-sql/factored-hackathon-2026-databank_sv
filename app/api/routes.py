@@ -185,6 +185,7 @@ def _health(request: Request) -> dict[str, Any]:
         "ops": "postgres" if settings.database_url else "sqlite",
         "llm": settings.resolved_llm_provider(),
         "migrations_ok": bool(getattr(ops, "migrations_ok", False)),
+        "force_test": bool(settings.force_test_cases),
     }
 
 
@@ -375,6 +376,7 @@ def open_case(
             eval_run_id,
             case_source,
             is_test=False if is_eval else (_traffic_is_test(request) or demo_case),
+            force_test=_settings(request).force_test_cases,
             demo_attack=body.demo_attack,
         )
     _schedule_drafts(background, engine, pending)
@@ -473,12 +475,23 @@ def _thresholds(request: Request) -> tuple[float, float]:
 def handoff_queue(request: Request, language: str | None = None) -> dict[str, Any]:
     _agent(request)
     lang = language if language in {"es", "pt"} else None
-    audits = {row["case_id"]: row for row in request.app.state.ops.current_audit_cases()}
+    ops = request.app.state.ops
+    audits = {row["case_id"]: row for row in ops.current_audit_cases()}
+    # Live leaves test cases out. A FORCE_TEST_CASES tag or an armed test session sees them.
+    show_test = _settings(request).force_test_cases or _traffic_is_test(request)
+    hidden = set() if show_test else _test_case_ids(ops)
     items = [
         queue_card(row, audits.get(row["case_id"]), display_language=lang)
-        for row in request.app.state.ops.list_handoffs()
+        for row in ops.list_handoffs()
+        if row["case_id"] not in hidden
     ]
     return {"queue": items}
+
+
+def _test_case_ids(ops: Any) -> set[str]:
+    """Case ids stored as is_test or listed in app.test_cases."""
+    flagged = {str(row["case_id"]) for row in ops.list_cases() if row.get("is_test")}
+    return flagged | {str(case_id) for case_id in ops.test_case_ids()}
 
 
 @router.get("/api/handoff/{case_id}")

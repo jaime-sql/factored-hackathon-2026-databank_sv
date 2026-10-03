@@ -172,6 +172,7 @@ setTimeout(async () => {
   nodes["test-mode-link"].listeners.click[0]({ preventDefault() {} });
   assert.equal(nodes["test-mode-form"].hidden, true, "Modo de prueba hides the field again");
   assert.equal(nodes["test-mode-link"].getAttribute("aria-expanded"), "false");
+  assert.equal(nodes["test-mode-change"].hidden, false, "Cambiar comes back after closing the field");
 
   const html = fs.readFileSync("static/index.html", "utf8");
   const form = html.slice(html.indexOf('<form id="test-mode-form"'), html.indexOf("</form>", html.indexOf('<form id="test-mode-form"')));
@@ -184,6 +185,18 @@ setTimeout(async () => {
   assert.ok(/#composer input,\s*#test-token \{[^}]*border-radius: 999px/.test(css), "token field shares the composer input style");
   const status = html.slice(html.indexOf('<div id="test-mode-status"'), html.indexOf("</div>", html.indexOf('<div id="test-mode-status"')));
   assert.ok(/aria-live="polite"/.test(status), status);
+  // Chip hidden by default: the markup starts hidden and no display rule can beat [hidden].
+  assert.ok(/<p id="test-ok-row" class="test-ok-row" hidden>/.test(status), "chip row starts hidden");
+  assert.ok(/<p id="test-mode-hint" class="test-mode-hint" hidden>/.test(status));
+  assert.ok(/<p id="test-token-error" class="test-token-error" hidden>/.test(status));
+  assert.ok(/\[hidden\] \{ display: none !important; \}/.test(css), "global [hidden] rule");
+  assert.ok(/\.test-ok-row\[hidden\]/.test(css), "chip row [hidden] rule");
+  for (const rule of css.matchAll(/(^|\n)([^{}\n]+)\{([^}]*)\}/g)) {
+    if (!/display:\s*(flex|inline-flex|grid|block|inline-block)/.test(rule[3])) continue;
+    for (const id of ["test-ok-row", "test-mode-change", "test-mode-hint", "test-token-error", "test-mode-status"]) {
+      if (rule[2].includes(id)) assert.ok(/\[hidden\]/.test(css), `${id} display rule needs a [hidden] guard`);
+    }
+  }
   assert.ok(status.includes('id="test-ok-chip"') && status.includes('id="test-token-error"'), "chip and error sit inside the live region");
   assert.ok(/aria-describedby="test-token-error"/.test(form));
   assert.ok(/\.test-ok-chip \{[^}]*border-radius: 999px[^}]*\}/.test(css), "chip uses the field's rounded style");

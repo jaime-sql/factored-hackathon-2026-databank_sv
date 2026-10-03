@@ -50,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             init_bank(bank_path)
             bank = SQLBankRepository("sqlite", path=bank_path)
             ops = OpsStore("sqlite", path=ops_path)
+        ops.force_test = active.force_test_cases
         app.state.settings = active
         app.state.bank = bank
         app.state.ops = ops

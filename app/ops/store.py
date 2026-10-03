@@ -78,6 +78,8 @@ class OpsStore:
         self.path = path
         self.dsn = dsn
         self.readback_tamper: Any = None
+        # FORCE_TEST_CASES on a tag revision: every insert is test traffic.
+        self.force_test = False
         self._migrations_ok = False
         self._schema_checked_at = 0.0
         self._schema_warned = False
@@ -208,6 +210,7 @@ class OpsStore:
         is_test: bool,
         extras: tuple[tuple[str, object], ...] = (),
     ) -> None:
+        is_test = is_test or self.force_test
         without = (
             f"INSERT INTO {self._table(table)} ({columns}) VALUES ({_placeholders(len(params))})"
         )

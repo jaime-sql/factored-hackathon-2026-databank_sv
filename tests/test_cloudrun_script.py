@@ -58,6 +58,27 @@ def test_default_deploy_is_no_traffic_next_tag_on_the_live_service() -> None:
 
 
 @needs_git
+@pytest.mark.parametrize("tag", ["next", "preview", "qa-r9"])
+def test_tag_deploys_force_test_cases(tag: str) -> None:
+    result = _dry_run(tag, "HEAD")
+    assert result.returncode == 0, result.stderr
+    deploy = next(line for line in result.stdout.splitlines() if "run deploy" in line)
+    assert "--no-traffic" in deploy
+    assert f"--tag {tag}" in deploy
+    assert "FORCE_TEST_CASES=true" in deploy
+
+
+@needs_git
+def test_live_candidate_never_gets_the_flag() -> None:
+    result = _dry_run("live-f3af22d", "HEAD")
+    assert result.returncode == 0, result.stderr
+    deploy = next(line for line in result.stdout.splitlines() if "run deploy" in line)
+    assert "--no-traffic" in deploy
+    assert "FORCE_TEST_CASES" not in deploy
+    assert "--set-env-vars ENVIRONMENT=production " in deploy
+
+
+@needs_git
 def test_bad_tag_is_refused() -> None:
     result = _dry_run("Not_A_Tag", "HEAD")
     assert result.returncode != 0

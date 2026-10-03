@@ -7,7 +7,12 @@
 # GIT_REF  commit to build, default origin/main. The image is built from
 #          `git archive GIT_REF`, so local edits never reach the build.
 #
-# Running this never moves live traffic. To promote a checked revision:
+# Tag (QA) revisions get FORCE_TEST_CASES=true: every case they create, with its
+# audit rows, is stored as test traffic and stays out of live Métricas and the
+# live Consola queue. A tag starting with "live" is a live candidate and is
+# deployed WITHOUT the flag; only such a revision may be promoted.
+#
+# Running this never moves live traffic. To promote a checked live candidate:
 #   gcloud run services update-traffic databank-sv-app --region us-central1 \
 #     --project databank-sv-123456 --to-revisions REVISION=100
 #
@@ -27,7 +32,7 @@
 set -euo pipefail
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  sed -n '2,25p' "$0"
+  sed -n '2,31p' "$0"
   exit 0
 fi
 
@@ -41,6 +46,13 @@ IMAGE_REPO="${IMAGE_REPO:-${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/databank-s
 if [[ ! "${TAG}" =~ ^[a-z][a-z0-9-]{0,45}$ ]]; then
   echo "TAG must be lowercase letters, digits or '-', starting with a letter." >&2
   exit 1
+fi
+
+# --set-env-vars replaces the revision's env, so a live candidate never inherits the flag.
+if [[ "${TAG}" == live* ]]; then
+  ENV_VARS="ENVIRONMENT=production"
+else
+  ENV_VARS="ENVIRONMENT=production,FORCE_TEST_CASES=true"
 fi
 
 SECRETS="DEMO_AGENT_TOKEN=admin-token:latest"
@@ -92,7 +104,7 @@ else
   echo "Build ${build_id}: SUCCESS"
 fi
 
-echo "Deploying ${sha} to ${SERVICE_NAME} as tag '${TAG}' with no traffic."
+echo "Deploying ${sha} to ${SERVICE_NAME} as tag '${TAG}' with no traffic (${ENV_VARS})."
 run gcloud run deploy "${SERVICE_NAME}" \
   --image "${image}" \
   --project "${GCP_PROJECT}" \
@@ -109,5 +121,5 @@ run gcloud run deploy "${SERVICE_NAME}" \
   --concurrency 80 \
   --timeout 60 \
   --cpu-boost \
-  --set-env-vars ENVIRONMENT=production \
+  --set-env-vars "${ENV_VARS}" \
   --set-secrets "${SECRETS}"

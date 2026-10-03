@@ -364,7 +364,12 @@ function bindTestArm() {
       event.preventDefault();
       form.hidden = !form.hidden;
       link.setAttribute("aria-expanded", form.hidden ? "false" : "true");
-      if (form.hidden) return;
+      if (form.hidden) {
+        // Closing the field while test mode is armed brings Cambiar back.
+        const row = document.getElementById("test-ok-row");
+        if (row && !row.hidden) setHidden("test-mode-change", false);
+        return;
+      }
       const input = document.getElementById("test-token");
       if (input && input.focus) input.focus();
     });

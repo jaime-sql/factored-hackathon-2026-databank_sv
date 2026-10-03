@@ -451,7 +451,7 @@ A `--image` deploy keeps the env and secrets from the previous revision. The ser
 
 To change a mapping, add `--update-secrets QA_TEST_TOKEN=qa-test-token:latest` (etc.) to the deploy. Never put a value on the command line or in the repo.
 
-> `deploy/cloudrun.sh [TAG] [GIT_REF]` runs the build and the no-traffic tag deploy above in one step (default tag `next`, default ref `origin/main`). Tag deploys set `FORCE_TEST_CASES=true`, so every case they create is test traffic; the script refuses to deploy without a tag and never moves traffic. Promote with the `update-traffic` command above, from a revision deployed without the flag.
+> `deploy/cloudrun.sh [TAG] [GIT_REF]` runs the build and the no-traffic tag deploy above in one step (default tag `next`, default ref `origin/main`). Tag deploys (`next`, `preview`, …) set `FORCE_TEST_CASES=true`, so every case they create is test traffic and `/health` shows `force_test: true`. A tag starting with `live` (for example `live-<sha>`) is a live candidate deployed without the flag; only such a revision may be promoted with the `update-traffic` command above. The script never moves traffic.
 
 **DB migrations** (Supabase `dmqwgbtrrnxkgcahunrc`). Apply them as the **database owner**, not `app_rw`, in order. Each file is idempotent.
 
