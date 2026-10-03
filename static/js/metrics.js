@@ -173,7 +173,8 @@ function formatMs(value) {
   if (value == null || value === "") return "—";
   const number = Number(value);
   if (!Number.isFinite(number)) return "—";
-  return `${localNumber(number)} ms`;
+  if (Math.abs(number) >= 10000) return `${localNumber((number / 1000).toFixed(1))} s`;
+  return `${localNumber(Math.round(number))} ms`;
 }
 
 function renderHealth(health, text) {
@@ -414,8 +415,14 @@ function countryLine(group, key, lang) {
   return typeof line === "string" ? line.trim() : "";
 }
 
+function countryName(text, country) {
+  const names = text && text.countries;
+  const name = names && typeof names === "object" ? names[country] : null;
+  return typeof name === "string" && name ? name : country;
+}
+
 function fillCountry(cell, country, group, cause, text, pt) {
-  cell.appendChild(document.createTextNode(country));
+  cell.appendChild(document.createTextNode(countryName(text, country)));
   if (group && group.small_sample === true) {
     const tag = document.createElement("span");
     tag.className = "fair-sample";

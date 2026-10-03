@@ -760,7 +760,7 @@ async function testMetrics() {
         health: {
           llm_calls: 4,
           latency_p50_ms: 120,
-          latency_p95_ms: 340,
+          latency_p95_ms: 2856.5999999999995,
           mean_cost_per_call_usd: 0.0012,
         },
       });
@@ -777,7 +777,8 @@ async function testMetrics() {
   assertNoEnglish(text, "metrics es", ["Console"]);
   const healthEs = document.getElementById("health").textContent;
   assert.ok(healthEs.includes("120 ms"), healthEs);
-  assert.ok(healthEs.includes("340 ms"), healthEs);
+  assert.ok(healthEs.includes("2857 ms"), healthEs);
+  assert.equal(healthEs.includes("2856.5"), false, healthEs);
   assert.ok(healthEs.includes("US$0.0012"), healthEs);
   assertNoRawEnums(renderedText(document), "metrics es");
   document.getElementById("lang").listeners.click.forEach((fn) => fn());
@@ -799,6 +800,8 @@ async function testMetrics() {
   assertNoEnglish(text, "metrics pt", ["Consola"]);
   const healthPt = document.getElementById("health").textContent;
   assert.ok(healthPt.includes("120 ms"), healthPt);
+  assert.ok(healthPt.includes("2857 ms"), healthPt);
+  assert.equal(healthPt.includes("2856,5"), false, healthPt);
   assert.ok(healthPt.includes("US$0,0012"), healthPt);
   assert.equal(healthPt.includes("US$0.0012"), false, healthPt);
   assert.ok(healthPt.includes(catalog.pt.health_p50), healthPt);
@@ -1286,6 +1289,7 @@ async function testFairnessPanel() {
     const row = fairness.querySelector(`tr[data-country="${country}"]`);
     assert.ok(row, country);
     assert.equal(row.className.includes("fair-gap"), country === "Mexico", country);
+    assert.ok(row.textContent.startsWith(catalog.es.countries[country]), row.textContent);
     const missed = real.by_customer_country[country].missed_fraud;
     assert.ok(row.textContent.includes(`${missed.k}/${missed.n}`), row.textContent);
     assert.ok(row.textContent.includes("%"), row.textContent);
@@ -1297,6 +1301,10 @@ async function testFairnessPanel() {
   // The cause row is Analytics-authored text from fairness.json; checked separately.
   const causeRow = () => fairness.querySelector("tr.fair-cause-row").textContent;
   assertNoRawEnums(fairness.textContent.replace(causeRow(), ""), "fairness file es");
+  assert.equal(catalog.es.countries.Mexico, "México");
+  assert.equal(catalog.es.countries.Colombia, "Colombia");
+  assert.equal(catalog.pt.countries.Colombia, "Colômbia");
+  assert.ok(fairness.querySelector('tr[data-country="Mexico"]').textContent.startsWith("México"));
 
   shell.document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();
@@ -1311,6 +1319,11 @@ async function testFairnessPanel() {
   assert.equal(fairness.querySelector("p.fair-cause").textContent, realMexico.cause.pt.trim());
   assert.equal(fairness.querySelector("p.fair-test-note").textContent, realMexico.test_note.pt.trim());
   assertNoRawEnums(fairness.textContent.replace(causeRow(), ""), "fairness file pt");
+  const ptNames = { Mexico: "México", Colombia: "Colômbia", Argentina: "Argentina" };
+  for (const [country, name] of Object.entries(ptNames)) {
+    const row = fairness.querySelector(`tr[data-country="${country}"]`);
+    assert.ok(row.textContent.startsWith(name), row.textContent);
+  }
 
   shell.document.getElementById("lang").listeners.click.forEach((fn) => fn());
   await flush();

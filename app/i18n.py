@@ -96,6 +96,17 @@ _COUNTRY_NAMES = {
 }
 
 
+# English country names as they appear in analytics outputs (e.g. fairness.json keys).
+_COUNTRY_KEYS = {
+    "Argentina": "AR",
+    "Brazil": "BR",
+    "Colombia": "CO",
+    "Mexico": "MX",
+    "Spain": "ES",
+    "United States": "US",
+}
+
+
 def _ui_language(language: str) -> str:
     return "pt" if language == "pt" else "es"
 
@@ -1145,6 +1156,9 @@ def ui_copy(language: str) -> dict[str, object]:
     payload["actions"] = dict(_ACTION_PHRASES[lang])
     payload["decisions"] = dict(_DECISIONS[lang])
     payload["months"] = list(MONTHS[lang])
+    payload["countries"] = {
+        name: _COUNTRY_NAMES[lang][code] for name, code in _COUNTRY_KEYS.items()
+    }
     return payload
 
 
