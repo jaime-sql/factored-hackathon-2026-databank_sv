@@ -6,6 +6,92 @@ Transaction-level dispute intake for a LATAM card portfolio (Mexico, Colombia, A
 
 Portuguese copy is machine-translated and is reported as `language=pt`, not as production traffic.
 
+**Live:** https://databank-sv-app-285047339740.us-central1.run.app (`/`, `/agent`, `/metrics`, `/health`)
+
+## Documentation
+
+| Doc | What it covers |
+|---|---|
+| [docs/walkthrough.md](docs/walkthrough.md) | Step-by-step walkthrough: architecture, a dispute end to end, data, ML, metrics, run, deploy, test, demo, troubleshooting |
+| [docs/guide.md](docs/guide.md) | Text of the in-app “¿Cómo funciona?” tour (source: `static/js/tour.js`) |
+| [docs/decisions.md](docs/decisions.md) | Why each design choice was made |
+| [docs/evaluation.md](docs/evaluation.md) | Model and rule evaluation, thresholds, fairness |
+| [docs/data-quality.md](docs/data-quality.md) | Data profiling, masking, pipeline checks |
+| [docs/analytics.md](docs/analytics.md) | KPIs, cost per case, how to recompute |
+
+## How it works
+
+1. **Guardrails first.** PII is masked and prompt injection is blocked before anything is stored. A blocked turn shows **Protegido** and is audited.
+2. **Deterministic routing, in order:** `fraud_score > 30` is **HIGH** (card block offered, performed only after confirmation, then handoff); otherwise Pending/Reversed get a fixed explanation (**rule path**); otherwise LightGBM splits **REVIEW** (human) from **LOW** (explain, can auto-close) at `t_low`. A missing feature row is REVIEW, never LOW.
+3. **Human handoff.** The agent console shows a packet of verified facts and a background `gpt-4o-mini` reply draft. Only a human sends the reply. This is the only LLM call; it never decides the outcome.
+4. **Audit and metrics.** Every step appends to an insert-only audit log. Métricas reads `app.audit_live`, which leaves out test, eval and break-it traffic.
+5. **Data.** `bash pipeline/run_all.sh` builds bronze, silver and gold locally with DuckDB; masked copies of all three layers sit in Databricks; the app reads a masked slice from Supabase Postgres and cannot read the fraud labels.
+
+### Architecture
+
+```mermaid
+flowchart TB
+  subgraph ui [Harbor Desk UI]
+    cust[Customer page /]
+    agentUI[Agent console /agent]
+    metrics[Metrics /metrics]
+  end
+  subgraph api [FastAPI on Cloud Run]
+    guard[PII mask + injection guard]
+    engine[Deterministic engine]
+    high[HIGH fraud_score greater than 30]
+    statusRule[Pending or Reversed rule]
+    model[LightGBM REVIEW or LOW]
+    draft[Reply draft gpt-4o-mini]
+    audit[Audit log]
+  end
+  subgraph data [Data platform]
+    raw[Challenge S3 raw]
+    duck[DuckDB bash pipeline/run_all.sh]
+    bronze[Bronze]
+    silver[Silver]
+    gold[Gold]
+    dbx[Databricks masked bronze silver gold]
+    slice[Supabase Postgres masked app slice]
+  end
+  cust --> guard --> engine
+  engine --> high
+  engine --> statusRule
+  engine --> model
+  high --> agentUI
+  statusRule --> cust
+  model --> cust
+  model --> agentUI
+  agentUI --> draft
+  guard --> audit
+  engine --> audit
+  draft --> audit
+  metrics --> audit
+  raw --> duck --> bronze --> silver --> gold
+  bronze --> dbx
+  silver --> dbx
+  gold --> dbx
+  gold --> slice --> engine
+```
+
+### Data flow
+
+```mermaid
+flowchart LR
+  S3[(S3 bucket<br/>read only)] --> RAW[raw/ local copy]
+  RAW --> B[DuckDB bronze<br/>as delivered]
+  B --> S[DuckDB silver<br/>checked + typed]
+  S --> G[DuckDB gold<br/>masked]
+  B -. masked .-> DB[(Databricks<br/>workspace.bronze / silver / gold)]
+  S -. masked .-> DB
+  G --> DB
+  G --> SQ[app_slice.sqlite]
+  SQ --> SB[(Supabase public<br/>app tables)]
+  SQ --> EV[(Supabase eval<br/>fraud labels)]
+  SB --> APP[App]
+  EV -. blocked for app_rw .-x APP
+```
+
 ## Run locally
 
 SQLite is the default. No API key is required. From a fresh clone:
@@ -35,7 +121,7 @@ SQLite uses the synthetic fixture in `app/bank/fixture.py`. With `DATABASE_URL` 
 
 `DATABASE_URL` is read from the environment only. Leave it empty for SQLite. Never commit a real URL.
 
-The app connects as the `app_rw` role: read public data tables, no writes to them, no access to `eval`, statement timeout 15 seconds. Apply `migrations/001_app_schema.sql` yourself as the owner. The app does not run that file. `migrations/002_is_test.sql` adds the insert-time `is_test` columns, `app.test_cases`, and `app.audit_live`. It does not replace `app.audit_current` and it does not change grants on the audit tables. Startup applies it when the role can; otherwise the owner runs it too. `migrations/003_view_grants.sql` leaves `app_rw` with `SELECT` only on `audit_current`, `audit_live`, and `audit_llm_call_current`. Startup applies that too when the role can; otherwise the owner runs it. It does not change default privileges or `eval_rw`. On Cloud Run the URL lives in Secret Manager (`database-url`). `deploy/cloudrun.sh [TAG] [GIT_REF]` builds `git archive GIT_REF` (default `origin/main`) and deploys it to `databank-sv-app` as a no-traffic revision under TAG (default `next`), mapping the existing secrets by name. It never moves live traffic; promote a checked revision with `gcloud run services update-traffic`.
+The app connects as the `app_rw` role: read public data tables, no writes to them, no access to `eval`, statement timeout 15 seconds. Apply `migrations/001_app_schema.sql` yourself as the owner. The app does not run that file. `migrations/002_is_test.sql` adds the insert-time `is_test` columns, `app.test_cases`, and `app.audit_live`. It does not replace `app.audit_current` and it does not change grants on the audit tables. Startup applies it when the role can; otherwise the owner runs it too. `migrations/003_view_grants.sql` leaves `app_rw` with `SELECT` only on `audit_current`, `audit_live`, and `audit_llm_call_current`. Startup applies that too when the role can; otherwise the owner runs it. It does not change default privileges or `eval_rw`. On Cloud Run the URL lives in Secret Manager (`database-url`). `deploy/cloudrun.sh [TAG] [GIT_REF]` builds `git archive GIT_REF` (default `origin/main`) and deploys it to `databank-sv-app` as a no-traffic revision under TAG (default `next`), mapping the existing secrets by name. It never moves live traffic; promote a checked revision with `gcloud run services update-traffic`. See [docs/walkthrough.md §6.2](docs/walkthrough.md#62-deploy) for promotion and rollback.
 
 Model features are read from `public.fraud_features` joined to the customer’s transaction. Pending and Reversed charges have no feature row. If any other status has no feature row, the desk routes it to REVIEW and never LOW.
 
