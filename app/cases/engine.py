@@ -195,12 +195,22 @@ class Engine:
         with self._draft_lock:
             return case_id in self._drafting
 
-    def ensure_reply_draft(self, case_id: str) -> bool:
-        """Write the reply draft once. Returns True when this call wrote it."""
+    def claim_draft(self, case_id: str) -> bool:
+        """Reserve the one in-flight draft slot for a case. False if it is taken."""
         with self._draft_lock:
             if case_id in self._drafting:
                 return False
             self._drafting.add(case_id)
+            return True
+
+    def ensure_reply_draft(self, case_id: str) -> bool:
+        """Write the reply draft once. Returns True when this call wrote it."""
+        if not self.claim_draft(case_id):
+            return False
+        return self.run_claimed_draft(case_id)
+
+    def run_claimed_draft(self, case_id: str) -> bool:
+        """Write the draft for a case already reserved with ``claim_draft``."""
         try:
             case = self.ops.get_case(case_id)
             if case is None or case.get("reply_draft") or case.get("reply_sent"):

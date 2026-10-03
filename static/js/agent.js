@@ -396,28 +396,87 @@ function appendDraftPending(panel) {
   panel.appendChild(note);
   const caseId = panel.dataset.caseId || "";
   const polls = Number(panel.dataset.draftPolls || "0");
-  if (!caseId || polls >= DRAFT_POLL_LIMIT || typeof setTimeout !== "function") return;
+  if (!caseId || typeof setTimeout !== "function") return;
+  if (polls >= DRAFT_POLL_LIMIT) {
+    if (note.remove) note.remove();
+    appendDraftFailed(panel, caseId);
+    return;
+  }
   panel.dataset.draftPolls = String(polls + 1);
   setTimeout(() => refreshDraft(panel, caseId), DRAFT_POLL_MS);
 }
 
 async function refreshDraft(panel, caseId) {
   if (panel.hidden || panel.dataset.caseId !== caseId) return;
-  const response = await fetch(
-    `/api/handoff/${encodeURIComponent(caseId)}?language=${consoleState.language}`,
-    { headers: { authorization: `Bearer ${agentToken()}` } },
-  );
-  if (!response.ok || panel.hidden || panel.dataset.caseId !== caseId) return;
-  const body = await response.json();
-  const view = body.view || {};
+  let response;
+  try {
+    response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/draft`, {
+      headers: { authorization: `Bearer ${agentToken()}` },
+    });
+  } catch {
+    response = null;
+  }
+  if (panel.hidden || panel.dataset.caseId !== caseId) return;
+  const body = response && response.ok ? await response.json() : {};
   const pending = panel.querySelector ? panel.querySelector(".draft-pending") : null;
-  if (view.reply_draft_status === "pending" && !view.reply_draft) {
+  if (body.status !== "ready" && body.status !== "sent") {
     if (pending && pending.remove) pending.remove();
     appendDraftPending(panel);
     return;
   }
   if (pending && pending.remove) pending.remove();
-  appendDraft(panel, view);
+  appendDraft(panel, {
+    reply_draft: body.reply_draft || "",
+    reply_sent: body.reply_sent || "",
+    reply_draft_status: "ready",
+    reply_grounded: Boolean(body.reply_grounded),
+    reply_unsupported: body.reply_unsupported || [],
+  });
+}
+
+function draftFailedText() {
+  return `${ui("draft_failed", "No se pudo generar el borrador")} · `;
+}
+
+function appendDraftFailed(panel, caseId) {
+  if (typeof document === "undefined" || !panel.appendChild) return;
+  const note = document.createElement("p");
+  note.className = "draft-failed meta";
+  const label = document.createElement("span");
+  label.className = "draft-failed-text";
+  label.textContent = draftFailedText();
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "draft-retry linkish";
+  retry.setAttribute("data-action", "draft-retry");
+  retry.textContent = ui("draft_retry", "Reintentar");
+  retry.addEventListener("click", () => retryDraft(panel, caseId, note, retry));
+  note.append(label, retry);
+  panel.appendChild(note);
+}
+
+async function retryDraft(panel, caseId, note, retry) {
+  if (retry.disabled || panel.dataset.draftRetrying === "1") return;
+  retry.disabled = true;
+  panel.dataset.draftRetrying = "1";
+  let ok = false;
+  try {
+    const response = await fetch(`/api/handoff/${encodeURIComponent(caseId)}/draft/retry`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${agentToken()}` },
+    });
+    ok = Boolean(response && (response.ok || response.status === 202));
+  } catch {
+    ok = false;
+  }
+  panel.dataset.draftRetrying = "0";
+  if (!ok) {
+    retry.disabled = false;
+    return;
+  }
+  if (note && note.remove) note.remove();
+  panel.dataset.draftPolls = "0";
+  appendDraftPending(panel);
 }
 
 function appendDraft(panel, view) {
@@ -719,6 +778,12 @@ function applyConsoleLanguage() {
   }
   for (const pending of document.querySelectorAll(".draft-pending")) {
     pending.textContent = pack.draft_pending;
+  }
+  for (const failed of document.querySelectorAll(".draft-failed-text")) {
+    if (pack.draft_failed) failed.textContent = `${pack.draft_failed} · `;
+  }
+  for (const retry of document.querySelectorAll(".draft-retry")) {
+    if (pack.draft_retry) retry.textContent = pack.draft_retry;
   }
   for (const send of document.querySelectorAll(".draft button")) {
     send.textContent = pack.send_reply;

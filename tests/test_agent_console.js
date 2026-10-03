@@ -772,18 +772,17 @@ async function checkDraftPendingThenReady() {
   let polls = 0;
   context.fetch = async (url) => {
     polls += 1;
-    assert.ok(String(url).includes("/api/handoff/case-slow"), String(url));
+    assert.equal(String(url), "/api/handoff/case-slow/draft", "polls the read-only draft endpoint");
     return {
       ok: true,
       status: 200,
       json: async () => ({
-        view: {
-          reply_draft: "Hola. Harbor Desk vio el cargo.",
-          reply_sent: "",
-          reply_draft_status: "ready",
-          reply_grounded: true,
-          reply_unsupported: [],
-        },
+        case_id: "case-slow",
+        status: "ready",
+        reply_draft: "Hola. Harbor Desk vio el cargo.",
+        reply_sent: "",
+        reply_grounded: true,
+        reply_unsupported: [],
       }),
     };
   };
@@ -801,8 +800,64 @@ async function checkDraftPendingThenReady() {
   assert.match(i18nText, /"draft_pending": "Borrador en preparación…"/);
 }
 
+async function checkDraftTimeoutAndRetry() {
+  const panel = fakeElement();
+  panel.dataset.caseId = "case-stuck";
+  const timers = [];
+  context.setTimeout = (fn, ms) => {
+    timers.push({ fn, ms });
+    return timers.length;
+  };
+  const calls = [];
+  let releaseRetry;
+  context.fetch = (url, options = {}) => {
+    calls.push({ url: String(url), method: options.method || "GET" });
+    if (String(url).endsWith("/draft/retry")) {
+      return new Promise((resolve) => {
+        releaseRetry = () => resolve({ ok: false, status: 202, json: async () => ({ status: "generating" }) });
+      });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ case_id: "case-stuck", status: "pending" }) });
+  };
+  context.renderPacket(panel, {
+    band: "review",
+    amount: "10 MXN",
+    merchant: "U•••",
+    recommended_next_step: "Revisar",
+    reply_draft: "",
+    reply_sent: "",
+    reply_draft_status: "pending",
+  });
+  for (let i = 0; i < 20; i += 1) await timers[i].fn();
+  assert.equal(timers.length, 20, "stops polling after the limit");
+  assert.ok(calls.every((call) => call.url === "/api/handoff/case-stuck/draft" && call.method === "GET"));
+  const nodes = [];
+  walkTags(panel, nodes);
+  const failed = nodes.find((node) => String(node.className).includes("draft-failed"));
+  assert.ok(failed, "timeout message shown");
+  const text = failed.children.find((node) => node.className === "draft-failed-text");
+  const retry = failed.children.find((node) => String(node.className).includes("draft-retry"));
+  assert.equal(`${text.textContent}${retry.textContent}`, "No se pudo generar el borrador · Reintentar");
+  calls.length = 0;
+  const first = retry.listeners.click[0]();
+  assert.equal(retry.disabled, true, "disabled while the retry is in flight");
+  retry.listeners.click[0]();
+  retry.listeners.click[0]();
+  assert.equal(calls.filter((call) => call.url.endsWith("/draft/retry")).length, 1, "no double submit");
+  assert.equal(calls[0].method, "POST");
+  releaseRetry();
+  await first;
+  assert.equal(panel.dataset.draftPolls, "1", "polling restarts after the retry");
+  assert.equal(timers.length, 21);
+
+  const i18nText = fs.readFileSync("app/i18n.py", "utf8");
+  assert.match(i18nText, /"draft_failed": "Não foi possível gerar o rascunho"/);
+  assert.match(i18nText, /"draft_retry": "Tentar novamente"/);
+}
+
 checkDraftFactsAndSend()
   .then(() => checkDraftPendingThenReady())
+  .then(() => checkDraftTimeoutAndRetry())
   .then(() => checkLoadQueue())
   .then(() => console.log("agent console js ok"))
   .catch((error) => {

@@ -512,6 +512,57 @@ def handoff_case(
     }
 
 
+def _draft_status(request: Request, case_id: str) -> dict[str, Any]:
+    case = request.app.state.ops.get_case(case_id)
+    if case is None or request.app.state.ops.get_handoff(case_id) is None:
+        raise APIError(404, "not_found", "Handoff not found")
+    draft = str(case.get("reply_draft") or "")
+    sent = str(case.get("reply_sent") or "")
+    if sent:
+        status = "sent"
+    elif draft:
+        status = "ready"
+    elif request.app.state.engine.draft_in_progress(case_id):
+        status = "generating"
+    else:
+        status = "pending"
+    body: dict[str, Any] = {"case_id": case_id, "status": status}
+    if draft or sent:
+        body["reply_draft"] = draft
+        body["reply_sent"] = sent
+        checked = grounded(sent or draft, _reply_facts(request, case_id))
+        body["reply_grounded"] = bool(checked["ok"])
+        body["reply_unsupported"] = list(checked["unsupported_facts"])
+    return body
+
+
+@router.get("/api/handoff/{case_id}/draft")
+def handoff_draft_status(case_id: str, request: Request) -> dict[str, Any]:
+    """Read-only draft state for the console poll. Writes no audit row."""
+    _agent(request)
+    return _draft_status(request, case_id)
+
+
+@router.post("/api/handoff/{case_id}/draft/retry")
+def handoff_draft_retry(
+    case_id: str, request: Request, background: BackgroundTasks
+) -> JSONResponse:
+    """Start one regeneration if none is running and no draft exists yet."""
+    _agent(request)
+    body = _draft_status(request, case_id)
+    if body["status"] in {"ready", "sent"}:
+        return JSONResponse(body)
+    engine = request.app.state.engine
+    if not engine.claim_draft(case_id):
+        body["status"] = "generating"
+        body["started"] = False
+        return JSONResponse(body, status_code=202)
+    background.add_task(engine.run_claimed_draft, case_id)
+    body["status"] = "generating"
+    body["started"] = True
+    return JSONResponse(body, status_code=202)
+
+
 def _reply_facts(request: Request, case_id: str) -> dict[str, str]:
     row = request.app.state.ops.get_handoff(case_id)
     if row is None:
