@@ -957,6 +957,11 @@ _UI = {
         "fair_sample": "muestra pequeña",
         "fair_gap": "Brecha conocida",
         "fair_small": "Los grupos con menos de 30 casos quedan fuera",
+        "fair_escalation_note": (
+            "Derivación a revisión humana de este país ÷ la del total (cargos Aprobados/Rechazados, "
+            "set de validación). 1.00× = igual al promedio."
+        ),
+        "raw_toggle": "Ver JSON",
     },
     "pt": {
         "nav_client": "Cliente",
@@ -1079,6 +1084,11 @@ _UI = {
         "fair_sample": "amostra pequena",
         "fair_gap": "Lacuna conhecida",
         "fair_small": "Os grupos com menos de 30 casos ficam de fora",
+        "fair_escalation_note": (
+            "Encaminhamento para revisão humana deste país ÷ o do total (cobranças Aprovadas/Recusadas, "
+            "conjunto de validação). 1,00× = igual à média."
+        ),
+        "raw_toggle": "Ver JSON",
     },
 }
 
@@ -1125,6 +1135,7 @@ def persona_note(language: str, persona_id: str, *, postgres: bool) -> str:
 
 def persona_label(language: str, persona_id: str, fallback: str) -> str:
     labels = {
+        "ana": {"es": "Ana · Rosario", "pt": "Ana · Rosário"},
         "camilo": {"es": "Camilo · Barranquilla", "pt": "Camilo · Barranquilla"},
         "maria": {"es": "María · Ciudad de México", "pt": "María · Cidade do México"},
     }

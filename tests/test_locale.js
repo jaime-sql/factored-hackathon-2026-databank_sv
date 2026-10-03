@@ -13,7 +13,7 @@ const dumped = execFileSync(
       "import json",
       "from app.i18n import persona_label, persona_note, ui_catalog",
       "ids = ['ana', 'camilo', 'maria', 'teo', 'lucia']",
-      "fallback = {'lucia': 'Lucía · Querétaro', 'teo': 'Teo · Tijuana', 'ana': 'Ana · Argentina', 'camilo': 'Camilo · Barranquilla', 'maria': 'María · Ciudad de México'}",
+      "fallback = {'lucia': 'Lucía · Querétaro', 'teo': 'Teo · Tijuana', 'ana': 'Ana · Rosario', 'camilo': 'Camilo · Barranquilla', 'maria': 'María · Ciudad de México'}",
       "personas = []",
       "for pid in ids:",
       "    personas.append({",
@@ -759,7 +759,7 @@ async function testMetrics() {
         eval_toggle_label: catalog[lang].eval_toggle,
         excluded_eval_cases: 0,
         k1_volume: { total: 1 },
-        k5_handoff: { display: "0 / 1" },
+        k5_handoff: { k: 0, n: 0, pct: null, display: "no definido" },
         k6_containment: { display: "1 / 1" },
         health: {
           llm_calls: 4,
@@ -779,6 +779,9 @@ async function testMetrics() {
   assert.ok(text.includes(catalog.es.eval_toggle), text);
   assertAbsent(text, ["Demo sample", catalog.pt.tile_containment, catalog.pt.metrics_lede], "metrics es");
   assertNoEnglish(text, "metrics es", ["Console"]);
+  const handoffTile = document.querySelector('[data-metric="handoff"]');
+  if (handoffTile) assert.ok(handoffTile.textContent.includes("0 / 0"), handoffTile.textContent);
+  assert.equal(text.includes("no definido"), false, text);
   const healthEs = document.getElementById("health").textContent;
   assert.ok(healthEs.includes("120 ms"), healthEs);
   assert.ok(healthEs.includes("2857 ms"), healthEs);
@@ -896,7 +899,7 @@ async function testBundledPortuguese() {
   assert.ok(text.includes("Modo de teste"), text);
   assert.ok(text.includes("Token de teste"), text);
   assert.ok(text.includes("Barranquilla"), text);
-  assert.ok(text.includes("Ana · Argentina"), text);
+  assert.ok(text.includes("Ana · Rosário"), text);
   assert.equal(text.includes("Camilo · Colombia"), false, text);
   assert.equal(text.includes("Camilo · Colômbia"), false, text);
   assert.ok(text.includes("Pessoa sintética"), text);
@@ -1301,7 +1304,12 @@ async function testFairnessPanel() {
   assert.ok(fairness.textContent.includes("21/292"), fairness.textContent);
   assert.ok(fairness.textContent.includes("7.2%"), fairness.textContent);
   assert.ok(fairness.textContent.includes("4.8%–10.7%"), fairness.textContent);
-  assert.ok(fairness.textContent.includes("96.3%"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("0.96×"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("1.05×"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("1.01×"), fairness.textContent);
+  assert.equal(fairness.textContent.includes("96.3%"), false, fairness.textContent);
+  assert.ok(fairness.textContent.includes("323,267"), fairness.textContent);
+  assert.equal(fairness.querySelector("p.fair-escalation-note").textContent, catalog.es.fair_escalation_note);
   // The cause row is Analytics-authored text from fairness.json; checked separately.
   const causeRow = () => fairness.querySelector("tr.fair-cause-row").textContent;
   assertNoRawEnums(fairness.textContent.replace(causeRow(), ""), "fairness file es");
@@ -1317,7 +1325,10 @@ async function testFairnessPanel() {
   assert.equal(fairness.textContent.includes(catalog.es.fair_caveat), false, fairness.textContent);
   assert.ok(fairness.textContent.includes("7,2%"), fairness.textContent);
   assert.ok(fairness.textContent.includes("4,8%–10,7%"), fairness.textContent);
-  assert.ok(fairness.textContent.includes("96,3%"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("0,96×"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("1,05×"), fairness.textContent);
+  assert.ok(fairness.textContent.includes("323.267"), fairness.textContent);
+  assert.equal(fairness.querySelector("p.fair-escalation-note").textContent, catalog.pt.fair_escalation_note);
   assert.equal(fairness.textContent.includes("7.2%"), false, fairness.textContent);
   assert.equal(fairness.querySelector(".fair-gap-chip").textContent, catalog.pt.fair_gap);
   assert.equal(fairness.querySelector("p.fair-cause").textContent, realMexico.cause.pt.trim());

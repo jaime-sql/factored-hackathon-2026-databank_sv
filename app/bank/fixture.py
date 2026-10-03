@@ -23,7 +23,7 @@ PERSONAS: tuple[dict[str, str], ...] = (
         "id": "ana",
         "customer_key": "ck_ar_ana",
         "bank_customer_key": "CUS_bea1a374f5bcbe2b4b20",
-        "label": "Ana · Argentina",
+        "label": "Ana · Rosario",
         "country": "Argentina",
         "segment": "Basic",
         "accent": "rioplatense",

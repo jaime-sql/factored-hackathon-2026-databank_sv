@@ -233,7 +233,7 @@ const GUIDE = {
         pt: "Saúde do sistema mostra as chamadas, a latência e o custo.",
       },
       {
-        selector: "#raw",
+        selector: "#raw-wrap",
         es: "Este bloque es el mismo cálculo en JSON, para leer el detalle.",
         pt: "Este bloco é o mesmo cálculo em JSON, para ler o detalhe.",
       },

@@ -55,6 +55,7 @@ const state = {
   caseId: null,
   catalog: globalThis.HD_CATALOG || null,
   personas: [],
+  persona: "",
   testMode: false,
   testToken: "",
 };
@@ -128,6 +129,8 @@ function renderPersonas() {
   for (const persona of state.personas) {
     const button = document.createElement("button");
     button.setAttribute("data-action", "persona");
+    button.setAttribute("data-persona", persona.id);
+    button.setAttribute("aria-pressed", state.persona === persona.id ? "true" : "false");
     const notes = persona.notes || {};
     const note = notes[state.language] || persona.note || "";
     const labels = persona.labels || {};
@@ -212,6 +215,16 @@ async function runDemo(demo) {
   }
 }
 
+function markPersona() {
+  const box = document.getElementById("personas");
+  if (!box || !box.children) return;
+  for (const button of Array.from(box.children)) {
+    if (!button.getAttribute || !button.setAttribute) continue;
+    const id = button.getAttribute("data-persona");
+    button.setAttribute("aria-pressed", id && id === state.persona ? "true" : "false");
+  }
+}
+
 async function loadPersonas() {
   const payload = await fetch("/api/personas").then((res) => res.json());
   state.personas = payload.personas || [];
@@ -268,6 +281,8 @@ async function signIn(persona) {
   });
   const body = await response.json();
   state.token = body.token;
+  state.persona = body.token ? persona : "";
+  markPersona();
   if (body.is_test) state.testMode = true;
   showTestBadge(state.testMode);
   await refreshCharges();

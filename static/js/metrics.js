@@ -58,11 +58,34 @@ function applyMetricsLanguage() {
   applyNav(text);
   const tour = document.getElementById("tour");
   if (tour) tour.textContent = text.tour_open;
+  const rawToggle = document.getElementById("raw-toggle");
+  if (rawToggle && text.raw_toggle) rawToggle.textContent = text.raw_toggle;
   if (label && !label.dataset.loaded) label.textContent = text.eval_toggle;
   const badge = document.getElementById("test-badge");
   if (badge && text.test_badge) badge.textContent = text.test_badge;
   revealCopy();
   notifyLanguage();
+}
+
+function localeTag() {
+  return language === "pt" ? "pt-BR" : "es-MX";
+}
+
+function formatCount(value) {
+  if (value == null || value === "") return "";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  return number.toLocaleString(localeTag());
+}
+
+function ratioText(metric) {
+  if (!metric || typeof metric !== "object") return "—";
+  const k = Number(metric.k);
+  const n = Number(metric.n);
+  if (metric.k != null && metric.n != null && Number.isFinite(k) && Number.isFinite(n)) {
+    return `${formatCount(k)} / ${formatCount(n)}`;
+  }
+  return metric.display == null ? "—" : String(metric.display);
 }
 
 function tile(name, caption, value) {
@@ -109,35 +132,39 @@ async function load() {
   if (tiles) tiles.removeAttribute("aria-busy");
   label.dataset.loaded = "1";
   label.textContent = body.eval_toggle_label;
-  const cases = tile("cases", text ? text.tile_cases : "Casos", body.k1_volume.total);
+  renderTiles(tiles, body, text);
+  renderJudgePanels(body, text);
+  document.getElementById("raw").textContent = JSON.stringify(body, null, 2);
+}
+
+function renderTiles(tiles, body, text) {
+  if (!tiles || !body) return;
+  const cases = tile(
+    "cases",
+    text ? text.tile_cases : "Casos",
+    formatCount(body.k1_volume && body.k1_volume.total),
+  );
   const handoff = tile(
     "handoff",
     text ? text.tile_handoff : "Traspaso a persona",
-    body.k5_handoff.display,
+    ratioText(body.k5_handoff),
   );
   const containment = tile(
     "containment",
     text ? text.tile_containment : "Contención",
-    body.k6_containment.display,
+    ratioText(body.k6_containment),
   );
   const evalTile = tile(
     "eval",
     text ? text.tile_eval : "Evaluación excluida",
-    body.excluded_eval_cases,
+    formatCount(body.excluded_eval_cases == null ? 0 : body.excluded_eval_cases),
   );
-  cases.setAttribute("data-metric", "cases");
-  handoff.setAttribute("data-metric", "handoff");
-  containment.setAttribute("data-metric", "containment");
-  evalTile.setAttribute("data-metric", "eval");
   const testTile = tile(
     "test",
     text ? text.tile_test : "Prueba excluida",
-    body.excluded_test_cases == null ? 0 : body.excluded_test_cases,
+    formatCount(body.excluded_test_cases == null ? 0 : body.excluded_test_cases),
   );
-  testTile.setAttribute("data-metric", "test");
   tiles.replaceChildren(cases, handoff, containment, evalTile, testTile);
-  renderJudgePanels(body, text);
-  document.getElementById("raw").textContent = JSON.stringify(body, null, 2);
 }
 
 function clearSection(id) {
@@ -368,11 +395,11 @@ function renderFairness(payload, text) {
     row.setAttribute("data-country", country);
     if (cause) row.className = "fair-gap";
     const missed = (group && group.missed_fraud) || {};
-    const values = [null, group && group.n];
+    const values = [null, group && group.n != null ? formatCount(group.n) : null];
     if (showShares) {
       values.push(share(group.low_share), share(group.review_share), share(group.high_share));
     }
-    values.push(percent(group && group.escalation_ratio_vs_overall, pt));
+    values.push(ratioTimes(group && group.escalation_ratio_vs_overall));
     values.push(missedText(missed, pt));
     values.forEach((value, index) => {
       const cell = document.createElement("td");
@@ -401,6 +428,16 @@ function renderFairness(payload, text) {
     table.appendChild(extra);
   }
   node.appendChild(table);
+  const escalationNote = document.createElement("p");
+  escalationNote.className = "fair-escalation-note";
+  escalationNote.textContent = fairLabel(
+    text,
+    "fair_escalation_note",
+    pt
+      ? "Encaminhamento para revisão humana deste país ÷ o do total (cobranças Aprovadas/Recusadas, conjunto de validação). 1,00× = igual à média."
+      : "Derivación a revisión humana de este país ÷ la del total (cargos Aprobados/Rechazados, set de validación). 1.00× = igual al promedio.",
+  );
+  node.appendChild(escalationNote);
 }
 
 function countryCause(group, lang) {
@@ -447,6 +484,15 @@ function missedText(missed, pt) {
   if (rate && low && high) parts.push(`${rate} (${low}–${high})`);
   else if (rate) parts.push(rate);
   return parts.join(" · ");
+}
+
+function ratioTimes(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+  const shown = value.toLocaleString(localeTag(), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${shown}×`;
 }
 
 function percent(value, pt) {

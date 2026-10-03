@@ -82,12 +82,20 @@ assert.match(agent, /data-action", "resolve"/);
 const metrics = fs.readFileSync("static/js/metrics.js", "utf8");
 for (const name of ["cases", "handoff", "containment", "eval"]) {
   assert.ok(
-    metrics.includes(`data-metric="${name}"`) || metrics.includes(`"data-metric", "${name}"`),
+    metrics.includes(`data-metric="${name}"`) ||
+      metrics.includes(`"data-metric", "${name}"`) ||
+      metrics.includes(`"${name}",\n    text ? text.tile_`),
     name,
   );
 }
 
+const metricsHtml = fs.readFileSync("static/metrics.html", "utf8");
+assert.match(metricsHtml, /<details id="raw-wrap" class="raw-wrap">\s*<summary id="raw-toggle">Ver JSON<\/summary>\s*<pre id="raw"><\/pre>/);
+assert.match(desk, /aria-pressed/);
+
 const css = fs.readFileSync("static/css/app.css", "utf8");
+assert.match(css, /:focus-visible \{ outline: 2px solid/);
+assert.match(css, /\.sim-table th, \.sim-table td \{ overflow-wrap: normal;/);
 assert.match(css, /#lang,\s*\n#tour\s*\{[^}]*z-index:\s*41/);
 assert.match(css, /#lang,\s*\n#tour\s*\{[^}]*pointer-events:\s*auto/);
 assert.match(css, /\.tour-shade\s*\{[^}]*z-index:\s*30/);

@@ -273,7 +273,7 @@ Salud del sistema muestra las llamadas, la latencia y el costo.
 
 PT: Saúde do sistema mostra as chamadas, a latência e o custo.
 
-### 12. `#raw`
+### 12. `#raw-wrap`
 
 Este bloque es el mismo cálculo en JSON, para leer el detalle.
 
