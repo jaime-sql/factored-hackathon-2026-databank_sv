@@ -13,6 +13,9 @@
       } catch (e) {}
       document.documentElement.lang = lang;
       document.documentElement.classList.add("i18n-pending");
+      setTimeout(function () {
+        document.documentElement.classList.remove("i18n-pending");
+      }, 1200);
     })();
   </script>
   <script src="/static/js/catalog.js"></script>
@@ -38,17 +41,22 @@
   </header>
   <main>
     <section id="personas" class="row"></section>
+    <section id="demos" class="row demo-row" aria-labelledby="demos-title">
+      <h2 id="demos-title" class="visually-hidden">Demos rápidas</h2>
+    </section>
     <section id="charges"></section>
     <form id="composer" class="row">
+      <label class="visually-hidden" id="message-label" for="message">Mensaje</label>
       <input id="message" type="text" maxlength="500" autocomplete="off" placeholder="Mensaje" />
       <button type="submit" id="send">Enviar</button>
+      <button type="button" id="break-it">Intenta romperlo</button>
     </form>
     <section id="thread"></section>
     <p class="test-arm">
-      <button type="button" id="test-mode-link" class="linkish">Modo de prueba</button>
+      <button type="button" id="test-mode-link" class="linkish" aria-expanded="false" aria-controls="test-mode-form">Modo de prueba</button>
     </p>
     <form id="test-mode-form" class="test-arm-form" hidden>
-      <label id="test-token-label" for="test-token">Token de prueba</label>
+      <label class="visually-hidden" id="test-token-label" for="test-token">Token de prueba</label>
       <input id="test-token" type="password" autocomplete="off" maxlength="200" placeholder="Token de prueba" />
       <button type="submit" id="test-mode-send">Activar</button>
     </form>

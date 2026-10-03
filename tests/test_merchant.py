@@ -5,6 +5,7 @@ from app.i18n import (
     merchant_label,
     packet_merchant,
     reply_high,
+    reply_low,
     reply_pending,
     reply_review,
 )
@@ -73,6 +74,18 @@ def test_category_titles_drop_the_prefix() -> None:
         transaction_type="Purchase",
     )
     assert "A cobrança da categoria Transporte (10.00 USD)" in portuguese
+
+
+def test_reply_low_translates_the_category_and_the_charge() -> None:
+    spanish = reply_low("es", "Café", "Food", "Bogotá", "1 may 2026", "10.00 USD")
+    assert "(Comida)" in spanish
+    assert "(Food)" not in spanish
+    portuguese = reply_low("pt", "Café", "Food", "São Paulo", "1 mai 2026", "10.00 BRL")
+    assert "(Alimentação)" in portuguese
+    assert "Food" not in portuguese
+    empty = reply_low("pt", "", "", "São Paulo", "1 mai 2026", "10.00 BRL")
+    assert "uma cobrança" in empty
+    assert "cargo" not in empty
 
 
 def test_packet_merchant_uses_the_same_fallback() -> None:

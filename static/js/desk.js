@@ -55,6 +55,7 @@ const state = {
   caseId: null,
   catalog: globalThis.HD_CATALOG || null,
   personas: [],
+  persona: "",
   testMode: false,
   testToken: "",
 };
@@ -87,6 +88,8 @@ function applyLanguage() {
   if (tour) tour.textContent = copy.tour_open;
   const message = document.getElementById("message");
   if (message) message.placeholder = copy.message_placeholder;
+  const messageLabel = document.getElementById("message-label");
+  if (messageLabel && copy.message_placeholder) messageLabel.textContent = copy.message_placeholder;
   const send = document.getElementById("send");
   if (send) send.textContent = copy.send;
   const why = document.querySelector("details.why summary");
@@ -102,12 +105,21 @@ function applyLanguage() {
   if (testToken && copy.test_token) testToken.placeholder = copy.test_token;
   const testTokenLabel = document.getElementById("test-token-label");
   if (testTokenLabel && copy.test_token) testTokenLabel.textContent = copy.test_token;
+  const breakIt = document.getElementById("break-it");
+  if (breakIt && copy.break_it) breakIt.textContent = copy.break_it;
+  for (const item of document.querySelectorAll("details.why li")) {
+    if (!item.dataset) continue;
+    item.textContent = [item.dataset.at, bandText(item.dataset.band), item.dataset.reason]
+      .filter(Boolean)
+      .join(" · ");
+  }
   revealCopy();
   notifyLanguage();
   for (const button of document.querySelectorAll('#charges [data-action="select-charge"]')) {
     button.textContent = copy.dispute;
   }
   renderPersonas();
+  renderDemos();
 }
 
 function renderPersonas() {
@@ -117,14 +129,99 @@ function renderPersonas() {
   for (const persona of state.personas) {
     const button = document.createElement("button");
     button.setAttribute("data-action", "persona");
+    button.setAttribute("data-persona", persona.id);
+    button.setAttribute("aria-pressed", state.persona === persona.id ? "true" : "false");
     const notes = persona.notes || {};
     const note = notes[state.language] || persona.note || "";
     const labels = persona.labels || {};
     const label = labels[state.language] || persona.label || "";
     const suffix = note ? ` · ${note}` : "";
-    button.textContent = `${label} · ${persona.tz}${suffix}`;
+    button.textContent = `${label}${suffix}`;
     button.addEventListener("click", () => signIn(persona.id));
     box.appendChild(button);
+  }
+}
+
+// Real charges from the challenge data that land in each outcome on every run.
+const DEMOS = [
+  { id: "high", persona: "teo", transaction: "TXN_c9d2185cbd2ab37f95d7" },
+  { id: "review", persona: "teo", transaction: "TXN_eef1352d123d275d7602" },
+  { id: "pending", persona: "maria", transaction: "TXN_ddcd20809f49f3b0a60c" },
+];
+const DEMO_FALLBACK = {
+  es: {
+    demo_title: "Demos rápidas",
+    demo_high: "Teo · Tijuana · cargo de riesgo alto",
+    demo_review: "Teo · Tijuana · cargo dudoso",
+    demo_pending: "María · Ciudad de México · cargo pendiente",
+    demo_chip_high: "Bloqueo · HIGH",
+    demo_chip_review: "Revisión humana",
+    demo_chip_pending: "Pendiente",
+    dispute: "No reconozco este cargo",
+  },
+  pt: {
+    demo_title: "Demos rápidas",
+    demo_high: "Teo · Tijuana · cobrança de risco alto",
+    demo_review: "Teo · Tijuana · cobrança duvidosa",
+    demo_pending: "María · Cidade do México · cobrança pendente",
+    demo_chip_high: "Bloqueio · HIGH",
+    demo_chip_review: "Revisão humana",
+    demo_chip_pending: "Pendente",
+    dispute: "Não reconheço esta cobrança",
+  },
+};
+
+function demoText(key) {
+  const copy = text();
+  if (copy && copy[key]) return copy[key];
+  return DEMO_FALLBACK[state.language === "pt" ? "pt" : "es"][key] || "";
+}
+
+function renderDemos() {
+  const box = document.getElementById("demos");
+  if (!box) return;
+  const title = document.getElementById("demos-title");
+  if (title) title.textContent = demoText("demo_title");
+  for (const old of Array.from(box.querySelectorAll ? box.querySelectorAll("button") : [])) old.remove();
+  for (const demo of DEMOS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("data-action", "demo");
+    button.setAttribute("data-demo", demo.id);
+    const label = document.createElement("span");
+    label.textContent = demoText(`demo_${demo.id}`);
+    const chip = document.createElement("span");
+    chip.className = "demo-chip";
+    chip.setAttribute("data-outcome", demo.id);
+    chip.textContent = demoText(`demo_chip_${demo.id}`);
+    button.append(label, chip);
+    button.addEventListener("click", () => runDemo(demo));
+    box.appendChild(button);
+  }
+}
+
+async function runDemo(demo) {
+  await signIn(demo.persona);
+  if (!state.token) return;
+  const shown = await postCase({
+    transaction_key: demo.transaction,
+    message: demoText("dispute"),
+    language: state.language,
+  });
+  const details = shown && shown.why ? await shown.why : null;
+  const target = details || (shown && shown.card);
+  if (target && typeof target.scrollIntoView === "function") {
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function markPersona() {
+  const box = document.getElementById("personas");
+  if (!box || !box.children) return;
+  for (const button of Array.from(box.children)) {
+    if (!button.getAttribute || !button.setAttribute) continue;
+    const id = button.getAttribute("data-persona");
+    button.setAttribute("aria-pressed", id && id === state.persona ? "true" : "false");
   }
 }
 
@@ -184,6 +281,8 @@ async function signIn(persona) {
   });
   const body = await response.json();
   state.token = body.token;
+  state.persona = body.token ? persona : "";
+  markPersona();
   if (body.is_test) state.testMode = true;
   showTestBadge(state.testMode);
   await refreshCharges();
@@ -213,7 +312,9 @@ function bindTestArm() {
   if (link && form) {
     link.addEventListener("click", (event) => {
       event.preventDefault();
-      form.hidden = false;
+      form.hidden = !form.hidden;
+      link.setAttribute("aria-expanded", form.hidden ? "false" : "true");
+      if (form.hidden) return;
       const input = document.getElementById("test-token");
       if (input && input.focus) input.focus();
     });
@@ -235,20 +336,48 @@ function bindTestArm() {
   });
 }
 
+function connectError() {
+  const copy = text();
+  if (copy && copy.connect_error) return copy.connect_error;
+  return state.language === "pt"
+    ? "Não foi possível conectar. Tente novamente."
+    : "No pudimos conectar. Intenta de nuevo.";
+}
+
+function showConnectError() {
+  const box = document.getElementById("thread");
+  if (!box || typeof box.replaceChildren !== "function") return;
+  const note = document.createElement("p");
+  note.className = "queue-status error";
+  note.setAttribute("data-connect-error", "1");
+  note.textContent = connectError();
+  box.replaceChildren(note);
+}
+
+async function postCase(body) {
+  let response;
+  try {
+    response = await fetch("/cases", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${state.token}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    showConnectError();
+    return null;
+  }
+  return render(await response.json());
+}
+
 async function openCase(transactionKey, message) {
-  const response = await fetch("/cases", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${state.token}`,
-    },
-    body: JSON.stringify({
-      transaction_key: transactionKey,
-      message,
-      language: state.language,
-    }),
+  await postCase({
+    transaction_key: transactionKey,
+    message,
+    language: state.language,
   });
-  render(await response.json());
 }
 
 async function sendAction(action) {
@@ -263,6 +392,32 @@ async function sendAction(action) {
   render(await response.json());
 }
 
+function bandText(band) {
+  const copy = text();
+  const fromCatalog = copy && copy.bands && copy.bands[band];
+  if (fromCatalog) return fromCatalog;
+  const fallback = state.language === "pt"
+    ? { high: "Alto", low: "Baixo", review: "Revisão", out_of_scope: "Fora de escopo" }
+    : { high: "Alto", low: "Bajo", review: "Revisión", out_of_scope: "Fuera de alcance" };
+  return fallback[band] || "";
+}
+
+function flagText(flag) {
+  const copy = text();
+  const key = flag === "prompt_injection" ? "flag_injection" : flag === "pii_masked" ? "flag_pii" : "";
+  if (key && copy && copy[key]) return copy[key];
+  const fallback = state.language === "pt"
+    ? { prompt_injection: "Injeção bloqueada", pii_masked: "Dados mascarados" }
+    : { prompt_injection: "Inyección bloqueada", pii_masked: "Datos enmascarados" };
+  return fallback[flag] || "";
+}
+
+function shownReply(body) {
+  let reply = String(body.reply || body.message || "");
+  if (body.protected) reply = reply.replace(/^Protegido\.\s*/, "");
+  return reply;
+}
+
 function render(body) {
   state.caseId = body.case_id;
   const box = document.getElementById("thread");
@@ -270,16 +425,21 @@ function render(body) {
   const card = document.createElement("article");
   card.className = "card";
   if (body.band) card.setAttribute("data-band", body.band);
+  const copy = text();
   if (body.protected) {
     const notice = document.createElement("p");
     notice.className = "protected";
-    const copy = text();
     notice.textContent = copy ? copy.protected : "Protegido";
     card.appendChild(notice);
+    const score = document.createElement("p");
+    score.className = "score-line";
+    score.dataset.band = "out_of_scope";
+    score.textContent = copy ? copy.score_guardrail : "Bloqueado por protección · sin puntaje";
+    card.appendChild(score);
   }
   const reply = document.createElement("p");
   reply.className = "reply";
-  reply.textContent = body.reply || body.message || "";
+  reply.textContent = shownReply(body);
   card.appendChild(reply);
   for (const action of body.actions || []) {
     const button = document.createElement("button");
@@ -289,15 +449,61 @@ function render(body) {
     button.addEventListener("click", () => sendAction(action.id));
     card.appendChild(button);
   }
+  if (body.protected || body.demo_attack) {
+    const money = document.createElement("p");
+    money.className = "meta";
+    const copy = text();
+    money.textContent = copy ? copy.no_money : "No se movió dinero";
+    card.appendChild(money);
+  }
+  if (body.demo_attack) {
+    const masked = document.createElement("p");
+    masked.className = "meta";
+    masked.textContent = `${copy ? copy.masked_label : "Texto enmascarado"}: ${body.masked_message || ""}`;
+    card.appendChild(masked);
+    const audit = body.audit || {};
+    const details = document.createElement("details");
+    details.className = "audit-row";
+    const summary = document.createElement("summary");
+    summary.textContent = copy ? copy.audit_label : "Fila de auditoría";
+    details.appendChild(summary);
+    const row = document.createElement("p");
+    const decision = (copy && copy.decisions && copy.decisions[audit.decision]) || "";
+    row.appendChild(document.createTextNode(decision));
+    for (const flag of audit.guardrail_flags || []) {
+      const label = flagText(flag);
+      if (!label) continue;
+      const chip = document.createElement("span");
+      chip.className = "flag-chip";
+      chip.textContent = label;
+      row.appendChild(document.createTextNode(" "));
+      row.appendChild(chip);
+    }
+    details.appendChild(row);
+    card.appendChild(details);
+  }
   box.appendChild(card);
-  if (body.case_id) attachWhy(card, body.case_id);
+  const flags = (body.audit && body.audit.guardrail_flags) || body.guardrail_flags || [];
+  const why = body.case_id ? attachWhy(card, body.case_id, flags) : null;
+  if ((body.demo_attack || body.protected) && typeof card.scrollIntoView === "function") {
+    card.scrollIntoView({ block: "nearest" });
+  }
+  if ((body.demo_attack || body.protected) && why && typeof why.then === "function") {
+    why.then((details) => {
+      const target = details || card;
+      if (typeof target.scrollIntoView === "function") {
+        target.scrollIntoView({ block: "center" });
+      }
+    });
+  }
+  return { card, why };
 }
 
-async function attachWhy(card, caseId) {
+async function attachWhy(card, caseId, flags) {
   const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/trail`, {
     headers: { authorization: `Bearer ${state.token}` },
   });
-  if (!response.ok) return;
+  if (!response.ok) return null;
   const body = await response.json();
   const details = document.createElement("details");
   details.className = "why";
@@ -305,14 +511,31 @@ async function attachWhy(card, caseId) {
   const copy = text();
   summary.textContent = copy ? copy.why : "¿Por qué?";
   details.appendChild(summary);
+  const chips = document.createElement("div");
+  chips.className = "flag-chips";
+  for (const flag of flags || []) {
+    const label = flagText(flag);
+    if (!label) continue;
+    const chip = document.createElement("span");
+    chip.className = "flag-chip";
+    chip.textContent = label;
+    chips.appendChild(chip);
+  }
+  if (chips.children.length) details.appendChild(chips);
   const list = document.createElement("ol");
   for (const step of body.steps || []) {
     const item = document.createElement("li");
-    item.textContent = [step.at, step.band, step.reason].filter(Boolean).join(" · ");
+    item.dataset.at = step.at || "";
+    item.dataset.band = step.band || "";
+    item.dataset.reason = step.reason || "";
+    item.textContent = [item.dataset.at, bandText(item.dataset.band), item.dataset.reason]
+      .filter(Boolean)
+      .join(" · ");
     list.appendChild(item);
   }
   details.appendChild(list);
   card.appendChild(details);
+  return details;
 }
 
 document.getElementById("composer").addEventListener("submit", async (event) => {
@@ -322,15 +545,21 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
   const message = input.value.trim();
   if (!message) return;
   input.value = "";
-  const response = await fetch("/cases", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${state.token}`,
-    },
-    body: JSON.stringify({ message, language: state.language }),
+  await postCase({ message, language: state.language });
+});
+
+const breakButton = document.getElementById("break-it");
+if (breakButton) breakButton.addEventListener("click", async () => {
+  if (!state.token) {
+    const first = (state.personas || [])[0];
+    if (!first) return;
+    await signIn(first.id);
+  }
+  if (!state.token) return;
+  await postCase({
+    demo_attack: true,
+    language: state.language,
   });
-  render(await response.json());
 });
 
 document.getElementById("lang").addEventListener("click", () => {

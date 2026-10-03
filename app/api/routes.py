@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from typing import Any
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, BackgroundTasks, Header, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -24,6 +25,8 @@ from app.cases.trail import build_steps
 from app.config import Settings
 from app.errors import APIError
 from app.eval_access import accept_eval_fields
+from app.guardrails.draft_check import grounded
+from app.handoff.packet import HandoffPacket
 from app.handoff.present import packet_view, queue_card
 from app.i18n import (
     localize_metrics,
@@ -37,9 +40,13 @@ from app.i18n import (
     ui_copy,
 )
 from app.metrics.compute import compute_metrics, select_cases
+from app.panels import fairness_panel, simulator_panel, trust_panel
+from app.reply.draft import fact_sheet
 from app.timeutil import present_time
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+_EVAL_BODY_FIELDS = frozenset({"eval_run_id", "case_source", "is_eval_case"})
 
 
 class SessionIn(BaseModel):
@@ -52,7 +59,9 @@ class CaseIn(BaseModel):
     language: str | None = None
     eval_run_id: str | None = None
     case_source: str | None = None
+    is_eval_case: bool | None = None
     case_id: str | None = None
+    demo_attack: bool = False
 
 
 class ActionIn(BaseModel):
@@ -63,6 +72,10 @@ class ResolveIn(BaseModel):
     note: str = Field(default="", max_length=500)
 
 
+class ReplyIn(BaseModel):
+    text: str = Field(default="", max_length=2000)
+
+
 def _settings(request: Request) -> Settings:
     return request.app.state.settings
 
@@ -70,9 +83,10 @@ def _settings(request: Request) -> Settings:
 def _session_token(request: Request) -> str:
     header = request.headers.get("authorization", "")
     token = header.removeprefix("Bearer ").strip() if header.lower().startswith("bearer ") else ""
-    if not token:
-        token = request.cookies.get("hd_session", "")
-    return token
+    # Agent tokens are not customer sessions. A judge bearer must not hide the cookie.
+    if token and agent_role(_settings(request), token) is None:
+        return token
+    return request.cookies.get("hd_session", "")
 
 
 def _customer(request: Request) -> str:
@@ -115,6 +129,33 @@ def _bearer(request: Request) -> str:
     if header.lower().startswith("bearer "):
         return header.removeprefix("Bearer ").strip()
     return ""
+
+
+def _console_source(request: Request) -> str | None:
+    if agent_role(_settings(request), _bearer(request)) == "judge":
+        return "judge"
+    return None
+
+
+def _record_console(
+    background: BackgroundTasks, request: Request, case_id: str, action: str
+) -> None:
+    """Audit after the response body is ready.
+
+    The task still finishes before the ASGI call returns, so Cloud Run does
+    not freeze the instance out from under the insert. A failure is logged
+    and does not change the response the console already received.
+    """
+    source = _console_source(request)
+    engine = request.app.state.engine
+
+    def write() -> None:
+        try:
+            engine.record_console_action(case_id, action, source)
+        except Exception:
+            logger.exception("console audit %s was not stored for %s", action, case_id)
+
+    background.add_task(write)
 
 
 def _agent(request: Request, *, admin_only: bool = False) -> str:
@@ -284,12 +325,25 @@ def transactions(request: Request, language: str = "es") -> dict[str, Any]:
 def open_case(
     body: CaseIn,
     request: Request,
+    background: BackgroundTasks,
     eval_runner_token: str | None = Header(default=None, alias="EVAL_RUNNER_TOKEN"),
 ) -> JSONResponse:
+    settings = _settings(request)
     customer_key = _customer(request)
+    presented_eval = (eval_runner_token or "").strip()
+    judge_request = (
+        agent_role(settings, _bearer(request)) == "judge"
+        or agent_role(settings, presented_eval) == "judge"
+    )
+    if judge_request and body.model_fields_set & _EVAL_BODY_FIELDS:
+        raise APIError(
+            403,
+            "eval_fields_forbidden",
+            "A judge token cannot set eval_run_id, case_source, or is_eval_case",
+        )
     eval_run_id, case_source = accept_eval_fields(
         eval_runner_token,
-        _settings(request).eval_runner_token,
+        settings.eval_runner_token,
         body.eval_run_id,
         body.case_source,
     )
@@ -297,15 +351,19 @@ def open_case(
     header_match = accepts_qa_test_token(
         _settings(request).qa_test_token, request.headers.get("x-test-token", "")
     )
-    result = request.app.state.engine.open_case(
-        customer_key,
-        body.transaction_key,
-        body.message,
-        body.language,
-        eval_run_id,
-        case_source,
-        is_test=False if is_eval else _traffic_is_test(request),
-    )
+    engine = request.app.state.engine
+    with engine.deferred_drafts() as pending:
+        result = engine.open_case(
+            customer_key,
+            body.transaction_key,
+            body.message,
+            body.language,
+            eval_run_id,
+            case_source,
+            is_test=False if is_eval else _traffic_is_test(request),
+            demo_attack=body.demo_attack,
+        )
+    _schedule_drafts(background, engine, pending)
     response = JSONResponse(result.as_dict())
     if header_match and not is_eval:
         _arm_test_cookie(response, request)
@@ -313,9 +371,24 @@ def open_case(
 
 
 @router.post("/cases/{case_id}/actions")
-def act(case_id: str, body: ActionIn, request: Request) -> dict[str, Any]:
+def act(
+    case_id: str, body: ActionIn, request: Request, background: BackgroundTasks
+) -> dict[str, Any]:
     customer_key = _customer(request)
-    return request.app.state.engine.act(customer_key, case_id, body.action).as_dict()
+    engine = request.app.state.engine
+    with engine.deferred_drafts() as pending:
+        result = engine.act(customer_key, case_id, body.action)
+    _schedule_drafts(background, engine, pending)
+    return result.as_dict()
+
+
+def _schedule_drafts(background: BackgroundTasks, engine: Any, case_ids: list[str]) -> None:
+    """Write reply drafts after the customer response is ready.
+
+    A draft that still fails here is written on the first console open.
+    """
+    for case_id in case_ids:
+        background.add_task(engine.ensure_reply_draft, case_id)
 
 
 @router.get("/cases/{case_id}")
@@ -395,7 +468,12 @@ def handoff_queue(request: Request, language: str | None = None) -> dict[str, An
 
 
 @router.get("/api/handoff/{case_id}")
-def handoff_case(case_id: str, request: Request, language: str | None = None) -> dict[str, Any]:
+def handoff_case(
+    case_id: str,
+    request: Request,
+    background: BackgroundTasks,
+    language: str | None = None,
+) -> dict[str, Any]:
     _agent(request)
     row = request.app.state.ops.get_handoff(case_id)
     if row is None:
@@ -421,10 +499,118 @@ def handoff_case(case_id: str, request: Request, language: str | None = None) ->
     evidence = request.app.state.band_evidence.line(str(view.get("band") or ""))
     if evidence:
         view["band_evidence"] = evidence
+    _attach_reply(request, case_id, view)
+    if view.get("reply_draft_status") == "pending":
+        engine = request.app.state.engine
+        if not engine.draft_in_progress(case_id):
+            background.add_task(engine.ensure_reply_draft, case_id)
+    _record_console(background, request, case_id, "open")
     return {
         "handoff": row,
         "events": safe_events,
         "view": view,
+    }
+
+
+def _draft_status(request: Request, case_id: str) -> dict[str, Any]:
+    case = request.app.state.ops.get_case(case_id)
+    if case is None or request.app.state.ops.get_handoff(case_id) is None:
+        raise APIError(404, "not_found", "Handoff not found")
+    draft = str(case.get("reply_draft") or "")
+    sent = str(case.get("reply_sent") or "")
+    if sent:
+        status = "sent"
+    elif draft:
+        status = "ready"
+    elif request.app.state.engine.draft_in_progress(case_id):
+        status = "generating"
+    else:
+        status = "pending"
+    body: dict[str, Any] = {"case_id": case_id, "status": status}
+    if draft or sent:
+        body["reply_draft"] = draft
+        body["reply_sent"] = sent
+        checked = grounded(sent or draft, _reply_facts(request, case_id))
+        body["reply_grounded"] = bool(checked["ok"])
+        body["reply_unsupported"] = list(checked["unsupported_facts"])
+    return body
+
+
+@router.get("/api/handoff/{case_id}/draft")
+def handoff_draft_status(case_id: str, request: Request) -> dict[str, Any]:
+    """Read-only draft state for the console poll. Writes no audit row."""
+    _agent(request)
+    return _draft_status(request, case_id)
+
+
+@router.post("/api/handoff/{case_id}/draft/retry")
+def handoff_draft_retry(
+    case_id: str, request: Request, background: BackgroundTasks
+) -> JSONResponse:
+    """Start one regeneration if none is running and no draft exists yet."""
+    _agent(request)
+    body = _draft_status(request, case_id)
+    if body["status"] in {"ready", "sent"}:
+        return JSONResponse(body)
+    engine = request.app.state.engine
+    if not engine.claim_draft(case_id):
+        body["status"] = "generating"
+        body["started"] = False
+        return JSONResponse(body, status_code=202)
+    background.add_task(engine.run_claimed_draft, case_id)
+    body["status"] = "generating"
+    body["started"] = True
+    return JSONResponse(body, status_code=202)
+
+
+def _reply_facts(request: Request, case_id: str) -> dict[str, str]:
+    row = request.app.state.ops.get_handoff(case_id)
+    if row is None:
+        raise APIError(404, "not_found", "Handoff not found")
+    packet = HandoffPacket.model_validate(row["packet"])
+    customer = request.app.state.engine.bank.get_customer(packet.customer_key)
+    country = customer.customer_country if customer is not None else ""
+    return fact_sheet(packet, country, _settings(request))
+
+
+def _attach_reply(request: Request, case_id: str, view: dict[str, Any]) -> None:
+    case = request.app.state.ops.get_case(case_id)
+    draft = str(case.get("reply_draft") or "") if case else ""
+    sent = str(case.get("reply_sent") or "") if case else ""
+    view["reply_draft"] = draft
+    view["reply_sent"] = sent
+    view["reply_draft_status"] = "ready" if (draft or sent) else "pending"
+    if not draft:
+        view["reply_grounded"] = False
+        view["reply_unsupported"] = []
+        return
+    checked = grounded(draft, _reply_facts(request, case_id))
+    view["reply_grounded"] = bool(checked["ok"])
+    view["reply_unsupported"] = list(checked["unsupported_facts"])
+
+
+@router.post("/api/handoff/{case_id}/draft-check")
+def draft_check(
+    case_id: str, body: ReplyIn, request: Request, background: BackgroundTasks
+) -> dict[str, Any]:
+    _agent(request)
+    checked = grounded(body.text, _reply_facts(request, case_id))
+    _record_console(background, request, case_id, "draft")
+    return checked
+
+
+@router.post("/api/handoff/{case_id}/reply")
+def send_reply(case_id: str, body: ReplyIn, request: Request) -> dict[str, Any]:
+    _agent(request)
+    text = body.text.strip()
+    if not text:
+        raise APIError(400, "empty_reply", "Reply text is required")
+    request.app.state.engine.record_reply_sent(case_id, text, source=_console_source(request))
+    checked = grounded(text, _reply_facts(request, case_id))
+    return {
+        "status": "reply_sent",
+        "ok": checked["ok"],
+        "unsupported_facts": checked["unsupported_facts"],
     }
 
 
@@ -447,7 +633,9 @@ def claim(case_id: str, request: Request) -> dict[str, str]:
 
 
 @router.post("/api/handoff/{case_id}/resolve")
-def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str, str]:
+def resolve_handoff(
+    case_id: str, body: ResolveIn, request: Request, background: BackgroundTasks
+) -> dict[str, str]:
     _agent(request)
     if request.app.state.ops.get_handoff(case_id) is None:
         raise APIError(404, "not_found", "Handoff not found")
@@ -461,6 +649,7 @@ def resolve_handoff(case_id: str, body: ResolveIn, request: Request) -> dict[str
             "updated_at": datetime.now(UTC),
         },
     )
+    _record_console(background, request, case_id, "resolve")
     return {"status": "resolved"}
 
 
@@ -524,6 +713,9 @@ def metrics(
     if language in {"es", "pt"}:
         payload = localize_metrics(payload, language)
         payload["eval_toggle_label"] = str(ui_copy(language)["eval_toggle"])
+    payload["trust"] = trust_panel()
+    payload["simulator"] = simulator_panel()
+    payload["fairness"] = fairness_panel()
     return payload
 
 

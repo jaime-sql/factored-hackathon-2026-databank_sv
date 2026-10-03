@@ -1,0 +1,7509 @@
+{
+  "version": "sim-curve-v1-2026-10-03",
+  "split": "validation",
+  "generated_at": "2026-10-03T09:19:08-06:00",
+  "model": {
+    "name": "LightGBM c5_nl15_mcs1000_spw1 (frozen)",
+    "score": "raw probability (model.txt)",
+    "model_sha256": "fb972233981238cc2fb148b27d0f77a1f313c69c6a6c0920b44cee7ca9de6884",
+    "thresholds_version": "v2-rule-high-2026-09-29"
+  },
+  "model_version": "sim-curve-v1-2026-10-03",
+  "t_low_default": 0.000275603870032301,
+  "n_charges": 663624,
+  "n_high": 330,
+  "n_rule": 19832,
+  "n_fraud_total": 610,
+  "n_fraud": 610,
+  "fraud_in_high": 330,
+  "fraud_in_rule": 6,
+  "notes": [
+    "Validation split only; test never read.",
+    "Routing: HIGH = fraud_score > 30 first (any status, fixed); non-HIGH Pending/Reversed -> rule (auto); non-HIGH Approved/Declined -> REVIEW if raw score >= cut else LOW (auto).",
+    "automation_rate = (n_rule + n_low) / n_charges; missed_fraud = fraud in LOW / all validation fraud (n=610), Wilson 95% CI.",
+    "Pending/Reversed fraud: 5 HIGH, 6 rule.",
+    "Cuts: 199 log-spaced over the non-HIGH score range plus the exact default t_low (default: true).",
+    "cost_per_case is absent until Analytics adds it with analytics/simulator_cost.py (the script refuses a pre-existing key).",
+    "Contract aliases (analytics/simulator_cost.py, static/js/metrics.js): t_low = cut, is_default = default, missed_fraud_n/rate/ci_lo/ci_hi = missed_fraud.k/rate/ci_low/ci_high, wrongful_autoclose_per_10k = missed_fraud.k / n_charges * 10000, n_fraud = n_fraud_total, model_version = version."
+  ],
+  "points": [
+    {
+      "cut": 0.00019932842543102,
+      "n_low": 0,
+      "n_review": 643462,
+      "automation_rate": 0.029884,
+      "missed_fraud": {
+        "k": 0,
+        "n": 610,
+        "rate": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.006258
+      },
+      "recall_outside_low": 1.0,
+      "fraud_in_low_per_10k_low": null,
+      "t_low": 0.00019932842543102,
+      "is_default": false,
+      "missed_fraud_n": 0,
+      "missed_fraud_rate": 0.0,
+      "missed_fraud_ci_lo": 0.0,
+      "missed_fraud_ci_hi": 0.006258,
+      "wrongful_autoclose_per_10k": 0.0,
+      "cost_per_case": {
+        "low": 1.610455,
+        "mid": 3.220847,
+        "high": 5.364803
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.049545,
+        "mid": 0.099153,
+        "high": 0.165197
+      }
+    },
+    {
+      "cut": 0.0002042734759258437,
+      "n_low": 5,
+      "n_review": 643457,
+      "automation_rate": 0.029892,
+      "missed_fraud": {
+        "k": 0,
+        "n": 610,
+        "rate": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.006258
+      },
+      "recall_outside_low": 1.0,
+      "fraud_in_low_per_10k_low": 0.0,
+      "t_low": 0.0002042734759258437,
+      "is_default": false,
+      "missed_fraud_n": 0,
+      "missed_fraud_rate": 0.0,
+      "missed_fraud_ci_lo": 0.0,
+      "missed_fraud_ci_hi": 0.006258,
+      "wrongful_autoclose_per_10k": 0.0,
+      "cost_per_case": {
+        "low": 1.610443,
+        "mid": 3.220822,
+        "high": 5.364761
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.049557,
+        "mid": 0.099178,
+        "high": 0.165239
+      }
+    },
+    {
+      "cut": 0.00020934120598502682,
+      "n_low": 42,
+      "n_review": 643420,
+      "automation_rate": 0.029948,
+      "missed_fraud": {
+        "k": 0,
+        "n": 610,
+        "rate": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.006258
+      },
+      "recall_outside_low": 1.0,
+      "fraud_in_low_per_10k_low": 0.0,
+      "t_low": 0.00020934120598502682,
+      "is_default": false,
+      "missed_fraud_n": 0,
+      "missed_fraud_rate": 0.0,
+      "missed_fraud_ci_lo": 0.0,
+      "missed_fraud_ci_hi": 0.006258,
+      "wrongful_autoclose_per_10k": 0.0,
+      "cost_per_case": {
+        "low": 1.61035,
+        "mid": 3.220637,
+        "high": 5.364453
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.04965,
+        "mid": 0.099363,
+        "high": 0.165547
+      }
+    },
+    {
+      "cut": 0.0002145346591114677,
+      "n_low": 131,
+      "n_review": 643331,
+      "automation_rate": 0.030082,
+      "missed_fraud": {
+        "k": 0,
+        "n": 610,
+        "rate": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.006258
+      },
+      "recall_outside_low": 1.0,
+      "fraud_in_low_per_10k_low": 0.0,
+      "t_low": 0.0002145346591114677,
+      "is_default": false,
+      "missed_fraud_n": 0,
+      "missed_fraud_rate": 0.0,
+      "missed_fraud_ci_lo": 0.0,
+      "missed_fraud_ci_hi": 0.006258,
+      "wrongful_autoclose_per_10k": 0.0,
+      "cost_per_case": {
+        "low": 1.610127,
+        "mid": 3.220192,
+        "high": 5.363711
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.049873,
+        "mid": 0.099808,
+        "high": 0.166289
+      }
+    },
+    {
+      "cut": 0.00021985695431297745,
+      "n_low": 385,
+      "n_review": 643077,
+      "automation_rate": 0.030465,
+      "missed_fraud": {
+        "k": 0,
+        "n": 610,
+        "rate": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.006258
+      },
+      "recall_outside_low": 1.0,
+      "fraud_in_low_per_10k_low": 0.0,
+      "t_low": 0.00021985695431297745,
+      "is_default": false,
+      "missed_fraud_n": 0,
+      "missed_fraud_rate": 0.0,
+      "missed_fraud_ci_lo": 0.0,
+      "missed_fraud_ci_hi": 0.006258,
+      "wrongful_autoclose_per_10k": 0.0,
+      "cost_per_case": {
+        "low": 1.609492,
+        "mid": 3.218921,
+        "high": 5.361594
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.050508,
+        "mid": 0.101079,
+        "high": 0.168406
+      }
+    },
+    {
+      "cut": 0.0002253112879754489,
+      "n_low": 974,
+      "n_review": 642488,
+      "automation_rate": 0.031352,
+      "missed_fraud": {
+        "k": 0,
+        "n": 610,
+        "rate": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.006258
+      },
+      "recall_outside_low": 1.0,
+      "fraud_in_low_per_10k_low": 0.0,
+      "t_low": 0.0002253112879754489,
+      "is_default": false,
+      "missed_fraud_n": 0,
+      "missed_fraud_rate": 0.0,
+      "missed_fraud_ci_lo": 0.0,
+      "missed_fraud_ci_hi": 0.006258,
+      "wrongful_autoclose_per_10k": 0.0,
+      "cost_per_case": {
+        "low": 1.608019,
+        "mid": 3.215974,
+        "high": 5.356686
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.051981,
+        "mid": 0.104026,
+        "high": 0.173314
+      }
+    },
+    {
+      "cut": 0.00023090093578249438,
+      "n_low": 2297,
+      "n_review": 641165,
+      "automation_rate": 0.033346,
+      "missed_fraud": {
+        "k": 1,
+        "n": 610,
+        "rate": 0.001639,
+        "ci_low": 0.000289,
+        "ci_high": 0.009227
+      },
+      "recall_outside_low": 0.998361,
+      "fraud_in_low_per_10k_low": 4.3535,
+      "t_low": 0.00023090093578249438,
+      "is_default": false,
+      "missed_fraud_n": 1,
+      "missed_fraud_rate": 0.001639,
+      "missed_fraud_ci_lo": 0.000289,
+      "missed_fraud_ci_hi": 0.009227,
+      "wrongful_autoclose_per_10k": 0.015069,
+      "cost_per_case": {
+        "low": 1.604709,
+        "mid": 3.209355,
+        "high": 5.345661
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.055291,
+        "mid": 0.110645,
+        "high": 0.184339
+      }
+    },
+    {
+      "cut": 0.00023662925468270884,
+      "n_low": 4893,
+      "n_review": 638569,
+      "automation_rate": 0.037258,
+      "missed_fraud": {
+        "k": 3,
+        "n": 610,
+        "rate": 0.004918,
+        "ci_low": 0.001674,
+        "ci_high": 0.014359
+      },
+      "recall_outside_low": 0.995082,
+      "fraud_in_low_per_10k_low": 6.1312,
+      "t_low": 0.00023662925468270884,
+      "is_default": false,
+      "missed_fraud_n": 3,
+      "missed_fraud_rate": 0.004918,
+      "missed_fraud_ci_lo": 0.001674,
+      "missed_fraud_ci_hi": 0.014359,
+      "wrongful_autoclose_per_10k": 0.045206,
+      "cost_per_case": {
+        "low": 1.598215,
+        "mid": 3.196368,
+        "high": 5.324029
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.061785,
+        "mid": 0.123632,
+        "high": 0.205971
+      }
+    },
+    {
+      "cut": 0.00024249968490573518,
+      "n_low": 9685,
+      "n_review": 633777,
+      "automation_rate": 0.044478,
+      "missed_fraud": {
+        "k": 3,
+        "n": 610,
+        "rate": 0.004918,
+        "ci_low": 0.001674,
+        "ci_high": 0.014359
+      },
+      "recall_outside_low": 0.995082,
+      "fraud_in_low_per_10k_low": 3.0976,
+      "t_low": 0.00024249968490573518,
+      "is_default": false,
+      "missed_fraud_n": 3,
+      "missed_fraud_rate": 0.004918,
+      "missed_fraud_ci_lo": 0.001674,
+      "missed_fraud_ci_hi": 0.014359,
+      "wrongful_autoclose_per_10k": 0.045206,
+      "cost_per_case": {
+        "low": 1.586228,
+        "mid": 3.172394,
+        "high": 5.284096
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.073772,
+        "mid": 0.147606,
+        "high": 0.245904
+      }
+    },
+    {
+      "cut": 0.0002485157520283476,
+      "n_low": 17539,
+      "n_review": 625923,
+      "automation_rate": 0.056314,
+      "missed_fraud": {
+        "k": 5,
+        "n": 610,
+        "rate": 0.008197,
+        "ci_low": 0.003506,
+        "ci_high": 0.019043
+      },
+      "recall_outside_low": 0.991803,
+      "fraud_in_low_per_10k_low": 2.8508,
+      "t_low": 0.0002485157520283476,
+      "is_default": false,
+      "missed_fraud_n": 5,
+      "missed_fraud_rate": 0.008197,
+      "missed_fraud_ci_lo": 0.003506,
+      "missed_fraud_ci_hi": 0.019043,
+      "wrongful_autoclose_per_10k": 0.075344,
+      "cost_per_case": {
+        "low": 1.566581,
+        "mid": 3.133101,
+        "high": 5.218648
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.093419,
+        "mid": 0.186899,
+        "high": 0.311352
+      }
+    },
+    {
+      "cut": 0.00025468106909179157,
+      "n_low": 28678,
+      "n_review": 614784,
+      "automation_rate": 0.073099,
+      "missed_fraud": {
+        "k": 5,
+        "n": 610,
+        "rate": 0.008197,
+        "ci_low": 0.003506,
+        "ci_high": 0.019043
+      },
+      "recall_outside_low": 0.991803,
+      "fraud_in_low_per_10k_low": 1.7435,
+      "t_low": 0.00025468106909179157,
+      "is_default": false,
+      "missed_fraud_n": 5,
+      "missed_fraud_rate": 0.008197,
+      "missed_fraud_ci_lo": 0.003506,
+      "missed_fraud_ci_hi": 0.019043,
+      "wrongful_autoclose_per_10k": 0.075344,
+      "cost_per_case": {
+        "low": 1.538717,
+        "mid": 3.077373,
+        "high": 5.125825
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.121283,
+        "mid": 0.242627,
+        "high": 0.404175
+      }
+    },
+    {
+      "cut": 0.0002609993387716494,
+      "n_low": 44976,
+      "n_review": 598486,
+      "automation_rate": 0.097658,
+      "missed_fraud": {
+        "k": 11,
+        "n": 610,
+        "rate": 0.018033,
+        "ci_low": 0.010099,
+        "ci_high": 0.031999
+      },
+      "recall_outside_low": 0.981967,
+      "fraud_in_low_per_10k_low": 2.4457,
+      "t_low": 0.0002609993387716494,
+      "is_default": false,
+      "missed_fraud_n": 11,
+      "missed_fraud_rate": 0.018033,
+      "missed_fraud_ci_lo": 0.010099,
+      "missed_fraud_ci_hi": 0.031999,
+      "wrongful_autoclose_per_10k": 0.165757,
+      "cost_per_case": {
+        "low": 1.497947,
+        "mid": 2.995835,
+        "high": 4.990012
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.162053,
+        "mid": 0.324165,
+        "high": 0.539988
+      }
+    },
+    {
+      "cut": 0.0002674743556015399,
+      "n_low": 66735,
+      "n_review": 576727,
+      "automation_rate": 0.130446,
+      "missed_fraud": {
+        "k": 19,
+        "n": 610,
+        "rate": 0.031148,
+        "ci_low": 0.02003,
+        "ci_high": 0.048134
+      },
+      "recall_outside_low": 0.968852,
+      "fraud_in_low_per_10k_low": 2.8471,
+      "t_low": 0.0002674743556015399,
+      "is_default": false,
+      "missed_fraud_n": 19,
+      "missed_fraud_rate": 0.031148,
+      "missed_fraud_ci_lo": 0.02003,
+      "missed_fraud_ci_hi": 0.048134,
+      "wrongful_autoclose_per_10k": 0.286307,
+      "cost_per_case": {
+        "low": 1.443517,
+        "mid": 2.886976,
+        "high": 4.808691
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.216483,
+        "mid": 0.433024,
+        "high": 0.721309
+      }
+    },
+    {
+      "cut": 0.00027411000825198307,
+      "n_low": 93303,
+      "n_review": 550159,
+      "automation_rate": 0.170481,
+      "missed_fraud": {
+        "k": 28,
+        "n": 610,
+        "rate": 0.045902,
+        "ci_low": 0.031946,
+        "ci_high": 0.065541
+      },
+      "recall_outside_low": 0.954098,
+      "fraud_in_low_per_10k_low": 3.001,
+      "t_low": 0.00027411000825198307,
+      "is_default": false,
+      "missed_fraud_n": 28,
+      "missed_fraud_rate": 0.045902,
+      "missed_fraud_ci_lo": 0.031946,
+      "missed_fraud_ci_hi": 0.065541,
+      "wrongful_autoclose_per_10k": 0.421926,
+      "cost_per_case": {
+        "low": 1.377056,
+        "mid": 2.754059,
+        "high": 4.587297
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.282944,
+        "mid": 0.565941,
+        "high": 0.942703
+      }
+    },
+    {
+      "cut": 0.000275603870032301,
+      "n_low": 99708,
+      "n_review": 543754,
+      "automation_rate": 0.180132,
+      "missed_fraud": {
+        "k": 29,
+        "n": 610,
+        "rate": 0.047541,
+        "ci_low": 0.033302,
+        "ci_high": 0.067443
+      },
+      "recall_outside_low": 0.952459,
+      "fraud_in_low_per_10k_low": 2.9085,
+      "default": true,
+      "t_low": 0.000275603870032301,
+      "is_default": true,
+      "missed_fraud_n": 29,
+      "missed_fraud_rate": 0.047541,
+      "missed_fraud_ci_lo": 0.033302,
+      "missed_fraud_ci_hi": 0.067443,
+      "wrongful_autoclose_per_10k": 0.436994,
+      "cost_per_case": {
+        "low": 1.361034,
+        "mid": 2.722015,
+        "high": 4.533923
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.298966,
+        "mid": 0.597985,
+        "high": 0.996077
+      }
+    },
+    {
+      "cut": 0.0002809102818658019,
+      "n_low": 123758,
+      "n_review": 519704,
+      "automation_rate": 0.216373,
+      "missed_fraud": {
+        "k": 40,
+        "n": 610,
+        "rate": 0.065574,
+        "ci_low": 0.048523,
+        "ci_high": 0.088062
+      },
+      "recall_outside_low": 0.934426,
+      "fraud_in_low_per_10k_low": 3.2321,
+      "t_low": 0.0002809102818658019,
+      "is_default": false,
+      "missed_fraud_n": 40,
+      "missed_fraud_rate": 0.065574,
+      "missed_fraud_ci_lo": 0.048523,
+      "missed_fraud_ci_hi": 0.088062,
+      "wrongful_autoclose_per_10k": 0.602751,
+      "cost_per_case": {
+        "low": 1.300873,
+        "mid": 2.601694,
+        "high": 4.333511
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.359127,
+        "mid": 0.718306,
+        "high": 1.196489
+      }
+    },
+    {
+      "cut": 0.00028787926045145923,
+      "n_low": 156479,
+      "n_review": 486983,
+      "automation_rate": 0.265679,
+      "missed_fraud": {
+        "k": 56,
+        "n": 610,
+        "rate": 0.091803,
+        "ci_low": 0.071373,
+        "ci_high": 0.117342
+      },
+      "recall_outside_low": 0.908197,
+      "fraud_in_low_per_10k_low": 3.5788,
+      "t_low": 0.00028787926045145923,
+      "is_default": false,
+      "missed_fraud_n": 56,
+      "missed_fraud_rate": 0.091803,
+      "missed_fraud_ci_lo": 0.071373,
+      "missed_fraud_ci_hi": 0.117342,
+      "wrongful_autoclose_per_10k": 0.843851,
+      "cost_per_case": {
+        "low": 1.219021,
+        "mid": 2.437993,
+        "high": 4.060843
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.440979,
+        "mid": 0.882007,
+        "high": 1.469157
+      }
+    },
+    {
+      "cut": 0.00029502112933577236,
+      "n_low": 190401,
+      "n_review": 453061,
+      "automation_rate": 0.316795,
+      "missed_fraud": {
+        "k": 66,
+        "n": 610,
+        "rate": 0.108197,
+        "ci_low": 0.085953,
+        "ci_high": 0.135344
+      },
+      "recall_outside_low": 0.891803,
+      "fraud_in_low_per_10k_low": 3.4664,
+      "t_low": 0.00029502112933577236,
+      "is_default": false,
+      "missed_fraud_n": 66,
+      "missed_fraud_rate": 0.108197,
+      "missed_fraud_ci_lo": 0.085953,
+      "missed_fraud_ci_hi": 0.135344,
+      "wrongful_autoclose_per_10k": 0.994539,
+      "cost_per_case": {
+        "low": 1.134164,
+        "mid": 2.268284,
+        "high": 3.778166
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.525836,
+        "mid": 1.051716,
+        "high": 1.751834
+      }
+    },
+    {
+      "cut": 0.00030234017767747615,
+      "n_low": 224108,
+      "n_review": 419354,
+      "automation_rate": 0.367588,
+      "missed_fraud": {
+        "k": 70,
+        "n": 610,
+        "rate": 0.114754,
+        "ci_low": 0.091836,
+        "ci_high": 0.142494
+      },
+      "recall_outside_low": 0.885246,
+      "fraud_in_low_per_10k_low": 3.1235,
+      "t_low": 0.00030234017767747615,
+      "is_default": false,
+      "missed_fraud_n": 70,
+      "missed_fraud_rate": 0.114754,
+      "missed_fraud_ci_lo": 0.091836,
+      "missed_fraud_ci_hi": 0.142494,
+      "wrongful_autoclose_per_10k": 1.054814,
+      "cost_per_case": {
+        "low": 1.049846,
+        "mid": 2.09965,
+        "high": 3.497281
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.610154,
+        "mid": 1.22035,
+        "high": 2.032719
+      }
+    },
+    {
+      "cut": 0.00030984080104314114,
+      "n_low": 256325,
+      "n_review": 387137,
+      "automation_rate": 0.416135,
+      "missed_fraud": {
+        "k": 81,
+        "n": 610,
+        "rate": 0.132787,
+        "ci_low": 0.108142,
+        "ci_high": 0.162028
+      },
+      "recall_outside_low": 0.867213,
+      "fraud_in_low_per_10k_low": 3.1601,
+      "t_low": 0.00030984080104314114,
+      "is_default": false,
+      "missed_fraud_n": 81,
+      "missed_fraud_rate": 0.132787,
+      "missed_fraud_ci_lo": 0.108142,
+      "missed_fraud_ci_hi": 0.162028,
+      "wrongful_autoclose_per_10k": 1.220571,
+      "cost_per_case": {
+        "low": 0.969254,
+        "mid": 1.938471,
+        "high": 3.228813
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.690746,
+        "mid": 1.381529,
+        "high": 2.301187
+      }
+    },
+    {
+      "cut": 0.0003175275040469995,
+      "n_low": 285538,
+      "n_review": 357924,
+      "automation_rate": 0.460155,
+      "missed_fraud": {
+        "k": 90,
+        "n": 610,
+        "rate": 0.147541,
+        "ci_low": 0.121605,
+        "ci_high": 0.177888
+      },
+      "recall_outside_low": 0.852459,
+      "fraud_in_low_per_10k_low": 3.1519,
+      "t_low": 0.0003175275040469995,
+      "is_default": false,
+      "missed_fraud_n": 90,
+      "missed_fraud_rate": 0.147541,
+      "missed_fraud_ci_lo": 0.121605,
+      "missed_fraud_ci_hi": 0.177888,
+      "wrongful_autoclose_per_10k": 1.35619,
+      "cost_per_case": {
+        "low": 0.896178,
+        "mid": 1.79232,
+        "high": 2.985377
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.763822,
+        "mid": 1.52768,
+        "high": 2.544623
+      }
+    },
+    {
+      "cut": 0.00032540490305625966,
+      "n_low": 311977,
+      "n_review": 331485,
+      "automation_rate": 0.499995,
+      "missed_fraud": {
+        "k": 99,
+        "n": 610,
+        "rate": 0.162295,
+        "ci_low": 0.135163,
+        "ci_high": 0.193654
+      },
+      "recall_outside_low": 0.837705,
+      "fraud_in_low_per_10k_low": 3.1733,
+      "t_low": 0.00032540490305625966,
+      "is_default": false,
+      "missed_fraud_n": 99,
+      "missed_fraud_rate": 0.162295,
+      "missed_fraud_ci_lo": 0.135163,
+      "missed_fraud_ci_hi": 0.193654,
+      "wrongful_autoclose_per_10k": 1.491809,
+      "cost_per_case": {
+        "low": 0.83004,
+        "mid": 1.660048,
+        "high": 2.765058
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.82996,
+        "mid": 1.659952,
+        "high": 2.764942
+      }
+    },
+    {
+      "cut": 0.00033347772896353753,
+      "n_low": 335519,
+      "n_review": 307943,
+      "automation_rate": 0.53547,
+      "missed_fraud": {
+        "k": 108,
+        "n": 610,
+        "rate": 0.177049,
+        "ci_low": 0.148806,
+        "ci_high": 0.209334
+      },
+      "recall_outside_low": 0.822951,
+      "fraud_in_low_per_10k_low": 3.2189,
+      "t_low": 0.00033347772896353753,
+      "is_default": false,
+      "missed_fraud_n": 108,
+      "missed_fraud_rate": 0.177049,
+      "missed_fraud_ci_lo": 0.148806,
+      "missed_fraud_ci_hi": 0.209334,
+      "wrongful_autoclose_per_10k": 1.627428,
+      "cost_per_case": {
+        "low": 0.771149,
+        "mid": 1.542269,
+        "high": 2.568879
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.888851,
+        "mid": 1.777731,
+        "high": 2.961121
+      }
+    },
+    {
+      "cut": 0.0003417508300280645,
+      "n_low": 356118,
+      "n_review": 287344,
+      "automation_rate": 0.566511,
+      "missed_fraud": {
+        "k": 112,
+        "n": 610,
+        "rate": 0.183607,
+        "ci_low": 0.154895,
+        "ci_high": 0.216278
+      },
+      "recall_outside_low": 0.816393,
+      "fraud_in_low_per_10k_low": 3.145,
+      "t_low": 0.0003417508300280645,
+      "is_default": false,
+      "missed_fraud_n": 112,
+      "missed_fraud_rate": 0.183607,
+      "missed_fraud_ci_lo": 0.154895,
+      "missed_fraud_ci_hi": 0.216278,
+      "wrongful_autoclose_per_10k": 1.687703,
+      "cost_per_case": {
+        "low": 0.719621,
+        "mid": 1.439213,
+        "high": 2.397225
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.940379,
+        "mid": 1.880787,
+        "high": 3.132775
+      }
+    },
+    {
+      "cut": 0.0003502291747873848,
+      "n_low": 374740,
+      "n_review": 268722,
+      "automation_rate": 0.594572,
+      "missed_fraud": {
+        "k": 117,
+        "n": 610,
+        "rate": 0.191803,
+        "ci_low": 0.162526,
+        "ci_high": 0.224938
+      },
+      "recall_outside_low": 0.808197,
+      "fraud_in_low_per_10k_low": 3.1222,
+      "t_low": 0.0003502291747873848,
+      "is_default": false,
+      "missed_fraud_n": 117,
+      "missed_fraud_rate": 0.191803,
+      "missed_fraud_ci_lo": 0.162526,
+      "missed_fraud_ci_hi": 0.224938,
+      "wrongful_autoclose_per_10k": 1.763047,
+      "cost_per_case": {
+        "low": 0.673038,
+        "mid": 1.346049,
+        "high": 2.242045
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 0.986962,
+        "mid": 1.973951,
+        "high": 3.287955
+      }
+    },
+    {
+      "cut": 0.00035891785504128777,
+      "n_low": 391074,
+      "n_review": 252388,
+      "automation_rate": 0.619185,
+      "missed_fraud": {
+        "k": 124,
+        "n": 610,
+        "rate": 0.203279,
+        "ci_low": 0.173245,
+        "ci_high": 0.237026
+      },
+      "recall_outside_low": 0.796721,
+      "fraud_in_low_per_10k_low": 3.1708,
+      "t_low": 0.00035891785504128777,
+      "is_default": false,
+      "missed_fraud_n": 124,
+      "missed_fraud_rate": 0.203279,
+      "missed_fraud_ci_lo": 0.173245,
+      "missed_fraud_ci_hi": 0.237026,
+      "wrongful_autoclose_per_10k": 1.868528,
+      "cost_per_case": {
+        "low": 0.632178,
+        "mid": 1.264331,
+        "high": 2.105932
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.027822,
+        "mid": 2.055669,
+        "high": 3.424068
+      }
+    },
+    {
+      "cut": 0.00036782208890976444,
+      "n_low": 405423,
+      "n_review": 238039,
+      "automation_rate": 0.640807,
+      "missed_fraud": {
+        "k": 131,
+        "n": 610,
+        "rate": 0.214754,
+        "ci_low": 0.184004,
+        "ci_high": 0.249074
+      },
+      "recall_outside_low": 0.785246,
+      "fraud_in_low_per_10k_low": 3.2312,
+      "t_low": 0.00036782208890976444,
+      "is_default": false,
+      "missed_fraud_n": 131,
+      "missed_fraud_rate": 0.214754,
+      "missed_fraud_ci_lo": 0.184004,
+      "missed_fraud_ci_hi": 0.249074,
+      "wrongful_autoclose_per_10k": 1.974009,
+      "cost_per_case": {
+        "low": 0.596284,
+        "mid": 1.192544,
+        "high": 1.98636
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.063716,
+        "mid": 2.127456,
+        "high": 3.54364
+      }
+    },
+    {
+      "cut": 0.00037694722396683036,
+      "n_low": 418083,
+      "n_review": 225379,
+      "automation_rate": 0.659884,
+      "missed_fraud": {
+        "k": 132,
+        "n": 610,
+        "rate": 0.216393,
+        "ci_low": 0.185544,
+        "ci_high": 0.250792
+      },
+      "recall_outside_low": 0.783607,
+      "fraud_in_low_per_10k_low": 3.1573,
+      "t_low": 0.00037694722396683036,
+      "is_default": false,
+      "missed_fraud_n": 132,
+      "missed_fraud_rate": 0.216393,
+      "missed_fraud_ci_lo": 0.185544,
+      "missed_fraud_ci_hi": 0.250792,
+      "wrongful_autoclose_per_10k": 1.989078,
+      "cost_per_case": {
+        "low": 0.564614,
+        "mid": 1.129207,
+        "high": 1.880862
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.095386,
+        "mid": 2.190793,
+        "high": 3.649138
+      }
+    },
+    {
+      "cut": 0.0003862987404520926,
+      "n_low": 429248,
+      "n_review": 214214,
+      "automation_rate": 0.676708,
+      "missed_fraud": {
+        "k": 134,
+        "n": 610,
+        "rate": 0.219672,
+        "ci_low": 0.188627,
+        "ci_high": 0.254226
+      },
+      "recall_outside_low": 0.780328,
+      "fraud_in_low_per_10k_low": 3.1217,
+      "t_low": 0.0003862987404520926,
+      "is_default": false,
+      "missed_fraud_n": 134,
+      "missed_fraud_rate": 0.219672,
+      "missed_fraud_ci_lo": 0.188627,
+      "missed_fraud_ci_hi": 0.254226,
+      "wrongful_autoclose_per_10k": 2.019216,
+      "cost_per_case": {
+        "low": 0.536685,
+        "mid": 1.073349,
+        "high": 1.787823
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.123315,
+        "mid": 2.246651,
+        "high": 3.742177
+      }
+    },
+    {
+      "cut": 0.00039588225456199303,
+      "n_low": 439264,
+      "n_review": 204198,
+      "automation_rate": 0.691801,
+      "missed_fraud": {
+        "k": 140,
+        "n": 610,
+        "rate": 0.229508,
+        "ci_low": 0.197892,
+        "ci_high": 0.26451
+      },
+      "recall_outside_low": 0.770492,
+      "fraud_in_low_per_10k_low": 3.1871,
+      "t_low": 0.00039588225456199303,
+      "is_default": false,
+      "missed_fraud_n": 140,
+      "missed_fraud_rate": 0.229508,
+      "missed_fraud_ci_lo": 0.197892,
+      "missed_fraud_ci_hi": 0.26451,
+      "wrongful_autoclose_per_10k": 2.109628,
+      "cost_per_case": {
+        "low": 0.51163,
+        "mid": 1.02324,
+        "high": 1.704358
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.14837,
+        "mid": 2.29676,
+        "high": 3.825642
+      }
+    },
+    {
+      "cut": 0.00040570352182269897,
+      "n_low": 448345,
+      "n_review": 195117,
+      "automation_rate": 0.705485,
+      "missed_fraud": {
+        "k": 143,
+        "n": 610,
+        "rate": 0.234426,
+        "ci_low": 0.202534,
+        "ci_high": 0.269643
+      },
+      "recall_outside_low": 0.765574,
+      "fraud_in_low_per_10k_low": 3.1895,
+      "t_low": 0.00040570352182269897,
+      "is_default": false,
+      "missed_fraud_n": 143,
+      "missed_fraud_rate": 0.234426,
+      "missed_fraud_ci_lo": 0.202534,
+      "missed_fraud_ci_hi": 0.269643,
+      "wrongful_autoclose_per_10k": 2.154835,
+      "cost_per_case": {
+        "low": 0.488914,
+        "mid": 0.977808,
+        "high": 1.628685
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.171086,
+        "mid": 2.342192,
+        "high": 3.901315
+      }
+    },
+    {
+      "cut": 0.00041576844054667337,
+      "n_low": 456294,
+      "n_review": 187168,
+      "automation_rate": 0.717464,
+      "missed_fraud": {
+        "k": 145,
+        "n": 610,
+        "rate": 0.237705,
+        "ci_low": 0.205632,
+        "ci_high": 0.273061
+      },
+      "recall_outside_low": 0.762295,
+      "fraud_in_low_per_10k_low": 3.1778,
+      "t_low": 0.00041576844054667337,
+      "is_default": false,
+      "missed_fraud_n": 145,
+      "missed_fraud_rate": 0.237705,
+      "missed_fraud_ci_lo": 0.205632,
+      "missed_fraud_ci_hi": 0.273061,
+      "wrongful_autoclose_per_10k": 2.184972,
+      "cost_per_case": {
+        "low": 0.469029,
+        "mid": 0.93804,
+        "high": 1.562445
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.190971,
+        "mid": 2.38196,
+        "high": 3.967555
+      }
+    },
+    {
+      "cut": 0.0004260830553749982,
+      "n_low": 463463,
+      "n_review": 179999,
+      "automation_rate": 0.728266,
+      "missed_fraud": {
+        "k": 148,
+        "n": 610,
+        "rate": 0.242623,
+        "ci_low": 0.210284,
+        "ci_high": 0.278183
+      },
+      "recall_outside_low": 0.757377,
+      "fraud_in_low_per_10k_low": 3.1934,
+      "t_low": 0.0004260830553749982,
+      "is_default": false,
+      "missed_fraud_n": 148,
+      "missed_fraud_rate": 0.242623,
+      "missed_fraud_ci_lo": 0.210284,
+      "missed_fraud_ci_hi": 0.278183,
+      "wrongful_autoclose_per_10k": 2.230179,
+      "cost_per_case": {
+        "low": 0.451096,
+        "mid": 0.902174,
+        "high": 1.502705
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.208904,
+        "mid": 2.417826,
+        "high": 4.027295
+      }
+    },
+    {
+      "cut": 0.0004366535609075737,
+      "n_low": 469857,
+      "n_review": 173605,
+      "automation_rate": 0.737901,
+      "missed_fraud": {
+        "k": 148,
+        "n": 610,
+        "rate": 0.242623,
+        "ci_low": 0.210284,
+        "ci_high": 0.278183
+      },
+      "recall_outside_low": 0.757377,
+      "fraud_in_low_per_10k_low": 3.1499,
+      "t_low": 0.0004366535609075737,
+      "is_default": false,
+      "missed_fraud_n": 148,
+      "missed_fraud_rate": 0.242623,
+      "missed_fraud_ci_lo": 0.210284,
+      "missed_fraud_ci_hi": 0.278183,
+      "wrongful_autoclose_per_10k": 2.230179,
+      "cost_per_case": {
+        "low": 0.435101,
+        "mid": 0.870185,
+        "high": 1.449423
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.224899,
+        "mid": 2.449815,
+        "high": 4.080577
+      }
+    },
+    {
+      "cut": 0.00044748630542338193,
+      "n_low": 475417,
+      "n_review": 168045,
+      "automation_rate": 0.74628,
+      "missed_fraud": {
+        "k": 149,
+        "n": 610,
+        "rate": 0.244262,
+        "ci_low": 0.211836,
+        "ci_high": 0.279889
+      },
+      "recall_outside_low": 0.755738,
+      "fraud_in_low_per_10k_low": 3.1341,
+      "t_low": 0.00044748630542338193,
+      "is_default": false,
+      "missed_fraud_n": 149,
+      "missed_fraud_rate": 0.244262,
+      "missed_fraud_ci_lo": 0.211836,
+      "missed_fraud_ci_hi": 0.279889,
+      "wrongful_autoclose_per_10k": 2.245247,
+      "cost_per_case": {
+        "low": 0.421193,
+        "mid": 0.842369,
+        "high": 1.403091
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.238807,
+        "mid": 2.477631,
+        "high": 4.126909
+      }
+    },
+    {
+      "cut": 0.00045858779469304227,
+      "n_low": 480391,
+      "n_review": 163071,
+      "automation_rate": 0.753775,
+      "missed_fraud": {
+        "k": 150,
+        "n": 610,
+        "rate": 0.245902,
+        "ci_low": 0.213389,
+        "ci_high": 0.281594
+      },
+      "recall_outside_low": 0.754098,
+      "fraud_in_low_per_10k_low": 3.1225,
+      "t_low": 0.00045858779469304227,
+      "is_default": false,
+      "missed_fraud_n": 150,
+      "missed_fraud_rate": 0.245902,
+      "missed_fraud_ci_lo": 0.213389,
+      "missed_fraud_ci_hi": 0.281594,
+      "wrongful_autoclose_per_10k": 2.260316,
+      "cost_per_case": {
+        "low": 0.40875,
+        "mid": 0.817484,
+        "high": 1.361642
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.25125,
+        "mid": 2.502516,
+        "high": 4.168358
+      }
+    },
+    {
+      "cut": 0.00046996469588595147,
+      "n_low": 484597,
+      "n_review": 158865,
+      "automation_rate": 0.760113,
+      "missed_fraud": {
+        "k": 150,
+        "n": 610,
+        "rate": 0.245902,
+        "ci_low": 0.213389,
+        "ci_high": 0.281594
+      },
+      "recall_outside_low": 0.754098,
+      "fraud_in_low_per_10k_low": 3.0954,
+      "t_low": 0.00046996469588595147,
+      "is_default": false,
+      "missed_fraud_n": 150,
+      "missed_fraud_rate": 0.245902,
+      "missed_fraud_ci_lo": 0.213389,
+      "missed_fraud_ci_hi": 0.281594,
+      "wrongful_autoclose_per_10k": 2.260316,
+      "cost_per_case": {
+        "low": 0.398229,
+        "mid": 0.796442,
+        "high": 1.326593
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.261771,
+        "mid": 2.523558,
+        "high": 4.203407
+      }
+    },
+    {
+      "cut": 0.00048162384157435597,
+      "n_low": 488363,
+      "n_review": 155099,
+      "automation_rate": 0.765788,
+      "missed_fraud": {
+        "k": 150,
+        "n": 610,
+        "rate": 0.245902,
+        "ci_low": 0.213389,
+        "ci_high": 0.281594
+      },
+      "recall_outside_low": 0.754098,
+      "fraud_in_low_per_10k_low": 3.0715,
+      "t_low": 0.00048162384157435597,
+      "is_default": false,
+      "missed_fraud_n": 150,
+      "missed_fraud_rate": 0.245902,
+      "missed_fraud_ci_lo": 0.213389,
+      "missed_fraud_ci_hi": 0.281594,
+      "wrongful_autoclose_per_10k": 2.260316,
+      "cost_per_case": {
+        "low": 0.388808,
+        "mid": 0.777601,
+        "high": 1.29521
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.271192,
+        "mid": 2.542399,
+        "high": 4.23479
+      }
+    },
+    {
+      "cut": 0.000493572233836755,
+      "n_low": 491713,
+      "n_review": 151749,
+      "automation_rate": 0.770836,
+      "missed_fraud": {
+        "k": 150,
+        "n": 610,
+        "rate": 0.245902,
+        "ci_low": 0.213389,
+        "ci_high": 0.281594
+      },
+      "recall_outside_low": 0.754098,
+      "fraud_in_low_per_10k_low": 3.0506,
+      "t_low": 0.000493572233836755,
+      "is_default": false,
+      "missed_fraud_n": 150,
+      "missed_fraud_rate": 0.245902,
+      "missed_fraud_ci_lo": 0.213389,
+      "missed_fraud_ci_hi": 0.281594,
+      "wrongful_autoclose_per_10k": 2.260316,
+      "cost_per_case": {
+        "low": 0.380428,
+        "mid": 0.760841,
+        "high": 1.267294
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.279572,
+        "mid": 2.559159,
+        "high": 4.262706
+      }
+    },
+    {
+      "cut": 0.0005058170484631079,
+      "n_low": 494713,
+      "n_review": 148749,
+      "automation_rate": 0.775356,
+      "missed_fraud": {
+        "k": 151,
+        "n": 610,
+        "rate": 0.247541,
+        "ci_low": 0.214943,
+        "ci_high": 0.283299
+      },
+      "recall_outside_low": 0.752459,
+      "fraud_in_low_per_10k_low": 3.0523,
+      "t_low": 0.0005058170484631079,
+      "is_default": false,
+      "missed_fraud_n": 151,
+      "missed_fraud_rate": 0.247541,
+      "missed_fraud_ci_lo": 0.214943,
+      "missed_fraud_ci_hi": 0.283299,
+      "wrongful_autoclose_per_10k": 2.275385,
+      "cost_per_case": {
+        "low": 0.372923,
+        "mid": 0.745832,
+        "high": 1.242295
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.287077,
+        "mid": 2.574168,
+        "high": 4.287705
+      }
+    },
+    {
+      "cut": 0.0005183656392643651,
+      "n_low": 497261,
+      "n_review": 146201,
+      "automation_rate": 0.779196,
+      "missed_fraud": {
+        "k": 153,
+        "n": 610,
+        "rate": 0.25082,
+        "ci_low": 0.218052,
+        "ci_high": 0.286707
+      },
+      "recall_outside_low": 0.74918,
+      "fraud_in_low_per_10k_low": 3.0769,
+      "t_low": 0.0005183656392643651,
+      "is_default": false,
+      "missed_fraud_n": 153,
+      "missed_fraud_rate": 0.25082,
+      "missed_fraud_ci_lo": 0.218052,
+      "missed_fraud_ci_hi": 0.286707,
+      "wrongful_autoclose_per_10k": 2.305522,
+      "cost_per_case": {
+        "low": 0.366549,
+        "mid": 0.733085,
+        "high": 1.221062
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.293451,
+        "mid": 2.586915,
+        "high": 4.308938
+      }
+    },
+    {
+      "cut": 0.0005312255424889103,
+      "n_low": 499456,
+      "n_review": 144006,
+      "automation_rate": 0.782503,
+      "missed_fraud": {
+        "k": 154,
+        "n": 610,
+        "rate": 0.252459,
+        "ci_low": 0.219607,
+        "ci_high": 0.288409
+      },
+      "recall_outside_low": 0.747541,
+      "fraud_in_low_per_10k_low": 3.0834,
+      "t_low": 0.0005312255424889103,
+      "is_default": false,
+      "missed_fraud_n": 154,
+      "missed_fraud_rate": 0.252459,
+      "missed_fraud_ci_lo": 0.219607,
+      "missed_fraud_ci_hi": 0.288409,
+      "wrongful_autoclose_per_10k": 2.320591,
+      "cost_per_case": {
+        "low": 0.361059,
+        "mid": 0.722103,
+        "high": 1.202771
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.298941,
+        "mid": 2.597897,
+        "high": 4.327229
+      }
+    },
+    {
+      "cut": 0.0005444044813485709,
+      "n_low": 501420,
+      "n_review": 142042,
+      "automation_rate": 0.785463,
+      "missed_fraud": {
+        "k": 156,
+        "n": 610,
+        "rate": 0.255738,
+        "ci_low": 0.22272,
+        "ci_high": 0.291813
+      },
+      "recall_outside_low": 0.744262,
+      "fraud_in_low_per_10k_low": 3.1112,
+      "t_low": 0.0005444044813485709,
+      "is_default": false,
+      "missed_fraud_n": 156,
+      "missed_fraud_rate": 0.255738,
+      "missed_fraud_ci_lo": 0.22272,
+      "missed_fraud_ci_hi": 0.291813,
+      "wrongful_autoclose_per_10k": 2.350729,
+      "cost_per_case": {
+        "low": 0.356146,
+        "mid": 0.712277,
+        "high": 1.186404
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.303854,
+        "mid": 2.607723,
+        "high": 4.343596
+      }
+    },
+    {
+      "cut": 0.0005579103706569102,
+      "n_low": 503308,
+      "n_review": 140154,
+      "automation_rate": 0.788308,
+      "missed_fraud": {
+        "k": 157,
+        "n": 610,
+        "rate": 0.257377,
+        "ci_low": 0.224277,
+        "ci_high": 0.293514
+      },
+      "recall_outside_low": 0.742623,
+      "fraud_in_low_per_10k_low": 3.1194,
+      "t_low": 0.0005579103706569102,
+      "is_default": false,
+      "missed_fraud_n": 157,
+      "missed_fraud_rate": 0.257377,
+      "missed_fraud_ci_lo": 0.224277,
+      "missed_fraud_ci_hi": 0.293514,
+      "wrongful_autoclose_per_10k": 2.365797,
+      "cost_per_case": {
+        "low": 0.351423,
+        "mid": 0.702832,
+        "high": 1.170671
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.308577,
+        "mid": 2.617168,
+        "high": 4.359329
+      }
+    },
+    {
+      "cut": 0.0005717513215825926,
+      "n_low": 505102,
+      "n_review": 138360,
+      "automation_rate": 0.791011,
+      "missed_fraud": {
+        "k": 158,
+        "n": 610,
+        "rate": 0.259016,
+        "ci_low": 0.225835,
+        "ci_high": 0.295214
+      },
+      "recall_outside_low": 0.740984,
+      "fraud_in_low_per_10k_low": 3.1281,
+      "t_low": 0.0005717513215825926,
+      "is_default": false,
+      "missed_fraud_n": 158,
+      "missed_fraud_rate": 0.259016,
+      "missed_fraud_ci_lo": 0.225835,
+      "missed_fraud_ci_hi": 0.295214,
+      "wrongful_autoclose_per_10k": 2.380866,
+      "cost_per_case": {
+        "low": 0.346935,
+        "mid": 0.693857,
+        "high": 1.155722
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.313065,
+        "mid": 2.626143,
+        "high": 4.374278
+      }
+    },
+    {
+      "cut": 0.0005859356465206661,
+      "n_low": 506769,
+      "n_review": 136693,
+      "automation_rate": 0.793523,
+      "missed_fraud": {
+        "k": 158,
+        "n": 610,
+        "rate": 0.259016,
+        "ci_low": 0.225835,
+        "ci_high": 0.295214
+      },
+      "recall_outside_low": 0.740984,
+      "fraud_in_low_per_10k_low": 3.1178,
+      "t_low": 0.0005859356465206661,
+      "is_default": false,
+      "missed_fraud_n": 158,
+      "missed_fraud_rate": 0.259016,
+      "missed_fraud_ci_lo": 0.225835,
+      "missed_fraud_ci_hi": 0.295214,
+      "wrongful_autoclose_per_10k": 2.380866,
+      "cost_per_case": {
+        "low": 0.342765,
+        "mid": 0.685517,
+        "high": 1.141831
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.317235,
+        "mid": 2.634483,
+        "high": 4.388169
+      }
+    },
+    {
+      "cut": 0.0006004718640847009,
+      "n_low": 508410,
+      "n_review": 135052,
+      "automation_rate": 0.795996,
+      "missed_fraud": {
+        "k": 161,
+        "n": 610,
+        "rate": 0.263934,
+        "ci_low": 0.230513,
+        "ci_high": 0.300311
+      },
+      "recall_outside_low": 0.736066,
+      "fraud_in_low_per_10k_low": 3.1667,
+      "t_low": 0.0006004718640847009,
+      "is_default": false,
+      "missed_fraud_n": 161,
+      "missed_fraud_rate": 0.263934,
+      "missed_fraud_ci_lo": 0.230513,
+      "missed_fraud_ci_hi": 0.300311,
+      "wrongful_autoclose_per_10k": 2.426073,
+      "cost_per_case": {
+        "low": 0.33866,
+        "mid": 0.677307,
+        "high": 1.128156
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.32134,
+        "mid": 2.642693,
+        "high": 4.401844
+      }
+    },
+    {
+      "cut": 0.0006153687042227744,
+      "n_low": 510193,
+      "n_review": 133269,
+      "automation_rate": 0.798683,
+      "missed_fraud": {
+        "k": 162,
+        "n": 610,
+        "rate": 0.265574,
+        "ci_low": 0.232073,
+        "ci_high": 0.302009
+      },
+      "recall_outside_low": 0.734426,
+      "fraud_in_low_per_10k_low": 3.1753,
+      "t_low": 0.0006153687042227744,
+      "is_default": false,
+      "missed_fraud_n": 162,
+      "missed_fraud_rate": 0.265574,
+      "missed_fraud_ci_lo": 0.232073,
+      "missed_fraud_ci_hi": 0.302009,
+      "wrongful_autoclose_per_10k": 2.441141,
+      "cost_per_case": {
+        "low": 0.3342,
+        "mid": 0.668387,
+        "high": 1.113298
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.3258,
+        "mid": 2.651613,
+        "high": 4.416702
+      }
+    },
+    {
+      "cut": 0.000630635113460372,
+      "n_low": 512065,
+      "n_review": 131397,
+      "automation_rate": 0.801504,
+      "missed_fraud": {
+        "k": 163,
+        "n": 610,
+        "rate": 0.267213,
+        "ci_low": 0.233634,
+        "ci_high": 0.303706
+      },
+      "recall_outside_low": 0.732787,
+      "fraud_in_low_per_10k_low": 3.1832,
+      "t_low": 0.000630635113460372,
+      "is_default": false,
+      "missed_fraud_n": 163,
+      "missed_fraud_rate": 0.267213,
+      "missed_fraud_ci_lo": 0.233634,
+      "missed_fraud_ci_hi": 0.303706,
+      "wrongful_autoclose_per_10k": 2.45621,
+      "cost_per_case": {
+        "low": 0.329517,
+        "mid": 0.659021,
+        "high": 1.097698
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.330483,
+        "mid": 2.660979,
+        "high": 4.432302
+      }
+    },
+    {
+      "cut": 0.000646280260273362,
+      "n_low": 513996,
+      "n_review": 129466,
+      "automation_rate": 0.804413,
+      "missed_fraud": {
+        "k": 164,
+        "n": 610,
+        "rate": 0.268852,
+        "ci_low": 0.235196,
+        "ci_high": 0.305402
+      },
+      "recall_outside_low": 0.731148,
+      "fraud_in_low_per_10k_low": 3.1907,
+      "t_low": 0.000646280260273362,
+      "is_default": false,
+      "missed_fraud_n": 164,
+      "missed_fraud_rate": 0.268852,
+      "missed_fraud_ci_lo": 0.235196,
+      "missed_fraud_ci_hi": 0.305402,
+      "wrongful_autoclose_per_10k": 2.471279,
+      "cost_per_case": {
+        "low": 0.324687,
+        "mid": 0.64936,
+        "high": 1.081607
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.335313,
+        "mid": 2.67064,
+        "high": 4.448393
+      }
+    },
+    {
+      "cut": 0.0006623135405942638,
+      "n_low": 516138,
+      "n_review": 127324,
+      "automation_rate": 0.807641,
+      "missed_fraud": {
+        "k": 165,
+        "n": 610,
+        "rate": 0.270492,
+        "ci_low": 0.236758,
+        "ci_high": 0.307098
+      },
+      "recall_outside_low": 0.729508,
+      "fraud_in_low_per_10k_low": 3.1968,
+      "t_low": 0.0006623135405942638,
+      "is_default": false,
+      "missed_fraud_n": 165,
+      "missed_fraud_rate": 0.270492,
+      "missed_fraud_ci_lo": 0.236758,
+      "missed_fraud_ci_hi": 0.307098,
+      "wrongful_autoclose_per_10k": 2.486348,
+      "cost_per_case": {
+        "low": 0.319328,
+        "mid": 0.638644,
+        "high": 1.063757
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.340672,
+        "mid": 2.681356,
+        "high": 4.466243
+      }
+    },
+    {
+      "cut": 0.0006787445834551205,
+      "n_low": 518466,
+      "n_review": 124996,
+      "automation_rate": 0.811149,
+      "missed_fraud": {
+        "k": 167,
+        "n": 610,
+        "rate": 0.27377,
+        "ci_low": 0.239884,
+        "ci_high": 0.310488
+      },
+      "recall_outside_low": 0.72623,
+      "fraud_in_low_per_10k_low": 3.221,
+      "t_low": 0.0006787445834551205,
+      "is_default": false,
+      "missed_fraud_n": 167,
+      "missed_fraud_rate": 0.27377,
+      "missed_fraud_ci_lo": 0.239884,
+      "missed_fraud_ci_hi": 0.310488,
+      "wrongful_autoclose_per_10k": 2.516485,
+      "cost_per_case": {
+        "low": 0.313505,
+        "mid": 0.626997,
+        "high": 1.044358
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.346495,
+        "mid": 2.693003,
+        "high": 4.485642
+      }
+    },
+    {
+      "cut": 0.0006955832567703584,
+      "n_low": 521005,
+      "n_review": 122457,
+      "automation_rate": 0.814975,
+      "missed_fraud": {
+        "k": 169,
+        "n": 610,
+        "rate": 0.277049,
+        "ci_low": 0.243013,
+        "ci_high": 0.313876
+      },
+      "recall_outside_low": 0.722951,
+      "fraud_in_low_per_10k_low": 3.2437,
+      "t_low": 0.0006955832567703584,
+      "is_default": false,
+      "missed_fraud_n": 169,
+      "missed_fraud_rate": 0.277049,
+      "missed_fraud_ci_lo": 0.243013,
+      "missed_fraud_ci_hi": 0.313876,
+      "wrongful_autoclose_per_10k": 2.546623,
+      "cost_per_case": {
+        "low": 0.307153,
+        "mid": 0.614295,
+        "high": 1.0232
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.352847,
+        "mid": 2.705705,
+        "high": 4.5068
+      }
+    },
+    {
+      "cut": 0.000712839673263116,
+      "n_low": 523746,
+      "n_review": 119716,
+      "automation_rate": 0.819105,
+      "missed_fraud": {
+        "k": 173,
+        "n": 610,
+        "rate": 0.283607,
+        "ci_low": 0.249277,
+        "ci_high": 0.320644
+      },
+      "recall_outside_low": 0.716393,
+      "fraud_in_low_per_10k_low": 3.3031,
+      "t_low": 0.000712839673263116,
+      "is_default": false,
+      "missed_fraud_n": 173,
+      "missed_fraud_rate": 0.283607,
+      "missed_fraud_ci_lo": 0.249277,
+      "missed_fraud_ci_hi": 0.320644,
+      "wrongful_autoclose_per_10k": 2.606898,
+      "cost_per_case": {
+        "low": 0.300297,
+        "mid": 0.600582,
+        "high": 1.000359
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.359703,
+        "mid": 2.719418,
+        "high": 4.529641
+      }
+    },
+    {
+      "cut": 0.0007305241965385967,
+      "n_low": 526852,
+      "n_review": 116610,
+      "automation_rate": 0.823786,
+      "missed_fraud": {
+        "k": 179,
+        "n": 610,
+        "rate": 0.293443,
+        "ci_low": 0.258691,
+        "ci_high": 0.330779
+      },
+      "recall_outside_low": 0.706557,
+      "fraud_in_low_per_10k_low": 3.3975,
+      "t_low": 0.0007305241965385967,
+      "is_default": false,
+      "missed_fraud_n": 179,
+      "missed_fraud_rate": 0.293443,
+      "missed_fraud_ci_lo": 0.258691,
+      "missed_fraud_ci_hi": 0.330779,
+      "wrongful_autoclose_per_10k": 2.697311,
+      "cost_per_case": {
+        "low": 0.292527,
+        "mid": 0.585043,
+        "high": 0.974476
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.367473,
+        "mid": 2.734957,
+        "high": 4.555524
+      }
+    },
+    {
+      "cut": 0.0007486474473080866,
+      "n_low": 530205,
+      "n_review": 113257,
+      "automation_rate": 0.828838,
+      "missed_fraud": {
+        "k": 180,
+        "n": 610,
+        "rate": 0.295082,
+        "ci_low": 0.260262,
+        "ci_high": 0.332467
+      },
+      "recall_outside_low": 0.704918,
+      "fraud_in_low_per_10k_low": 3.3949,
+      "t_low": 0.0007486474473080866,
+      "is_default": false,
+      "missed_fraud_n": 180,
+      "missed_fraud_rate": 0.295082,
+      "missed_fraud_ci_lo": 0.260262,
+      "missed_fraud_ci_hi": 0.332467,
+      "wrongful_autoclose_per_10k": 2.712379,
+      "cost_per_case": {
+        "low": 0.28414,
+        "mid": 0.568268,
+        "high": 0.946535
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.37586,
+        "mid": 2.751732,
+        "high": 4.583465
+      }
+    },
+    {
+      "cut": 0.0007672203097673877,
+      "n_low": 533788,
+      "n_review": 109674,
+      "automation_rate": 0.834237,
+      "missed_fraud": {
+        "k": 182,
+        "n": 610,
+        "rate": 0.298361,
+        "ci_low": 0.263406,
+        "ci_high": 0.335839
+      },
+      "recall_outside_low": 0.701639,
+      "fraud_in_low_per_10k_low": 3.4096,
+      "t_low": 0.0007672203097673877,
+      "is_default": false,
+      "missed_fraud_n": 182,
+      "missed_fraud_rate": 0.298361,
+      "missed_fraud_ci_lo": 0.263406,
+      "missed_fraud_ci_hi": 0.335839,
+      "wrongful_autoclose_per_10k": 2.742517,
+      "cost_per_case": {
+        "low": 0.275177,
+        "mid": 0.550342,
+        "high": 0.916678
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.384823,
+        "mid": 2.769658,
+        "high": 4.613322
+      }
+    },
+    {
+      "cut": 0.0007862539381334878,
+      "n_low": 537669,
+      "n_review": 105793,
+      "automation_rate": 0.840086,
+      "missed_fraud": {
+        "k": 183,
+        "n": 610,
+        "rate": 0.3,
+        "ci_low": 0.264978,
+        "ci_high": 0.337525
+      },
+      "recall_outside_low": 0.7,
+      "fraud_in_low_per_10k_low": 3.4036,
+      "t_low": 0.0007862539381334878,
+      "is_default": false,
+      "missed_fraud_n": 183,
+      "missed_fraud_rate": 0.3,
+      "missed_fraud_ci_lo": 0.264978,
+      "missed_fraud_ci_hi": 0.337525,
+      "wrongful_autoclose_per_10k": 2.757586,
+      "cost_per_case": {
+        "low": 0.265468,
+        "mid": 0.530926,
+        "high": 0.884337
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.394532,
+        "mid": 2.789074,
+        "high": 4.645663
+      }
+    },
+    {
+      "cut": 0.0008057597633433983,
+      "n_low": 541956,
+      "n_review": 101506,
+      "automation_rate": 0.846546,
+      "missed_fraud": {
+        "k": 186,
+        "n": 610,
+        "rate": 0.304918,
+        "ci_low": 0.269699,
+        "ci_high": 0.342578
+      },
+      "recall_outside_low": 0.695082,
+      "fraud_in_low_per_10k_low": 3.432,
+      "t_low": 0.0008057597633433983,
+      "is_default": false,
+      "missed_fraud_n": 186,
+      "missed_fraud_rate": 0.304918,
+      "missed_fraud_ci_lo": 0.269699,
+      "missed_fraud_ci_hi": 0.342578,
+      "wrongful_autoclose_per_10k": 2.802792,
+      "cost_per_case": {
+        "low": 0.254744,
+        "mid": 0.509478,
+        "high": 0.848613
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.405256,
+        "mid": 2.810522,
+        "high": 4.681387
+      }
+    },
+    {
+      "cut": 0.0008257494999191746,
+      "n_low": 546180,
+      "n_review": 97282,
+      "automation_rate": 0.852911,
+      "missed_fraud": {
+        "k": 189,
+        "n": 610,
+        "rate": 0.309836,
+        "ci_low": 0.274425,
+        "ci_high": 0.347627
+      },
+      "recall_outside_low": 0.690164,
+      "fraud_in_low_per_10k_low": 3.4604,
+      "t_low": 0.0008257494999191746,
+      "is_default": false,
+      "missed_fraud_n": 189,
+      "missed_fraud_rate": 0.309836,
+      "missed_fraud_ci_lo": 0.274425,
+      "missed_fraud_ci_hi": 0.347627,
+      "wrongful_autoclose_per_10k": 2.847998,
+      "cost_per_case": {
+        "low": 0.244178,
+        "mid": 0.488346,
+        "high": 0.813414
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.415822,
+        "mid": 2.831654,
+        "high": 4.716586
+      }
+    },
+    {
+      "cut": 0.0008462351530032539,
+      "n_low": 550787,
+      "n_review": 92675,
+      "automation_rate": 0.859853,
+      "missed_fraud": {
+        "k": 192,
+        "n": 610,
+        "rate": 0.314754,
+        "ci_low": 0.279156,
+        "ci_high": 0.352671
+      },
+      "recall_outside_low": 0.685246,
+      "fraud_in_low_per_10k_low": 3.4859,
+      "t_low": 0.0008462351530032539,
+      "is_default": false,
+      "missed_fraud_n": 192,
+      "missed_fraud_rate": 0.314754,
+      "missed_fraud_ci_lo": 0.279156,
+      "missed_fraud_ci_hi": 0.352671,
+      "wrongful_autoclose_per_10k": 2.893205,
+      "cost_per_case": {
+        "low": 0.232653,
+        "mid": 0.465298,
+        "high": 0.775023
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.427347,
+        "mid": 2.854702,
+        "high": 4.754977
+      }
+    },
+    {
+      "cut": 0.0008672290255683295,
+      "n_low": 555447,
+      "n_review": 88015,
+      "automation_rate": 0.866875,
+      "missed_fraud": {
+        "k": 194,
+        "n": 610,
+        "rate": 0.318033,
+        "ci_low": 0.282312,
+        "ci_high": 0.356031
+      },
+      "recall_outside_low": 0.681967,
+      "fraud_in_low_per_10k_low": 3.4927,
+      "t_low": 0.0008672290255683295,
+      "is_default": false,
+      "missed_fraud_n": 194,
+      "missed_fraud_rate": 0.318033,
+      "missed_fraud_ci_lo": 0.282312,
+      "missed_fraud_ci_hi": 0.356031,
+      "wrongful_autoclose_per_10k": 2.923342,
+      "cost_per_case": {
+        "low": 0.220996,
+        "mid": 0.441984,
+        "high": 0.73619
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.439004,
+        "mid": 2.878016,
+        "high": 4.79381
+      }
+    },
+    {
+      "cut": 0.0008887437258060852,
+      "n_low": 560204,
+      "n_review": 83258,
+      "automation_rate": 0.874043,
+      "missed_fraud": {
+        "k": 197,
+        "n": 610,
+        "rate": 0.322951,
+        "ci_low": 0.287051,
+        "ci_high": 0.361067
+      },
+      "recall_outside_low": 0.677049,
+      "fraud_in_low_per_10k_low": 3.5166,
+      "t_low": 0.0008887437258060852,
+      "is_default": false,
+      "missed_fraud_n": 197,
+      "missed_fraud_rate": 0.322951,
+      "missed_fraud_ci_lo": 0.287051,
+      "missed_fraud_ci_hi": 0.361067,
+      "wrongful_autoclose_per_10k": 2.968548,
+      "cost_per_case": {
+        "low": 0.209097,
+        "mid": 0.418185,
+        "high": 0.69655
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.450903,
+        "mid": 2.901815,
+        "high": 4.83345
+      }
+    },
+    {
+      "cut": 0.0009107921746992402,
+      "n_low": 565289,
+      "n_review": 78173,
+      "automation_rate": 0.881706,
+      "missed_fraud": {
+        "k": 206,
+        "n": 610,
+        "rate": 0.337705,
+        "ci_low": 0.301294,
+        "ci_high": 0.376147
+      },
+      "recall_outside_low": 0.662295,
+      "fraud_in_low_per_10k_low": 3.6442,
+      "t_low": 0.0009107921746992402,
+      "is_default": false,
+      "missed_fraud_n": 206,
+      "missed_fraud_rate": 0.337705,
+      "missed_fraud_ci_lo": 0.301294,
+      "missed_fraud_ci_hi": 0.376147,
+      "wrongful_autoclose_per_10k": 3.104167,
+      "cost_per_case": {
+        "low": 0.196376,
+        "mid": 0.392745,
+        "high": 0.654176
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.463624,
+        "mid": 2.927255,
+        "high": 4.875824
+      }
+    },
+    {
+      "cut": 0.0009333876137814426,
+      "n_low": 570220,
+      "n_review": 73242,
+      "automation_rate": 0.889136,
+      "missed_fraud": {
+        "k": 210,
+        "n": 610,
+        "rate": 0.344262,
+        "ci_low": 0.307638,
+        "ci_high": 0.382836
+      },
+      "recall_outside_low": 0.655738,
+      "fraud_in_low_per_10k_low": 3.6828,
+      "t_low": 0.0009333876137814426,
+      "is_default": false,
+      "missed_fraud_n": 210,
+      "missed_fraud_rate": 0.344262,
+      "missed_fraud_ci_lo": 0.307638,
+      "missed_fraud_ci_hi": 0.382836,
+      "wrongful_autoclose_per_10k": 3.164443,
+      "cost_per_case": {
+        "low": 0.184041,
+        "mid": 0.368076,
+        "high": 0.613085
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.475959,
+        "mid": 2.951924,
+        "high": 4.916915
+      }
+    },
+    {
+      "cut": 0.0009565436130896778,
+      "n_low": 575142,
+      "n_review": 68320,
+      "automation_rate": 0.896553,
+      "missed_fraud": {
+        "k": 213,
+        "n": 610,
+        "rate": 0.34918,
+        "ci_low": 0.312401,
+        "ci_high": 0.387848
+      },
+      "recall_outside_low": 0.65082,
+      "fraud_in_low_per_10k_low": 3.7034,
+      "t_low": 0.0009565436130896778,
+      "is_default": false,
+      "missed_fraud_n": 213,
+      "missed_fraud_rate": 0.34918,
+      "missed_fraud_ci_lo": 0.312401,
+      "missed_fraud_ci_hi": 0.387848,
+      "wrongful_autoclose_per_10k": 3.209649,
+      "cost_per_case": {
+        "low": 0.171729,
+        "mid": 0.343451,
+        "high": 0.572069
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.488271,
+        "mid": 2.976549,
+        "high": 4.957931
+      }
+    },
+    {
+      "cut": 0.0009802740793139573,
+      "n_low": 580136,
+      "n_review": 63326,
+      "automation_rate": 0.904078,
+      "missed_fraud": {
+        "k": 219,
+        "n": 610,
+        "rate": 0.359016,
+        "ci_low": 0.321939,
+        "ci_high": 0.397858
+      },
+      "recall_outside_low": 0.640984,
+      "fraud_in_low_per_10k_low": 3.775,
+      "t_low": 0.0009802740793139573,
+      "is_default": false,
+      "missed_fraud_n": 219,
+      "missed_fraud_rate": 0.359016,
+      "missed_fraud_ci_lo": 0.321939,
+      "missed_fraud_ci_hi": 0.397858,
+      "wrongful_autoclose_per_10k": 3.300061,
+      "cost_per_case": {
+        "low": 0.159236,
+        "mid": 0.318467,
+        "high": 0.530454
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.500764,
+        "mid": 3.001533,
+        "high": 4.999546
+      }
+    },
+    {
+      "cut": 0.0010045932641491967,
+      "n_low": 584951,
+      "n_review": 58511,
+      "automation_rate": 0.911334,
+      "missed_fraud": {
+        "k": 222,
+        "n": 610,
+        "rate": 0.363934,
+        "ci_low": 0.326715,
+        "ci_high": 0.402857
+      },
+      "recall_outside_low": 0.636066,
+      "fraud_in_low_per_10k_low": 3.7952,
+      "t_low": 0.0010045932641491967,
+      "is_default": false,
+      "missed_fraud_n": 222,
+      "missed_fraud_rate": 0.363934,
+      "missed_fraud_ci_lo": 0.326715,
+      "missed_fraud_ci_hi": 0.402857,
+      "wrongful_autoclose_per_10k": 3.345268,
+      "cost_per_case": {
+        "low": 0.147192,
+        "mid": 0.294377,
+        "high": 0.49033
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.512808,
+        "mid": 3.025623,
+        "high": 5.03967
+      }
+    },
+    {
+      "cut": 0.0010295157728542924,
+      "n_low": 589562,
+      "n_review": 53900,
+      "automation_rate": 0.918282,
+      "missed_fraud": {
+        "k": 227,
+        "n": 610,
+        "rate": 0.372131,
+        "ci_low": 0.334684,
+        "ci_high": 0.411178
+      },
+      "recall_outside_low": 0.627869,
+      "fraud_in_low_per_10k_low": 3.8503,
+      "t_low": 0.0010295157728542924,
+      "is_default": false,
+      "missed_fraud_n": 227,
+      "missed_fraud_rate": 0.372131,
+      "missed_fraud_ci_lo": 0.334684,
+      "missed_fraud_ci_hi": 0.411178,
+      "wrongful_autoclose_per_10k": 3.420612,
+      "cost_per_case": {
+        "low": 0.135657,
+        "mid": 0.271309,
+        "high": 0.451906
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.524343,
+        "mid": 3.048691,
+        "high": 5.078094
+      }
+    },
+    {
+      "cut": 0.0010550565730235277,
+      "n_low": 594120,
+      "n_review": 49342,
+      "automation_rate": 0.92515,
+      "missed_fraud": {
+        "k": 231,
+        "n": 610,
+        "rate": 0.378689,
+        "ci_low": 0.341068,
+        "ci_high": 0.417827
+      },
+      "recall_outside_low": 0.621311,
+      "fraud_in_low_per_10k_low": 3.8881,
+      "t_low": 0.0010550565730235277,
+      "is_default": false,
+      "missed_fraud_n": 231,
+      "missed_fraud_rate": 0.378689,
+      "missed_fraud_ci_lo": 0.341068,
+      "missed_fraud_ci_hi": 0.417827,
+      "wrongful_autoclose_per_10k": 3.480887,
+      "cost_per_case": {
+        "low": 0.124255,
+        "mid": 0.248506,
+        "high": 0.413923
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.535745,
+        "mid": 3.071494,
+        "high": 5.116077
+      }
+    },
+    {
+      "cut": 0.0010812310035755947,
+      "n_low": 598338,
+      "n_review": 45124,
+      "automation_rate": 0.931506,
+      "missed_fraud": {
+        "k": 236,
+        "n": 610,
+        "rate": 0.386885,
+        "ci_low": 0.349058,
+        "ci_high": 0.426128
+      },
+      "recall_outside_low": 0.613115,
+      "fraud_in_low_per_10k_low": 3.9443,
+      "t_low": 0.0010812310035755947,
+      "is_default": false,
+      "missed_fraud_n": 236,
+      "missed_fraud_rate": 0.386885,
+      "missed_fraud_ci_lo": 0.349058,
+      "missed_fraud_ci_hi": 0.426128,
+      "wrongful_autoclose_per_10k": 3.556231,
+      "cost_per_case": {
+        "low": 0.113704,
+        "mid": 0.227403,
+        "high": 0.378774
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.546296,
+        "mid": 3.092597,
+        "high": 5.151226
+      }
+    },
+    {
+      "cut": 0.0011080547839656142,
+      "n_low": 602265,
+      "n_review": 41197,
+      "automation_rate": 0.937424,
+      "missed_fraud": {
+        "k": 238,
+        "n": 610,
+        "rate": 0.390164,
+        "ci_low": 0.352257,
+        "ci_high": 0.429445
+      },
+      "recall_outside_low": 0.609836,
+      "fraud_in_low_per_10k_low": 3.9517,
+      "t_low": 0.0011080547839656142,
+      "is_default": false,
+      "missed_fraud_n": 238,
+      "missed_fraud_rate": 0.390164,
+      "missed_fraud_ci_lo": 0.352257,
+      "missed_fraud_ci_hi": 0.429445,
+      "wrongful_autoclose_per_10k": 3.586368,
+      "cost_per_case": {
+        "low": 0.10388,
+        "mid": 0.207757,
+        "high": 0.34605
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.55612,
+        "mid": 3.112243,
+        "high": 5.18395
+      }
+    },
+    {
+      "cut": 0.001135544023625701,
+      "n_low": 605943,
+      "n_review": 37519,
+      "automation_rate": 0.942966,
+      "missed_fraud": {
+        "k": 243,
+        "n": 610,
+        "rate": 0.398361,
+        "ci_low": 0.360263,
+        "ci_high": 0.43773
+      },
+      "recall_outside_low": 0.601639,
+      "fraud_in_low_per_10k_low": 4.0103,
+      "t_low": 0.001135544023625701,
+      "is_default": false,
+      "missed_fraud_n": 243,
+      "missed_fraud_rate": 0.398361,
+      "missed_fraud_ci_lo": 0.360263,
+      "missed_fraud_ci_hi": 0.43773,
+      "wrongful_autoclose_per_10k": 3.661712,
+      "cost_per_case": {
+        "low": 0.09468,
+        "mid": 0.189356,
+        "high": 0.315401
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.56532,
+        "mid": 3.130644,
+        "high": 5.214599
+      }
+    },
+    {
+      "cut": 0.0011637152316397216,
+      "n_low": 609363,
+      "n_review": 34099,
+      "automation_rate": 0.94812,
+      "missed_fraud": {
+        "k": 244,
+        "n": 610,
+        "rate": 0.4,
+        "ci_low": 0.361866,
+        "ci_high": 0.439386
+      },
+      "recall_outside_low": 0.6,
+      "fraud_in_low_per_10k_low": 4.0042,
+      "t_low": 0.0011637152316397216,
+      "is_default": false,
+      "missed_fraud_n": 244,
+      "missed_fraud_rate": 0.4,
+      "missed_fraud_ci_lo": 0.361866,
+      "missed_fraud_ci_hi": 0.439386,
+      "wrongful_autoclose_per_10k": 3.676781,
+      "cost_per_case": {
+        "low": 0.086125,
+        "mid": 0.172246,
+        "high": 0.286901
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.573875,
+        "mid": 3.147754,
+        "high": 5.243099
+      }
+    },
+    {
+      "cut": 0.0011925853266580822,
+      "n_low": 612399,
+      "n_review": 31063,
+      "automation_rate": 0.952695,
+      "missed_fraud": {
+        "k": 248,
+        "n": 610,
+        "rate": 0.406557,
+        "ci_low": 0.368281,
+        "ci_high": 0.446004
+      },
+      "recall_outside_low": 0.593443,
+      "fraud_in_low_per_10k_low": 4.0496,
+      "t_low": 0.0011925853266580822,
+      "is_default": false,
+      "missed_fraud_n": 248,
+      "missed_fraud_rate": 0.406557,
+      "missed_fraud_ci_lo": 0.368281,
+      "missed_fraud_ci_hi": 0.446004,
+      "wrongful_autoclose_per_10k": 3.737056,
+      "cost_per_case": {
+        "low": 0.07853,
+        "mid": 0.157057,
+        "high": 0.261602
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.58147,
+        "mid": 3.162943,
+        "high": 5.268398
+      }
+    },
+    {
+      "cut": 0.0012221716470584858,
+      "n_low": 615376,
+      "n_review": 28086,
+      "automation_rate": 0.957181,
+      "missed_fraud": {
+        "k": 249,
+        "n": 610,
+        "rate": 0.408197,
+        "ci_low": 0.369885,
+        "ci_high": 0.447657
+      },
+      "recall_outside_low": 0.591803,
+      "fraud_in_low_per_10k_low": 4.0463,
+      "t_low": 0.0012221716470584858,
+      "is_default": false,
+      "missed_fraud_n": 249,
+      "missed_fraud_rate": 0.408197,
+      "missed_fraud_ci_lo": 0.369885,
+      "missed_fraud_ci_hi": 0.447657,
+      "wrongful_autoclose_per_10k": 3.752125,
+      "cost_per_case": {
+        "low": 0.071083,
+        "mid": 0.142163,
+        "high": 0.236794
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.588917,
+        "mid": 3.177837,
+        "high": 5.293206
+      }
+    },
+    {
+      "cut": 0.0012524919613587544,
+      "n_low": 617982,
+      "n_review": 25480,
+      "automation_rate": 0.961107,
+      "missed_fraud": {
+        "k": 250,
+        "n": 610,
+        "rate": 0.409836,
+        "ci_low": 0.371491,
+        "ci_high": 0.44931
+      },
+      "recall_outside_low": 0.590164,
+      "fraud_in_low_per_10k_low": 4.0454,
+      "t_low": 0.0012524919613587544,
+      "is_default": false,
+      "missed_fraud_n": 250,
+      "missed_fraud_rate": 0.409836,
+      "missed_fraud_ci_lo": 0.371491,
+      "missed_fraud_ci_hi": 0.44931,
+      "wrongful_autoclose_per_10k": 3.767193,
+      "cost_per_case": {
+        "low": 0.064564,
+        "mid": 0.129126,
+        "high": 0.215078
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.595436,
+        "mid": 3.190874,
+        "high": 5.314922
+      }
+    },
+    {
+      "cut": 0.0012835644788879881,
+      "n_low": 620383,
+      "n_review": 23079,
+      "automation_rate": 0.964726,
+      "missed_fraud": {
+        "k": 254,
+        "n": 610,
+        "rate": 0.416393,
+        "ci_low": 0.377916,
+        "ci_high": 0.455917
+      },
+      "recall_outside_low": 0.583607,
+      "fraud_in_low_per_10k_low": 4.0942,
+      "t_low": 0.0012835644788879881,
+      "is_default": false,
+      "missed_fraud_n": 254,
+      "missed_fraud_rate": 0.416393,
+      "missed_fraud_ci_lo": 0.377916,
+      "missed_fraud_ci_hi": 0.455917,
+      "wrongful_autoclose_per_10k": 3.827469,
+      "cost_per_case": {
+        "low": 0.058558,
+        "mid": 0.117114,
+        "high": 0.19507
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.601442,
+        "mid": 3.202886,
+        "high": 5.33493
+      }
+    },
+    {
+      "cut": 0.0013154078607224549,
+      "n_low": 622523,
+      "n_review": 20939,
+      "automation_rate": 0.96795,
+      "missed_fraud": {
+        "k": 257,
+        "n": 610,
+        "rate": 0.421311,
+        "ci_low": 0.38274,
+        "ci_high": 0.460868
+      },
+      "recall_outside_low": 0.578689,
+      "fraud_in_low_per_10k_low": 4.1284,
+      "t_low": 0.0013154078607224549,
+      "is_default": false,
+      "missed_fraud_n": 257,
+      "missed_fraud_rate": 0.421311,
+      "missed_fraud_ci_lo": 0.38274,
+      "missed_fraud_ci_hi": 0.460868,
+      "wrongful_autoclose_per_10k": 3.872675,
+      "cost_per_case": {
+        "low": 0.053205,
+        "mid": 0.106407,
+        "high": 0.177237
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.606795,
+        "mid": 3.213593,
+        "high": 5.352763
+      }
+    },
+    {
+      "cut": 0.0013480412308927907,
+      "n_low": 624490,
+      "n_review": 18972,
+      "automation_rate": 0.970914,
+      "missed_fraud": {
+        "k": 257,
+        "n": 610,
+        "rate": 0.421311,
+        "ci_low": 0.38274,
+        "ci_high": 0.460868
+      },
+      "recall_outside_low": 0.578689,
+      "fraud_in_low_per_10k_low": 4.1154,
+      "t_low": 0.0013480412308927907,
+      "is_default": false,
+      "missed_fraud_n": 257,
+      "missed_fraud_rate": 0.421311,
+      "missed_fraud_ci_lo": 0.38274,
+      "missed_fraud_ci_hi": 0.460868,
+      "wrongful_autoclose_per_10k": 3.872675,
+      "cost_per_case": {
+        "low": 0.048284,
+        "mid": 0.096567,
+        "high": 0.160846
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.611716,
+        "mid": 3.223433,
+        "high": 5.369154
+      }
+    },
+    {
+      "cut": 0.0013814841878692214,
+      "n_low": 626298,
+      "n_review": 17164,
+      "automation_rate": 0.973639,
+      "missed_fraud": {
+        "k": 260,
+        "n": 610,
+        "rate": 0.42623,
+        "ci_low": 0.387567,
+        "ci_high": 0.465815
+      },
+      "recall_outside_low": 0.57377,
+      "fraud_in_low_per_10k_low": 4.1514,
+      "t_low": 0.0013814841878692214,
+      "is_default": false,
+      "missed_fraud_n": 260,
+      "missed_fraud_rate": 0.42623,
+      "missed_fraud_ci_lo": 0.387567,
+      "missed_fraud_ci_hi": 0.465815,
+      "wrongful_autoclose_per_10k": 3.917881,
+      "cost_per_case": {
+        "low": 0.043761,
+        "mid": 0.087521,
+        "high": 0.14578
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.616239,
+        "mid": 3.232479,
+        "high": 5.38422
+      }
+    },
+    {
+      "cut": 0.0014157568163317273,
+      "n_low": 627948,
+      "n_review": 15514,
+      "automation_rate": 0.976125,
+      "missed_fraud": {
+        "k": 263,
+        "n": 610,
+        "rate": 0.431148,
+        "ci_low": 0.392399,
+        "ci_high": 0.470758
+      },
+      "recall_outside_low": 0.568852,
+      "fraud_in_low_per_10k_low": 4.1882,
+      "t_low": 0.0014157568163317273,
+      "is_default": false,
+      "missed_fraud_n": 263,
+      "missed_fraud_rate": 0.431148,
+      "missed_fraud_ci_lo": 0.392399,
+      "missed_fraud_ci_hi": 0.470758,
+      "wrongful_autoclose_per_10k": 3.963088,
+      "cost_per_case": {
+        "low": 0.039634,
+        "mid": 0.079266,
+        "high": 0.13203
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.620366,
+        "mid": 3.240734,
+        "high": 5.39797
+      }
+    },
+    {
+      "cut": 0.00145087969923221,
+      "n_low": 629420,
+      "n_review": 14042,
+      "automation_rate": 0.978343,
+      "missed_fraud": {
+        "k": 263,
+        "n": 610,
+        "rate": 0.431148,
+        "ci_low": 0.392399,
+        "ci_high": 0.470758
+      },
+      "recall_outside_low": 0.568852,
+      "fraud_in_low_per_10k_low": 4.1785,
+      "t_low": 0.00145087969923221,
+      "is_default": false,
+      "missed_fraud_n": 263,
+      "missed_fraud_rate": 0.431148,
+      "missed_fraud_ci_lo": 0.392399,
+      "missed_fraud_ci_hi": 0.470758,
+      "wrongful_autoclose_per_10k": 3.963088,
+      "cost_per_case": {
+        "low": 0.035952,
+        "mid": 0.071902,
+        "high": 0.119764
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.624048,
+        "mid": 3.248098,
+        "high": 5.410236
+      }
+    },
+    {
+      "cut": 0.0014868739301558919,
+      "n_low": 630773,
+      "n_review": 12689,
+      "automation_rate": 0.980382,
+      "missed_fraud": {
+        "k": 263,
+        "n": 610,
+        "rate": 0.431148,
+        "ci_low": 0.392399,
+        "ci_high": 0.470758
+      },
+      "recall_outside_low": 0.568852,
+      "fraud_in_low_per_10k_low": 4.1695,
+      "t_low": 0.0014868739301558919,
+      "is_default": false,
+      "missed_fraud_n": 263,
+      "missed_fraud_rate": 0.431148,
+      "missed_fraud_ci_lo": 0.392399,
+      "missed_fraud_ci_hi": 0.470758,
+      "wrongful_autoclose_per_10k": 3.963088,
+      "cost_per_case": {
+        "low": 0.032567,
+        "mid": 0.065133,
+        "high": 0.108489
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.627433,
+        "mid": 3.254867,
+        "high": 5.421511
+      }
+    },
+    {
+      "cut": 0.0015237611259893956,
+      "n_low": 632087,
+      "n_review": 11375,
+      "automation_rate": 0.982362,
+      "missed_fraud": {
+        "k": 265,
+        "n": 610,
+        "rate": 0.434426,
+        "ci_low": 0.395622,
+        "ci_high": 0.474051
+      },
+      "recall_outside_low": 0.565574,
+      "fraud_in_low_per_10k_low": 4.1925,
+      "t_low": 0.0015237611259893956,
+      "is_default": false,
+      "missed_fraud_n": 265,
+      "missed_fraud_rate": 0.434426,
+      "missed_fraud_ci_lo": 0.395622,
+      "missed_fraud_ci_hi": 0.474051,
+      "wrongful_autoclose_per_10k": 3.993225,
+      "cost_per_case": {
+        "low": 0.02928,
+        "mid": 0.058559,
+        "high": 0.097539
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.63072,
+        "mid": 3.261441,
+        "high": 5.432461
+      }
+    },
+    {
+      "cut": 0.0015615634399030963,
+      "n_low": 633181,
+      "n_review": 10281,
+      "automation_rate": 0.984011,
+      "missed_fraud": {
+        "k": 266,
+        "n": 610,
+        "rate": 0.436066,
+        "ci_low": 0.397234,
+        "ci_high": 0.475697
+      },
+      "recall_outside_low": 0.563934,
+      "fraud_in_low_per_10k_low": 4.201,
+      "t_low": 0.0015615634399030963,
+      "is_default": false,
+      "missed_fraud_n": 266,
+      "missed_fraud_rate": 0.436066,
+      "missed_fraud_ci_lo": 0.397234,
+      "missed_fraud_ci_hi": 0.475697,
+      "wrongful_autoclose_per_10k": 4.008294,
+      "cost_per_case": {
+        "low": 0.026544,
+        "mid": 0.053086,
+        "high": 0.088423
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.633456,
+        "mid": 3.266914,
+        "high": 5.441577
+      }
+    },
+    {
+      "cut": 0.0016003035746555453,
+      "n_low": 634211,
+      "n_review": 9251,
+      "automation_rate": 0.985563,
+      "missed_fraud": {
+        "k": 266,
+        "n": 610,
+        "rate": 0.436066,
+        "ci_low": 0.397234,
+        "ci_high": 0.475697
+      },
+      "recall_outside_low": 0.563934,
+      "fraud_in_low_per_10k_low": 4.1942,
+      "t_low": 0.0016003035746555453,
+      "is_default": false,
+      "missed_fraud_n": 266,
+      "missed_fraud_rate": 0.436066,
+      "missed_fraud_ci_lo": 0.397234,
+      "missed_fraud_ci_hi": 0.475697,
+      "wrongful_autoclose_per_10k": 4.008294,
+      "cost_per_case": {
+        "low": 0.023967,
+        "mid": 0.047933,
+        "high": 0.07984
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.636033,
+        "mid": 3.272067,
+        "high": 5.45016
+      }
+    },
+    {
+      "cut": 0.0016400047962279662,
+      "n_low": 635101,
+      "n_review": 8361,
+      "automation_rate": 0.986904,
+      "missed_fraud": {
+        "k": 266,
+        "n": 610,
+        "rate": 0.436066,
+        "ci_low": 0.397234,
+        "ci_high": 0.475697
+      },
+      "recall_outside_low": 0.563934,
+      "fraud_in_low_per_10k_low": 4.1883,
+      "t_low": 0.0016400047962279662,
+      "is_default": false,
+      "missed_fraud_n": 266,
+      "missed_fraud_rate": 0.436066,
+      "missed_fraud_ci_lo": 0.397234,
+      "missed_fraud_ci_hi": 0.475697,
+      "wrongful_autoclose_per_10k": 4.008294,
+      "cost_per_case": {
+        "low": 0.021741,
+        "mid": 0.04348,
+        "high": 0.072423
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.638259,
+        "mid": 3.27652,
+        "high": 5.457577
+      }
+    },
+    {
+      "cut": 0.001680690947796984,
+      "n_low": 635939,
+      "n_review": 7523,
+      "automation_rate": 0.988166,
+      "missed_fraud": {
+        "k": 266,
+        "n": 610,
+        "rate": 0.436066,
+        "ci_low": 0.397234,
+        "ci_high": 0.475697
+      },
+      "recall_outside_low": 0.563934,
+      "fraud_in_low_per_10k_low": 4.1828,
+      "t_low": 0.001680690947796984,
+      "is_default": false,
+      "missed_fraud_n": 266,
+      "missed_fraud_rate": 0.436066,
+      "missed_fraud_ci_lo": 0.397234,
+      "missed_fraud_ci_hi": 0.475697,
+      "wrongful_autoclose_per_10k": 4.008294,
+      "cost_per_case": {
+        "low": 0.019644,
+        "mid": 0.039288,
+        "high": 0.06544
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.640356,
+        "mid": 3.280712,
+        "high": 5.46456
+      }
+    },
+    {
+      "cut": 0.0017223864640540242,
+      "n_low": 636687,
+      "n_review": 6775,
+      "automation_rate": 0.989294,
+      "missed_fraud": {
+        "k": 267,
+        "n": 610,
+        "rate": 0.437705,
+        "ci_low": 0.398847,
+        "ci_high": 0.477342
+      },
+      "recall_outside_low": 0.562295,
+      "fraud_in_low_per_10k_low": 4.1936,
+      "t_low": 0.0017223864640540242,
+      "is_default": false,
+      "missed_fraud_n": 267,
+      "missed_fraud_rate": 0.437705,
+      "missed_fraud_ci_lo": 0.398847,
+      "missed_fraud_ci_hi": 0.477342,
+      "wrongful_autoclose_per_10k": 4.023363,
+      "cost_per_case": {
+        "low": 0.017773,
+        "mid": 0.035546,
+        "high": 0.059207
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.642227,
+        "mid": 3.284454,
+        "high": 5.470793
+      }
+    },
+    {
+      "cut": 0.0017651163858799289,
+      "n_low": 637368,
+      "n_review": 6094,
+      "automation_rate": 0.99032,
+      "missed_fraud": {
+        "k": 267,
+        "n": 610,
+        "rate": 0.437705,
+        "ci_low": 0.398847,
+        "ci_high": 0.477342
+      },
+      "recall_outside_low": 0.562295,
+      "fraud_in_low_per_10k_low": 4.1891,
+      "t_low": 0.0017651163858799289,
+      "is_default": false,
+      "missed_fraud_n": 267,
+      "missed_fraud_rate": 0.437705,
+      "missed_fraud_ci_lo": 0.398847,
+      "missed_fraud_ci_hi": 0.477342,
+      "wrongful_autoclose_per_10k": 4.023363,
+      "cost_per_case": {
+        "low": 0.01607,
+        "mid": 0.032139,
+        "high": 0.053532
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.64393,
+        "mid": 3.287861,
+        "high": 5.476468
+      }
+    },
+    {
+      "cut": 0.0018089063753836474,
+      "n_low": 637984,
+      "n_review": 5478,
+      "automation_rate": 0.991248,
+      "missed_fraud": {
+        "k": 267,
+        "n": 610,
+        "rate": 0.437705,
+        "ci_low": 0.398847,
+        "ci_high": 0.477342
+      },
+      "recall_outside_low": 0.562295,
+      "fraud_in_low_per_10k_low": 4.1851,
+      "t_low": 0.0018089063753836474,
+      "is_default": false,
+      "missed_fraud_n": 267,
+      "missed_fraud_rate": 0.437705,
+      "missed_fraud_ci_lo": 0.398847,
+      "missed_fraud_ci_hi": 0.477342,
+      "wrongful_autoclose_per_10k": 4.023363,
+      "cost_per_case": {
+        "low": 0.014529,
+        "mid": 0.029057,
+        "high": 0.048399
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.645471,
+        "mid": 3.290943,
+        "high": 5.481601
+      }
+    },
+    {
+      "cut": 0.001853782731314008,
+      "n_low": 638514,
+      "n_review": 4948,
+      "automation_rate": 0.992047,
+      "missed_fraud": {
+        "k": 268,
+        "n": 610,
+        "rate": 0.439344,
+        "ci_low": 0.40046,
+        "ci_high": 0.478988
+      },
+      "recall_outside_low": 0.560656,
+      "fraud_in_low_per_10k_low": 4.1972,
+      "t_low": 0.001853782731314008,
+      "is_default": false,
+      "missed_fraud_n": 268,
+      "missed_fraud_rate": 0.439344,
+      "missed_fraud_ci_lo": 0.40046,
+      "missed_fraud_ci_hi": 0.478988,
+      "wrongful_autoclose_per_10k": 4.038431,
+      "cost_per_case": {
+        "low": 0.013203,
+        "mid": 0.026405,
+        "high": 0.043982
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.646797,
+        "mid": 3.293595,
+        "high": 5.486018
+      }
+    },
+    {
+      "cut": 0.001899772404853832,
+      "n_low": 639061,
+      "n_review": 4401,
+      "automation_rate": 0.992871,
+      "missed_fraud": {
+        "k": 268,
+        "n": 610,
+        "rate": 0.439344,
+        "ci_low": 0.40046,
+        "ci_high": 0.478988
+      },
+      "recall_outside_low": 0.560656,
+      "fraud_in_low_per_10k_low": 4.1937,
+      "t_low": 0.001899772404853832,
+      "is_default": false,
+      "missed_fraud_n": 268,
+      "missed_fraud_rate": 0.439344,
+      "missed_fraud_ci_lo": 0.40046,
+      "missed_fraud_ci_hi": 0.478988,
+      "wrongful_autoclose_per_10k": 4.038431,
+      "cost_per_case": {
+        "low": 0.011835,
+        "mid": 0.023669,
+        "high": 0.039424
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.648165,
+        "mid": 3.296331,
+        "high": 5.490576
+      }
+    },
+    {
+      "cut": 0.0019469030158058864,
+      "n_low": 639511,
+      "n_review": 3951,
+      "automation_rate": 0.993549,
+      "missed_fraud": {
+        "k": 269,
+        "n": 610,
+        "rate": 0.440984,
+        "ci_low": 0.402074,
+        "ci_high": 0.480632
+      },
+      "recall_outside_low": 0.559016,
+      "fraud_in_low_per_10k_low": 4.2063,
+      "t_low": 0.0019469030158058864,
+      "is_default": false,
+      "missed_fraud_n": 269,
+      "missed_fraud_rate": 0.440984,
+      "missed_fraud_ci_lo": 0.402074,
+      "missed_fraud_ci_hi": 0.480632,
+      "wrongful_autoclose_per_10k": 4.0535,
+      "cost_per_case": {
+        "low": 0.010709,
+        "mid": 0.021418,
+        "high": 0.035674
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.649291,
+        "mid": 3.298582,
+        "high": 5.494326
+      }
+    },
+    {
+      "cut": 0.001995202869180367,
+      "n_low": 639930,
+      "n_review": 3532,
+      "automation_rate": 0.99418,
+      "missed_fraud": {
+        "k": 269,
+        "n": 610,
+        "rate": 0.440984,
+        "ci_low": 0.402074,
+        "ci_high": 0.480632
+      },
+      "recall_outside_low": 0.559016,
+      "fraud_in_low_per_10k_low": 4.2036,
+      "t_low": 0.001995202869180367,
+      "is_default": false,
+      "missed_fraud_n": 269,
+      "missed_fraud_rate": 0.440984,
+      "missed_fraud_ci_lo": 0.402074,
+      "missed_fraud_ci_hi": 0.480632,
+      "wrongful_autoclose_per_10k": 4.0535,
+      "cost_per_case": {
+        "low": 0.009661,
+        "mid": 0.019321,
+        "high": 0.032183
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.650339,
+        "mid": 3.300679,
+        "high": 5.497817
+      }
+    },
+    {
+      "cut": 0.0020447009721939217,
+      "n_low": 640281,
+      "n_review": 3181,
+      "automation_rate": 0.994709,
+      "missed_fraud": {
+        "k": 269,
+        "n": 610,
+        "rate": 0.440984,
+        "ci_low": 0.402074,
+        "ci_high": 0.480632
+      },
+      "recall_outside_low": 0.559016,
+      "fraud_in_low_per_10k_low": 4.2013,
+      "t_low": 0.0020447009721939217,
+      "is_default": false,
+      "missed_fraud_n": 269,
+      "missed_fraud_rate": 0.440984,
+      "missed_fraud_ci_lo": 0.402074,
+      "missed_fraud_ci_hi": 0.480632,
+      "wrongful_autoclose_per_10k": 4.0535,
+      "cost_per_case": {
+        "low": 0.008783,
+        "mid": 0.017565,
+        "high": 0.029258
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.651217,
+        "mid": 3.302435,
+        "high": 5.500742
+      }
+    },
+    {
+      "cut": 0.002095427051690362,
+      "n_low": 640616,
+      "n_review": 2846,
+      "automation_rate": 0.995214,
+      "missed_fraud": {
+        "k": 269,
+        "n": 610,
+        "rate": 0.440984,
+        "ci_low": 0.402074,
+        "ci_high": 0.480632
+      },
+      "recall_outside_low": 0.559016,
+      "fraud_in_low_per_10k_low": 4.1991,
+      "t_low": 0.002095427051690362,
+      "is_default": false,
+      "missed_fraud_n": 269,
+      "missed_fraud_rate": 0.440984,
+      "missed_fraud_ci_lo": 0.402074,
+      "missed_fraud_ci_hi": 0.480632,
+      "wrongful_autoclose_per_10k": 4.0535,
+      "cost_per_case": {
+        "low": 0.007945,
+        "mid": 0.015889,
+        "high": 0.026466
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.652055,
+        "mid": 3.304111,
+        "high": 5.503534
+      }
+    },
+    {
+      "cut": 0.0021474115719935863,
+      "n_low": 640929,
+      "n_review": 2533,
+      "automation_rate": 0.995686,
+      "missed_fraud": {
+        "k": 269,
+        "n": 610,
+        "rate": 0.440984,
+        "ci_low": 0.402074,
+        "ci_high": 0.480632
+      },
+      "recall_outside_low": 0.559016,
+      "fraud_in_low_per_10k_low": 4.197,
+      "t_low": 0.0021474115719935863,
+      "is_default": false,
+      "missed_fraud_n": 269,
+      "missed_fraud_rate": 0.440984,
+      "missed_fraud_ci_lo": 0.402074,
+      "missed_fraud_ci_hi": 0.480632,
+      "wrongful_autoclose_per_10k": 4.0535,
+      "cost_per_case": {
+        "low": 0.007162,
+        "mid": 0.014323,
+        "high": 0.023858
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.652838,
+        "mid": 3.305677,
+        "high": 5.506142
+      }
+    },
+    {
+      "cut": 0.002200685753203391,
+      "n_low": 641203,
+      "n_review": 2259,
+      "automation_rate": 0.996099,
+      "missed_fraud": {
+        "k": 269,
+        "n": 610,
+        "rate": 0.440984,
+        "ci_low": 0.402074,
+        "ci_high": 0.480632
+      },
+      "recall_outside_low": 0.559016,
+      "fraud_in_low_per_10k_low": 4.1952,
+      "t_low": 0.002200685753203391,
+      "is_default": false,
+      "missed_fraud_n": 269,
+      "missed_fraud_rate": 0.440984,
+      "missed_fraud_ci_lo": 0.402074,
+      "missed_fraud_ci_hi": 0.480632,
+      "wrongful_autoclose_per_10k": 4.0535,
+      "cost_per_case": {
+        "low": 0.006476,
+        "mid": 0.012953,
+        "high": 0.021574
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.653524,
+        "mid": 3.307047,
+        "high": 5.508426
+      }
+    },
+    {
+      "cut": 0.002255281589945179,
+      "n_low": 641441,
+      "n_review": 2021,
+      "automation_rate": 0.996457,
+      "missed_fraud": {
+        "k": 270,
+        "n": 610,
+        "rate": 0.442623,
+        "ci_low": 0.403688,
+        "ci_high": 0.482276
+      },
+      "recall_outside_low": 0.557377,
+      "fraud_in_low_per_10k_low": 4.2093,
+      "t_low": 0.002255281589945179,
+      "is_default": false,
+      "missed_fraud_n": 270,
+      "missed_fraud_rate": 0.442623,
+      "missed_fraud_ci_lo": 0.403688,
+      "missed_fraud_ci_hi": 0.482276,
+      "wrongful_autoclose_per_10k": 4.068569,
+      "cost_per_case": {
+        "low": 0.005881,
+        "mid": 0.011762,
+        "high": 0.019591
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.654119,
+        "mid": 3.308238,
+        "high": 5.510409
+      }
+    },
+    {
+      "cut": 0.0023112318705848303,
+      "n_low": 641656,
+      "n_review": 1806,
+      "automation_rate": 0.996781,
+      "missed_fraud": {
+        "k": 270,
+        "n": 610,
+        "rate": 0.442623,
+        "ci_low": 0.403688,
+        "ci_high": 0.482276
+      },
+      "recall_outside_low": 0.557377,
+      "fraud_in_low_per_10k_low": 4.2079,
+      "t_low": 0.0023112318705848303,
+      "is_default": false,
+      "missed_fraud_n": 270,
+      "missed_fraud_rate": 0.442623,
+      "missed_fraud_ci_lo": 0.403688,
+      "missed_fraud_ci_hi": 0.482276,
+      "wrongful_autoclose_per_10k": 4.068569,
+      "cost_per_case": {
+        "low": 0.005343,
+        "mid": 0.010686,
+        "high": 0.0178
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.654657,
+        "mid": 3.309314,
+        "high": 5.5122
+      }
+    },
+    {
+      "cut": 0.002368570196920242,
+      "n_low": 641867,
+      "n_review": 1595,
+      "automation_rate": 0.997099,
+      "missed_fraud": {
+        "k": 270,
+        "n": 610,
+        "rate": 0.442623,
+        "ci_low": 0.403688,
+        "ci_high": 0.482276
+      },
+      "recall_outside_low": 0.557377,
+      "fraud_in_low_per_10k_low": 4.2065,
+      "t_low": 0.002368570196920242,
+      "is_default": false,
+      "missed_fraud_n": 270,
+      "missed_fraud_rate": 0.442623,
+      "missed_fraud_ci_lo": 0.403688,
+      "missed_fraud_ci_hi": 0.482276,
+      "wrongful_autoclose_per_10k": 4.068569,
+      "cost_per_case": {
+        "low": 0.004815,
+        "mid": 0.009631,
+        "high": 0.016041
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.655185,
+        "mid": 3.310369,
+        "high": 5.513959
+      }
+    },
+    {
+      "cut": 0.0024273310043614192,
+      "n_low": 642041,
+      "n_review": 1421,
+      "automation_rate": 0.997361,
+      "missed_fraud": {
+        "k": 270,
+        "n": 610,
+        "rate": 0.442623,
+        "ci_low": 0.403688,
+        "ci_high": 0.482276
+      },
+      "recall_outside_low": 0.557377,
+      "fraud_in_low_per_10k_low": 4.2053,
+      "t_low": 0.0024273310043614192,
+      "is_default": false,
+      "missed_fraud_n": 270,
+      "missed_fraud_rate": 0.442623,
+      "missed_fraud_ci_lo": 0.403688,
+      "missed_fraud_ci_hi": 0.482276,
+      "wrongful_autoclose_per_10k": 4.068569,
+      "cost_per_case": {
+        "low": 0.00438,
+        "mid": 0.00876,
+        "high": 0.014591
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.65562,
+        "mid": 3.31124,
+        "high": 5.515409
+      }
+    },
+    {
+      "cut": 0.0024875495826111754,
+      "n_low": 642185,
+      "n_review": 1277,
+      "automation_rate": 0.997578,
+      "missed_fraud": {
+        "k": 271,
+        "n": 610,
+        "rate": 0.444262,
+        "ci_low": 0.405302,
+        "ci_high": 0.48392
+      },
+      "recall_outside_low": 0.555738,
+      "fraud_in_low_per_10k_low": 4.22,
+      "t_low": 0.0024875495826111754,
+      "is_default": false,
+      "missed_fraud_n": 271,
+      "missed_fraud_rate": 0.444262,
+      "missed_fraud_ci_lo": 0.405302,
+      "missed_fraud_ci_hi": 0.48392,
+      "wrongful_autoclose_per_10k": 4.083638,
+      "cost_per_case": {
+        "low": 0.00402,
+        "mid": 0.00804,
+        "high": 0.013391
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.65598,
+        "mid": 3.31196,
+        "high": 5.516609
+      }
+    },
+    {
+      "cut": 0.002549262096858909,
+      "n_low": 642328,
+      "n_review": 1134,
+      "automation_rate": 0.997794,
+      "missed_fraud": {
+        "k": 271,
+        "n": 610,
+        "rate": 0.444262,
+        "ci_low": 0.405302,
+        "ci_high": 0.48392
+      },
+      "recall_outside_low": 0.555738,
+      "fraud_in_low_per_10k_low": 4.219,
+      "t_low": 0.002549262096858909,
+      "is_default": false,
+      "missed_fraud_n": 271,
+      "missed_fraud_rate": 0.444262,
+      "missed_fraud_ci_lo": 0.405302,
+      "missed_fraud_ci_hi": 0.48392,
+      "wrongful_autoclose_per_10k": 4.083638,
+      "cost_per_case": {
+        "low": 0.003662,
+        "mid": 0.007324,
+        "high": 0.0122
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.656338,
+        "mid": 3.312676,
+        "high": 5.5178
+      }
+    },
+    {
+      "cut": 0.002612505609500161,
+      "n_low": 642473,
+      "n_review": 989,
+      "automation_rate": 0.998012,
+      "missed_fraud": {
+        "k": 272,
+        "n": 610,
+        "rate": 0.445902,
+        "ci_low": 0.406917,
+        "ci_high": 0.485563
+      },
+      "recall_outside_low": 0.554098,
+      "fraud_in_low_per_10k_low": 4.2336,
+      "t_low": 0.002612505609500161,
+      "is_default": false,
+      "missed_fraud_n": 272,
+      "missed_fraud_rate": 0.445902,
+      "missed_fraud_ci_lo": 0.406917,
+      "missed_fraud_ci_hi": 0.485563,
+      "wrongful_autoclose_per_10k": 4.098706,
+      "cost_per_case": {
+        "low": 0.003299,
+        "mid": 0.006599,
+        "high": 0.010991
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.656701,
+        "mid": 3.313401,
+        "high": 5.519009
+      }
+    },
+    {
+      "cut": 0.0026773181023950036,
+      "n_low": 642595,
+      "n_review": 867,
+      "automation_rate": 0.998196,
+      "missed_fraud": {
+        "k": 272,
+        "n": 610,
+        "rate": 0.445902,
+        "ci_low": 0.406917,
+        "ci_high": 0.485563
+      },
+      "recall_outside_low": 0.554098,
+      "fraud_in_low_per_10k_low": 4.2328,
+      "t_low": 0.0026773181023950036,
+      "is_default": false,
+      "missed_fraud_n": 272,
+      "missed_fraud_rate": 0.445902,
+      "missed_fraud_ci_lo": 0.406917,
+      "missed_fraud_ci_hi": 0.485563,
+      "wrongful_autoclose_per_10k": 4.098706,
+      "cost_per_case": {
+        "low": 0.002994,
+        "mid": 0.005989,
+        "high": 0.009975
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.657006,
+        "mid": 3.314011,
+        "high": 5.520025
+      }
+    },
+    {
+      "cut": 0.0027437384996786356,
+      "n_low": 642693,
+      "n_review": 769,
+      "automation_rate": 0.998344,
+      "missed_fraud": {
+        "k": 272,
+        "n": 610,
+        "rate": 0.445902,
+        "ci_low": 0.406917,
+        "ci_high": 0.485563
+      },
+      "recall_outside_low": 0.554098,
+      "fraud_in_low_per_10k_low": 4.2322,
+      "t_low": 0.0027437384996786356,
+      "is_default": false,
+      "missed_fraud_n": 272,
+      "missed_fraud_rate": 0.445902,
+      "missed_fraud_ci_lo": 0.406917,
+      "missed_fraud_ci_hi": 0.485563,
+      "wrongful_autoclose_per_10k": 4.098706,
+      "cost_per_case": {
+        "low": 0.002749,
+        "mid": 0.005498,
+        "high": 0.009158
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.657251,
+        "mid": 3.314502,
+        "high": 5.520842
+      }
+    },
+    {
+      "cut": 0.0028118066911378492,
+      "n_low": 642783,
+      "n_review": 679,
+      "automation_rate": 0.99848,
+      "missed_fraud": {
+        "k": 272,
+        "n": 610,
+        "rate": 0.445902,
+        "ci_low": 0.406917,
+        "ci_high": 0.485563
+      },
+      "recall_outside_low": 0.554098,
+      "fraud_in_low_per_10k_low": 4.2316,
+      "t_low": 0.0028118066911378492,
+      "is_default": false,
+      "missed_fraud_n": 272,
+      "missed_fraud_rate": 0.445902,
+      "missed_fraud_ci_lo": 0.406917,
+      "missed_fraud_ci_hi": 0.485563,
+      "wrongful_autoclose_per_10k": 4.098706,
+      "cost_per_case": {
+        "low": 0.002524,
+        "mid": 0.005048,
+        "high": 0.008408
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.657476,
+        "mid": 3.314952,
+        "high": 5.521592
+      }
+    },
+    {
+      "cut": 0.002881563556167478,
+      "n_low": 642864,
+      "n_review": 598,
+      "automation_rate": 0.998602,
+      "missed_fraud": {
+        "k": 272,
+        "n": 610,
+        "rate": 0.445902,
+        "ci_low": 0.406917,
+        "ci_high": 0.485563
+      },
+      "recall_outside_low": 0.554098,
+      "fraud_in_low_per_10k_low": 4.2311,
+      "t_low": 0.002881563556167478,
+      "is_default": false,
+      "missed_fraud_n": 272,
+      "missed_fraud_rate": 0.445902,
+      "missed_fraud_ci_lo": 0.406917,
+      "missed_fraud_ci_hi": 0.485563,
+      "wrongful_autoclose_per_10k": 4.098706,
+      "cost_per_case": {
+        "low": 0.002321,
+        "mid": 0.004643,
+        "high": 0.007733
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.657679,
+        "mid": 3.315357,
+        "high": 5.522267
+      }
+    },
+    {
+      "cut": 0.0029530509883211194,
+      "n_low": 642927,
+      "n_review": 535,
+      "automation_rate": 0.998697,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2462,
+      "t_low": 0.0029530509883211194,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.002164,
+        "mid": 0.004328,
+        "high": 0.007208
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.657836,
+        "mid": 3.315672,
+        "high": 5.522792
+      }
+    },
+    {
+      "cut": 0.003026311920470963,
+      "n_low": 642982,
+      "n_review": 480,
+      "automation_rate": 0.998779,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2458,
+      "t_low": 0.003026311920470963,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.002026,
+        "mid": 0.004052,
+        "high": 0.00675
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.657974,
+        "mid": 3.315948,
+        "high": 5.52325
+      }
+    },
+    {
+      "cut": 0.003101390350591784,
+      "n_low": 643026,
+      "n_review": 436,
+      "automation_rate": 0.998846,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2456,
+      "t_low": 0.003101390350591784,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001916,
+        "mid": 0.003832,
+        "high": 0.006383
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658084,
+        "mid": 3.316168,
+        "high": 5.523617
+      }
+    },
+    {
+      "cut": 0.0031783313681845926,
+      "n_low": 643072,
+      "n_review": 390,
+      "automation_rate": 0.998915,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2452,
+      "t_low": 0.0031783313681845926,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001801,
+        "mid": 0.003602,
+        "high": 0.006
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658199,
+        "mid": 3.316398,
+        "high": 5.524
+      }
+    },
+    {
+      "cut": 0.003257181181355842,
+      "n_low": 643114,
+      "n_review": 348,
+      "automation_rate": 0.998978,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.245,
+      "t_low": 0.003257181181355842,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001696,
+        "mid": 0.003392,
+        "high": 0.00565
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658304,
+        "mid": 3.316608,
+        "high": 5.52435
+      }
+    },
+    {
+      "cut": 0.003337987144568388,
+      "n_low": 643154,
+      "n_review": 308,
+      "automation_rate": 0.999039,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2447,
+      "t_low": 0.003337987144568388,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001596,
+        "mid": 0.003192,
+        "high": 0.005317
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658404,
+        "mid": 3.316808,
+        "high": 5.524683
+      }
+    },
+    {
+      "cut": 0.0034207977870809665,
+      "n_low": 643183,
+      "n_review": 279,
+      "automation_rate": 0.999082,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2445,
+      "t_low": 0.0034207977870809665,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001523,
+        "mid": 0.003047,
+        "high": 0.005075
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658477,
+        "mid": 3.316953,
+        "high": 5.524925
+      }
+    },
+    {
+      "cut": 0.003505662842093157,
+      "n_low": 643207,
+      "n_review": 255,
+      "automation_rate": 0.999118,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2444,
+      "t_low": 0.003505662842093157,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001463,
+        "mid": 0.002927,
+        "high": 0.004875
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658537,
+        "mid": 3.317073,
+        "high": 5.525125
+      }
+    },
+    {
+      "cut": 0.0035926332766134323,
+      "n_low": 643228,
+      "n_review": 234,
+      "automation_rate": 0.99915,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2442,
+      "t_low": 0.0035926332766134323,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001411,
+        "mid": 0.002822,
+        "high": 0.0047
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658589,
+        "mid": 3.317178,
+        "high": 5.5253
+      }
+    },
+    {
+      "cut": 0.003681761322068172,
+      "n_low": 643246,
+      "n_review": 216,
+      "automation_rate": 0.999177,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2441,
+      "t_low": 0.003681761322068172,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001366,
+        "mid": 0.002732,
+        "high": 0.00455
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658634,
+        "mid": 3.317268,
+        "high": 5.52545
+      }
+    },
+    {
+      "cut": 0.0037731005056700416,
+      "n_low": 643259,
+      "n_review": 203,
+      "automation_rate": 0.999197,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.244,
+      "t_low": 0.0037731005056700416,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001333,
+        "mid": 0.002667,
+        "high": 0.004442
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658667,
+        "mid": 3.317333,
+        "high": 5.525558
+      }
+    },
+    {
+      "cut": 0.0038667056825645954,
+      "n_low": 643268,
+      "n_review": 194,
+      "automation_rate": 0.99921,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.244,
+      "t_low": 0.0038667056825645954,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001311,
+        "mid": 0.002622,
+        "high": 0.004367
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658689,
+        "mid": 3.317378,
+        "high": 5.525633
+      }
+    },
+    {
+      "cut": 0.0039626330687743475,
+      "n_low": 643290,
+      "n_review": 172,
+      "automation_rate": 0.999244,
+      "missed_fraud": {
+        "k": 273,
+        "n": 610,
+        "rate": 0.447541,
+        "ci_low": 0.408532,
+        "ci_high": 0.487206
+      },
+      "recall_outside_low": 0.552459,
+      "fraud_in_low_per_10k_low": 4.2438,
+      "t_low": 0.0039626330687743475,
+      "is_default": false,
+      "missed_fraud_n": 273,
+      "missed_fraud_rate": 0.447541,
+      "missed_fraud_ci_lo": 0.408532,
+      "missed_fraud_ci_hi": 0.487206,
+      "wrongful_autoclose_per_10k": 4.113775,
+      "cost_per_case": {
+        "low": 0.001256,
+        "mid": 0.002511,
+        "high": 0.004183
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658744,
+        "mid": 3.317489,
+        "high": 5.525817
+      }
+    },
+    {
+      "cut": 0.004060940274960195,
+      "n_low": 643299,
+      "n_review": 163,
+      "automation_rate": 0.999257,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2593,
+      "t_low": 0.004060940274960195,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001233,
+        "mid": 0.002466,
+        "high": 0.004108
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658767,
+        "mid": 3.317534,
+        "high": 5.525892
+      }
+    },
+    {
+      "cut": 0.004161686341020358,
+      "n_low": 643311,
+      "n_review": 151,
+      "automation_rate": 0.999275,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2592,
+      "t_low": 0.004161686341020358,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001203,
+        "mid": 0.002406,
+        "high": 0.004008
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658797,
+        "mid": 3.317594,
+        "high": 5.525992
+      }
+    },
+    {
+      "cut": 0.004264931771547706,
+      "n_low": 643320,
+      "n_review": 142,
+      "automation_rate": 0.999289,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2592,
+      "t_low": 0.004264931771547706,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001181,
+        "mid": 0.002361,
+        "high": 0.003933
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658819,
+        "mid": 3.317639,
+        "high": 5.526067
+      }
+    },
+    {
+      "cut": 0.004370738572166719,
+      "n_low": 643324,
+      "n_review": 138,
+      "automation_rate": 0.999295,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2591,
+      "t_low": 0.004370738572166719,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001171,
+        "mid": 0.002341,
+        "high": 0.0039
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658829,
+        "mid": 3.317659,
+        "high": 5.5261
+      }
+    },
+    {
+      "cut": 0.004479170286771909,
+      "n_low": 643334,
+      "n_review": 128,
+      "automation_rate": 0.99931,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2591,
+      "t_low": 0.004479170286771909,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001146,
+        "mid": 0.002291,
+        "high": 0.003817
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658854,
+        "mid": 3.317709,
+        "high": 5.526183
+      }
+    },
+    {
+      "cut": 0.004590292035690082,
+      "n_low": 643340,
+      "n_review": 122,
+      "automation_rate": 0.999319,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.259,
+      "t_low": 0.004590292035690082,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001131,
+        "mid": 0.002261,
+        "high": 0.003767
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658869,
+        "mid": 3.317739,
+        "high": 5.526233
+      }
+    },
+    {
+      "cut": 0.004704170554789353,
+      "n_low": 643345,
+      "n_review": 117,
+      "automation_rate": 0.999326,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.259,
+      "t_low": 0.004704170554789353,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001118,
+        "mid": 0.002236,
+        "high": 0.003725
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658882,
+        "mid": 3.317764,
+        "high": 5.526275
+      }
+    },
+    {
+      "cut": 0.00482087423555839,
+      "n_low": 643347,
+      "n_review": 115,
+      "automation_rate": 0.999329,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.259,
+      "t_low": 0.00482087423555839,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001113,
+        "mid": 0.002226,
+        "high": 0.003708
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658887,
+        "mid": 3.317774,
+        "high": 5.526292
+      }
+    },
+    {
+      "cut": 0.0049404731661799595,
+      "n_low": 643353,
+      "n_review": 109,
+      "automation_rate": 0.999338,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2589,
+      "t_low": 0.0049404731661799595,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001098,
+        "mid": 0.002196,
+        "high": 0.003658
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658902,
+        "mid": 3.317804,
+        "high": 5.526342
+      }
+    },
+    {
+      "cut": 0.005063039173623471,
+      "n_low": 643360,
+      "n_review": 102,
+      "automation_rate": 0.999349,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2589,
+      "t_low": 0.005063039173623471,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001081,
+        "mid": 0.002161,
+        "high": 0.0036
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658919,
+        "mid": 3.317839,
+        "high": 5.5264
+      }
+    },
+    {
+      "cut": 0.00518864586678176,
+      "n_low": 643361,
+      "n_review": 101,
+      "automation_rate": 0.999351,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2589,
+      "t_low": 0.00518864586678176,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001078,
+        "mid": 0.002156,
+        "high": 0.003592
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658922,
+        "mid": 3.317844,
+        "high": 5.526408
+      }
+    },
+    {
+      "cut": 0.005317368680678034,
+      "n_low": 643362,
+      "n_review": 100,
+      "automation_rate": 0.999352,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2589,
+      "t_low": 0.005317368680678034,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001076,
+        "mid": 0.002151,
+        "high": 0.003583
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658924,
+        "mid": 3.317849,
+        "high": 5.526417
+      }
+    },
+    {
+      "cut": 0.0054492849217695274,
+      "n_low": 643364,
+      "n_review": 98,
+      "automation_rate": 0.999355,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2589,
+      "t_low": 0.0054492849217695274,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001071,
+        "mid": 0.002141,
+        "high": 0.003567
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658929,
+        "mid": 3.317859,
+        "high": 5.526433
+      }
+    },
+    {
+      "cut": 0.005584473814375101,
+      "n_low": 643365,
+      "n_review": 97,
+      "automation_rate": 0.999357,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2589,
+      "t_low": 0.005584473814375101,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001068,
+        "mid": 0.002136,
+        "high": 0.003558
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658932,
+        "mid": 3.317864,
+        "high": 5.526442
+      }
+    },
+    {
+      "cut": 0.005723016548254577,
+      "n_low": 643365,
+      "n_review": 97,
+      "automation_rate": 0.999357,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2589,
+      "t_low": 0.005723016548254577,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001068,
+        "mid": 0.002136,
+        "high": 0.003558
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658932,
+        "mid": 3.317864,
+        "high": 5.526442
+      }
+    },
+    {
+      "cut": 0.0058649963273685445,
+      "n_low": 643368,
+      "n_review": 94,
+      "automation_rate": 0.999361,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.0058649963273685445,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001061,
+        "mid": 0.002121,
+        "high": 0.003533
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658939,
+        "mid": 3.317879,
+        "high": 5.526467
+      }
+    },
+    {
+      "cut": 0.006010498419847724,
+      "n_low": 643368,
+      "n_review": 94,
+      "automation_rate": 0.999361,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.006010498419847724,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001061,
+        "mid": 0.002121,
+        "high": 0.003533
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658939,
+        "mid": 3.317879,
+        "high": 5.526467
+      }
+    },
+    {
+      "cut": 0.006159610209202079,
+      "n_low": 643368,
+      "n_review": 94,
+      "automation_rate": 0.999361,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.006159610209202079,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001061,
+        "mid": 0.002121,
+        "high": 0.003533
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658939,
+        "mid": 3.317879,
+        "high": 5.526467
+      }
+    },
+    {
+      "cut": 0.006312421246800313,
+      "n_low": 643368,
+      "n_review": 94,
+      "automation_rate": 0.999361,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.006312421246800313,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001061,
+        "mid": 0.002121,
+        "high": 0.003533
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658939,
+        "mid": 3.317879,
+        "high": 5.526467
+      }
+    },
+    {
+      "cut": 0.006469023305651308,
+      "n_low": 643369,
+      "n_review": 93,
+      "automation_rate": 0.999363,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.006469023305651308,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001058,
+        "mid": 0.002116,
+        "high": 0.003525
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658942,
+        "mid": 3.317884,
+        "high": 5.526475
+      }
+    },
+    {
+      "cut": 0.006629510435519837,
+      "n_low": 643370,
+      "n_review": 92,
+      "automation_rate": 0.999364,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.006629510435519837,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001056,
+        "mid": 0.002111,
+        "high": 0.003517
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658944,
+        "mid": 3.317889,
+        "high": 5.526483
+      }
+    },
+    {
+      "cut": 0.006793979019409546,
+      "n_low": 643370,
+      "n_review": 92,
+      "automation_rate": 0.999364,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.006793979019409546,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001056,
+        "mid": 0.002111,
+        "high": 0.003517
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658944,
+        "mid": 3.317889,
+        "high": 5.526483
+      }
+    },
+    {
+      "cut": 0.006962527831447296,
+      "n_low": 643370,
+      "n_review": 92,
+      "automation_rate": 0.999364,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.006962527831447296,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001056,
+        "mid": 0.002111,
+        "high": 0.003517
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658944,
+        "mid": 3.317889,
+        "high": 5.526483
+      }
+    },
+    {
+      "cut": 0.007135258096203427,
+      "n_low": 643370,
+      "n_review": 92,
+      "automation_rate": 0.999364,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.007135258096203427,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001056,
+        "mid": 0.002111,
+        "high": 0.003517
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658944,
+        "mid": 3.317889,
+        "high": 5.526483
+      }
+    },
+    {
+      "cut": 0.0073122735494837564,
+      "n_low": 643370,
+      "n_review": 92,
+      "automation_rate": 0.999364,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.0073122735494837564,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001056,
+        "mid": 0.002111,
+        "high": 0.003517
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658944,
+        "mid": 3.317889,
+        "high": 5.526483
+      }
+    },
+    {
+      "cut": 0.007493680500629693,
+      "n_low": 643370,
+      "n_review": 92,
+      "automation_rate": 0.999364,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.007493680500629693,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001056,
+        "mid": 0.002111,
+        "high": 0.003517
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658944,
+        "mid": 3.317889,
+        "high": 5.526483
+      }
+    },
+    {
+      "cut": 0.007679587896363938,
+      "n_low": 643371,
+      "n_review": 91,
+      "automation_rate": 0.999366,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.007679587896363938,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001053,
+        "mid": 0.002106,
+        "high": 0.003508
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658947,
+        "mid": 3.317894,
+        "high": 5.526492
+      }
+    },
+    {
+      "cut": 0.007870107386220137,
+      "n_low": 643373,
+      "n_review": 89,
+      "automation_rate": 0.999369,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.007870107386220137,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001048,
+        "mid": 0.002096,
+        "high": 0.003492
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658952,
+        "mid": 3.317904,
+        "high": 5.526508
+      }
+    },
+    {
+      "cut": 0.008065353389595659,
+      "n_low": 643375,
+      "n_review": 87,
+      "automation_rate": 0.999372,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.008065353389595659,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001043,
+        "mid": 0.002086,
+        "high": 0.003475
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658957,
+        "mid": 3.317914,
+        "high": 5.526525
+      }
+    },
+    {
+      "cut": 0.008265443164467989,
+      "n_low": 643375,
+      "n_review": 87,
+      "automation_rate": 0.999372,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.008265443164467989,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001043,
+        "mid": 0.002086,
+        "high": 0.003475
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658957,
+        "mid": 3.317914,
+        "high": 5.526525
+      }
+    },
+    {
+      "cut": 0.008470496877815736,
+      "n_low": 643376,
+      "n_review": 86,
+      "automation_rate": 0.999373,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.008470496877815736,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001041,
+        "mid": 0.002081,
+        "high": 0.003467
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658959,
+        "mid": 3.317919,
+        "high": 5.526533
+      }
+    },
+    {
+      "cut": 0.008680637677786795,
+      "n_low": 643376,
+      "n_review": 86,
+      "automation_rate": 0.999373,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.008680637677786795,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001041,
+        "mid": 0.002081,
+        "high": 0.003467
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658959,
+        "mid": 3.317919,
+        "high": 5.526533
+      }
+    },
+    {
+      "cut": 0.008895991767656836,
+      "n_low": 643376,
+      "n_review": 86,
+      "automation_rate": 0.999373,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.008895991767656836,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001041,
+        "mid": 0.002081,
+        "high": 0.003467
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658959,
+        "mid": 3.317919,
+        "high": 5.526533
+      }
+    },
+    {
+      "cut": 0.00911668848162261,
+      "n_low": 643376,
+      "n_review": 86,
+      "automation_rate": 0.999373,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.00911668848162261,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001041,
+        "mid": 0.002081,
+        "high": 0.003467
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658959,
+        "mid": 3.317919,
+        "high": 5.526533
+      }
+    },
+    {
+      "cut": 0.009342860362475617,
+      "n_low": 643377,
+      "n_review": 85,
+      "automation_rate": 0.999375,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.009342860362475617,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001038,
+        "mid": 0.002076,
+        "high": 0.003458
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658962,
+        "mid": 3.317924,
+        "high": 5.526542
+      }
+    },
+    {
+      "cut": 0.009574643241202645,
+      "n_low": 643377,
+      "n_review": 85,
+      "automation_rate": 0.999375,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.009574643241202645,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001038,
+        "mid": 0.002076,
+        "high": 0.003458
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658962,
+        "mid": 3.317924,
+        "high": 5.526542
+      }
+    },
+    {
+      "cut": 0.009812176318561225,
+      "n_low": 643377,
+      "n_review": 85,
+      "automation_rate": 0.999375,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.009812176318561225,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001038,
+        "mid": 0.002076,
+        "high": 0.003458
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658962,
+        "mid": 3.317924,
+        "high": 5.526542
+      }
+    },
+    {
+      "cut": 0.010055602248678708,
+      "n_low": 643379,
+      "n_review": 83,
+      "automation_rate": 0.999378,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.010055602248678708,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001033,
+        "mid": 0.002066,
+        "high": 0.003442
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658967,
+        "mid": 3.317934,
+        "high": 5.526558
+      }
+    },
+    {
+      "cut": 0.010305067224725422,
+      "n_low": 643380,
+      "n_review": 82,
+      "automation_rate": 0.999379,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2588,
+      "t_low": 0.010305067224725422,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001031,
+        "mid": 0.002061,
+        "high": 0.003433
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658969,
+        "mid": 3.317939,
+        "high": 5.526567
+      }
+    },
+    {
+      "cut": 0.010560721066713233,
+      "n_low": 643382,
+      "n_review": 80,
+      "automation_rate": 0.999382,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2587,
+      "t_low": 0.010560721066713233,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001026,
+        "mid": 0.002051,
+        "high": 0.003417
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658974,
+        "mid": 3.317949,
+        "high": 5.526583
+      }
+    },
+    {
+      "cut": 0.0108227173114722,
+      "n_low": 643386,
+      "n_review": 76,
+      "automation_rate": 0.999388,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2587,
+      "t_low": 0.0108227173114722,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001016,
+        "mid": 0.002031,
+        "high": 0.003383
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658984,
+        "mid": 3.317969,
+        "high": 5.526617
+      }
+    },
+    {
+      "cut": 0.011091213304859527,
+      "n_low": 643389,
+      "n_review": 73,
+      "automation_rate": 0.999393,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2587,
+      "t_low": 0.011091213304859527,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001008,
+        "mid": 0.002016,
+        "high": 0.003358
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658992,
+        "mid": 3.317984,
+        "high": 5.526642
+      }
+    },
+    {
+      "cut": 0.011366370296255974,
+      "n_low": 643390,
+      "n_review": 72,
+      "automation_rate": 0.999394,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2587,
+      "t_low": 0.011366370296255974,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001006,
+        "mid": 0.002011,
+        "high": 0.00335
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658994,
+        "mid": 3.317989,
+        "high": 5.52665
+      }
+    },
+    {
+      "cut": 0.01164835353540669,
+      "n_low": 643392,
+      "n_review": 70,
+      "automation_rate": 0.999397,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2587,
+      "t_low": 0.01164835353540669,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.001001,
+        "mid": 0.002001,
+        "high": 0.003333
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.658999,
+        "mid": 3.317999,
+        "high": 5.526667
+      }
+    },
+    {
+      "cut": 0.01193733237166443,
+      "n_low": 643393,
+      "n_review": 69,
+      "automation_rate": 0.999399,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2587,
+      "t_low": 0.01193733237166443,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000998,
+        "mid": 0.001996,
+        "high": 0.003325
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659002,
+        "mid": 3.318004,
+        "high": 5.526675
+      }
+    },
+    {
+      "cut": 0.012233480355694954,
+      "n_low": 643395,
+      "n_review": 67,
+      "automation_rate": 0.999402,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2587,
+      "t_low": 0.012233480355694954,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000993,
+        "mid": 0.001986,
+        "high": 0.003308
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659007,
+        "mid": 3.318014,
+        "high": 5.526692
+      }
+    },
+    {
+      "cut": 0.012536975343705485,
+      "n_low": 643398,
+      "n_review": 64,
+      "automation_rate": 0.999406,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2586,
+      "t_low": 0.012536975343705485,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000986,
+        "mid": 0.001971,
+        "high": 0.003283
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659014,
+        "mid": 3.318029,
+        "high": 5.526717
+      }
+    },
+    {
+      "cut": 0.012847999604259017,
+      "n_low": 643402,
+      "n_review": 60,
+      "automation_rate": 0.999412,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2586,
+      "t_low": 0.012847999604259017,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000976,
+        "mid": 0.001951,
+        "high": 0.00325
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659024,
+        "mid": 3.318049,
+        "high": 5.52675
+      }
+    },
+    {
+      "cut": 0.013166739927738487,
+      "n_low": 643405,
+      "n_review": 57,
+      "automation_rate": 0.999417,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2586,
+      "t_low": 0.013166739927738487,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000968,
+        "mid": 0.001936,
+        "high": 0.003225
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659032,
+        "mid": 3.318064,
+        "high": 5.526775
+      }
+    },
+    {
+      "cut": 0.013493387738526569,
+      "n_low": 643406,
+      "n_review": 56,
+      "automation_rate": 0.999418,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2586,
+      "t_low": 0.013493387738526569,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000966,
+        "mid": 0.001931,
+        "high": 0.003217
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659034,
+        "mid": 3.318069,
+        "high": 5.526783
+      }
+    },
+    {
+      "cut": 0.013828139209968565,
+      "n_low": 643408,
+      "n_review": 54,
+      "automation_rate": 0.999421,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2586,
+      "t_low": 0.013828139209968565,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000961,
+        "mid": 0.001921,
+        "high": 0.0032
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659039,
+        "mid": 3.318079,
+        "high": 5.5268
+      }
+    },
+    {
+      "cut": 0.014171195382187262,
+      "n_low": 643417,
+      "n_review": 45,
+      "automation_rate": 0.999435,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2585,
+      "t_low": 0.014171195382187262,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000938,
+        "mid": 0.001876,
+        "high": 0.003125
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659062,
+        "mid": 3.318124,
+        "high": 5.526875
+      }
+    },
+    {
+      "cut": 0.014522762282820713,
+      "n_low": 643420,
+      "n_review": 42,
+      "automation_rate": 0.999439,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2585,
+      "t_low": 0.014522762282820713,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000931,
+        "mid": 0.001861,
+        "high": 0.0031
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659069,
+        "mid": 3.318139,
+        "high": 5.5269
+      }
+    },
+    {
+      "cut": 0.014883051050755228,
+      "n_low": 643422,
+      "n_review": 40,
+      "automation_rate": 0.999442,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2585,
+      "t_low": 0.014883051050755228,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000926,
+        "mid": 0.001851,
+        "high": 0.003083
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659074,
+        "mid": 3.318149,
+        "high": 5.526917
+      }
+    },
+    {
+      "cut": 0.015252278062928124,
+      "n_low": 643426,
+      "n_review": 36,
+      "automation_rate": 0.999448,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2585,
+      "t_low": 0.015252278062928124,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000916,
+        "mid": 0.001831,
+        "high": 0.00305
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659084,
+        "mid": 3.318169,
+        "high": 5.52695
+      }
+    },
+    {
+      "cut": 0.015630665064276177,
+      "n_low": 643431,
+      "n_review": 31,
+      "automation_rate": 0.999456,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2584,
+      "t_low": 0.015630665064276177,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000903,
+        "mid": 0.001806,
+        "high": 0.003008
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659097,
+        "mid": 3.318194,
+        "high": 5.526992
+      }
+    },
+    {
+      "cut": 0.016018439300907926,
+      "n_low": 643434,
+      "n_review": 28,
+      "automation_rate": 0.999461,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2584,
+      "t_low": 0.016018439300907926,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000896,
+        "mid": 0.001791,
+        "high": 0.002983
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659104,
+        "mid": 3.318209,
+        "high": 5.527017
+      }
+    },
+    {
+      "cut": 0.01641583365657985,
+      "n_low": 643436,
+      "n_review": 26,
+      "automation_rate": 0.999464,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2584,
+      "t_low": 0.01641583365657985,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000891,
+        "mid": 0.001781,
+        "high": 0.002967
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659109,
+        "mid": 3.318219,
+        "high": 5.527033
+      }
+    },
+    {
+      "cut": 0.016823086792558218,
+      "n_low": 643438,
+      "n_review": 24,
+      "automation_rate": 0.999467,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2584,
+      "t_low": 0.016823086792558218,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000886,
+        "mid": 0.001771,
+        "high": 0.00295
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659114,
+        "mid": 3.318229,
+        "high": 5.52705
+      }
+    },
+    {
+      "cut": 0.01724044329095083,
+      "n_low": 643443,
+      "n_review": 19,
+      "automation_rate": 0.999474,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.01724044329095083,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000873,
+        "mid": 0.001746,
+        "high": 0.002908
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659127,
+        "mid": 3.318254,
+        "high": 5.527092
+      }
+    },
+    {
+      "cut": 0.01766815380159448,
+      "n_low": 643445,
+      "n_review": 17,
+      "automation_rate": 0.999477,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.01766815380159448,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000868,
+        "mid": 0.001736,
+        "high": 0.002892
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659132,
+        "mid": 3.318264,
+        "high": 5.527108
+      }
+    },
+    {
+      "cut": 0.01810647519258661,
+      "n_low": 643447,
+      "n_review": 15,
+      "automation_rate": 0.99948,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.01810647519258661,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000863,
+        "mid": 0.001726,
+        "high": 0.002875
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659137,
+        "mid": 3.318274,
+        "high": 5.527125
+      }
+    },
+    {
+      "cut": 0.01855567070455136,
+      "n_low": 643448,
+      "n_review": 14,
+      "automation_rate": 0.999482,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.01855567070455136,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000861,
+        "mid": 0.001721,
+        "high": 0.002867
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659139,
+        "mid": 3.318279,
+        "high": 5.527133
+      }
+    },
+    {
+      "cut": 0.019016010108732734,
+      "n_low": 643451,
+      "n_review": 11,
+      "automation_rate": 0.999486,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.019016010108732734,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000853,
+        "mid": 0.001706,
+        "high": 0.002842
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659147,
+        "mid": 3.318294,
+        "high": 5.527158
+      }
+    },
+    {
+      "cut": 0.0194877698690099,
+      "n_low": 643452,
+      "n_review": 10,
+      "automation_rate": 0.999488,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.0194877698690099,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000851,
+        "mid": 0.001701,
+        "high": 0.002833
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659149,
+        "mid": 3.318299,
+        "high": 5.527167
+      }
+    },
+    {
+      "cut": 0.019971233307931744,
+      "n_low": 643454,
+      "n_review": 8,
+      "automation_rate": 0.999491,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.019971233307931744,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000846,
+        "mid": 0.001691,
+        "high": 0.002817
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659154,
+        "mid": 3.318309,
+        "high": 5.527183
+      }
+    },
+    {
+      "cut": 0.020466690776870643,
+      "n_low": 643456,
+      "n_review": 6,
+      "automation_rate": 0.999494,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.020466690776870643,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000841,
+        "mid": 0.001681,
+        "high": 0.0028
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659159,
+        "mid": 3.318319,
+        "high": 5.5272
+      }
+    },
+    {
+      "cut": 0.020974439830397353,
+      "n_low": 643456,
+      "n_review": 6,
+      "automation_rate": 0.999494,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.020974439830397353,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000841,
+        "mid": 0.001681,
+        "high": 0.0028
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659159,
+        "mid": 3.318319,
+        "high": 5.5272
+      }
+    },
+    {
+      "cut": 0.02149478540498198,
+      "n_low": 643456,
+      "n_review": 6,
+      "automation_rate": 0.999494,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.02149478540498198,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000841,
+        "mid": 0.001681,
+        "high": 0.0028
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659159,
+        "mid": 3.318319,
+        "high": 5.5272
+      }
+    },
+    {
+      "cut": 0.022028040002128345,
+      "n_low": 643456,
+      "n_review": 6,
+      "automation_rate": 0.999494,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.022028040002128345,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000841,
+        "mid": 0.001681,
+        "high": 0.0028
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659159,
+        "mid": 3.318319,
+        "high": 5.5272
+      }
+    },
+    {
+      "cut": 0.02257452387605138,
+      "n_low": 643456,
+      "n_review": 6,
+      "automation_rate": 0.999494,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2583,
+      "t_low": 0.02257452387605138,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000841,
+        "mid": 0.001681,
+        "high": 0.0028
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659159,
+        "mid": 3.318319,
+        "high": 5.5272
+      }
+    },
+    {
+      "cut": 0.023134565226010803,
+      "n_low": 643458,
+      "n_review": 4,
+      "automation_rate": 0.999497,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2582,
+      "t_low": 0.023134565226010803,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000836,
+        "mid": 0.001671,
+        "high": 0.002783
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659164,
+        "mid": 3.318329,
+        "high": 5.527217
+      }
+    },
+    {
+      "cut": 0.023708500393416255,
+      "n_low": 643460,
+      "n_review": 2,
+      "automation_rate": 0.9995,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2582,
+      "t_low": 0.023708500393416255,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000831,
+        "mid": 0.001661,
+        "high": 0.002767
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659169,
+        "mid": 3.318339,
+        "high": 5.527233
+      }
+    },
+    {
+      "cut": 0.024296674063822164,
+      "n_low": 643461,
+      "n_review": 1,
+      "automation_rate": 0.999501,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2582,
+      "t_low": 0.024296674063822164,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000828,
+        "mid": 0.001656,
+        "high": 0.002758
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659172,
+        "mid": 3.318344,
+        "high": 5.527242
+      }
+    },
+    {
+      "cut": 0.024899439473934002,
+      "n_low": 643461,
+      "n_review": 1,
+      "automation_rate": 0.999501,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2582,
+      "t_low": 0.024899439473934002,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000828,
+        "mid": 0.001656,
+        "high": 0.002758
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659172,
+        "mid": 3.318344,
+        "high": 5.527242
+      }
+    },
+    {
+      "cut": 0.02551715862374996,
+      "n_low": 643461,
+      "n_review": 1,
+      "automation_rate": 0.999501,
+      "missed_fraud": {
+        "k": 274,
+        "n": 610,
+        "rate": 0.44918,
+        "ci_low": 0.410148,
+        "ci_high": 0.488849
+      },
+      "recall_outside_low": 0.55082,
+      "fraud_in_low_per_10k_low": 4.2582,
+      "t_low": 0.02551715862374996,
+      "is_default": false,
+      "missed_fraud_n": 274,
+      "missed_fraud_rate": 0.44918,
+      "missed_fraud_ci_lo": 0.410148,
+      "missed_fraud_ci_hi": 0.488849,
+      "wrongful_autoclose_per_10k": 4.128844,
+      "cost_per_case": {
+        "low": 0.000828,
+        "mid": 0.001656,
+        "high": 0.002758
+      },
+      "human_only": {
+        "low": 1.66,
+        "mid": 3.32,
+        "high": 5.53
+      },
+      "net_savings_per_case": {
+        "low": 1.659172,
+        "mid": 3.318344,
+        "high": 5.527242
+      }
+    }
+  ],
+  "cost_model": {
+    "generator": "analytics/simulator_cost.py",
+    "generated_at_utc": "2026-10-03T16:39:57Z",
+    "llm_cost_per_case_usd_by_band": {
+      "low": 0.0,
+      "review": 6.52e-05,
+      "high": 6.52e-05,
+      "rule": 0.0
+    },
+    "llm_cost_source": {
+      "source": "mean of 22 audit rows in app.audit_llm_call (QA/test traffic) at OpenAI Standard $0.15/1M in + $0.60/1M out, fetched 2026-10-03; 80 direct API calls gave $0.0000600/call; calls per case from app/cases/engine.py, confirmed by the audit rows",
+      "eval_run_id": null,
+      "form": "cost_per_call_usd x calls_per_case",
+      "cost_per_call_usd": 6.52e-05,
+      "calls_per_case": {
+        "low": 0,
+        "review": 1,
+        "high": 1
+      }
+    },
+    "llm_cost_label": "measured from 22 QA audit rows (live calls)",
+    "human_cost_per_resolution_usd": {
+      "low": 1.66,
+      "mid": 3.32,
+      "high": 5.53
+    },
+    "human_cost_source": "team-locked human cost per dispute resolution; analytics/out/cost_proj_per_resolution.csv (Queja, mean handle time 434.6 s, resolution rate 0.4364, $6/$12/$20 per hour)",
+    "shares": "low=n_low/n_charges, review=n_review/n_charges, high=n_high/n_charges, rule=n_rule/n_charges (validation set)",
+    "formula": "expected = sum(llm_band*share_band) + human*(review+high); human_only = human per charge; net_savings_per_case = human_only - expected",
+    "fields": "per point cost_per_case / human_only / net_savings_per_case, each {low, mid, high} human-cost scenario, USD per charge",
+    "assumptions": [
+      "A1: HIGH cases cost one LLM turn (llm_high) plus one human resolution.",
+      "A2: the Pending/Reversed rule path is template-only (llm_rule, default 0) and never needs a human.",
+      "A3: human-only baseline = one human resolution per charge."
+    ]
+  },
+  "default_point_summary": {
+    "point_index": 14,
+    "matched_by": "point flagged default: true",
+    "cut": 0.000275603870032301,
+    "t_low_default": 0.000275603870032301,
+    "automation_rate": 0.180132,
+    "missed_fraud": {
+      "k": 29,
+      "n": 610,
+      "rate": 0.047541,
+      "ci_low": 0.033302,
+      "ci_high": 0.067443
+    },
+    "shares": {
+      "low": 0.150248,
+      "review": 0.819371,
+      "high": 0.000497,
+      "rule": 0.029884
+    },
+    "cost_per_case": {
+      "low": 1.361034,
+      "mid": 2.722015,
+      "high": 4.533923
+    },
+    "human_only": {
+      "low": 1.66,
+      "mid": 3.32,
+      "high": 5.53
+    },
+    "net_savings_per_case": {
+      "low": 0.298966,
+      "mid": 0.597985,
+      "high": 0.996077
+    },
+    "net_savings_pct_vs_human_only": {
+      "low": 0.1801,
+      "mid": 0.180116,
+      "high": 0.180122
+    },
+    "quote_mid": "At the default cut (18.01% automation), expected $2.72 per charge vs $3.32 human-only: $0.60 saved per charge (mid scenario, validation set)."
+  }
+}

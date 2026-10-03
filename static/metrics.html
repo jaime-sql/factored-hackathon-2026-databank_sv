@@ -13,6 +13,9 @@
       } catch (e) {}
       document.documentElement.lang = lang;
       document.documentElement.classList.add("i18n-pending");
+      setTimeout(function () {
+        document.documentElement.classList.remove("i18n-pending");
+      }, 1200);
     })();
   </script>
   <script src="/static/js/catalog.js"></script>
@@ -42,7 +45,14 @@
       <span id="eval-label">Muestra de demostración (enriquecida en fraude, tasa de riesgo alto cerca de 11 veces la de los datos completos)</span>
     </label>
     <div id="tiles" class="grid"></div>
-    <pre id="raw"></pre>
+    <section id="health" hidden></section>
+    <section id="trust" hidden></section>
+    <section id="simulator" hidden></section>
+    <section id="fairness" hidden></section>
+    <details id="raw-wrap" class="raw-wrap">
+      <summary id="raw-toggle">Ver JSON</summary>
+      <pre id="raw"></pre>
+    </details>
   </main>
   <script src="/static/js/metrics.js"></script>
   <script src="/static/js/tour.js"></script>

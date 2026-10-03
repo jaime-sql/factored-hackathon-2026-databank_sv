@@ -160,7 +160,15 @@ def test_audit_rows_are_append_only(client: TestClient) -> None:
         json={"action": "contest"},
     )
     assert contested.status_code == 200, contested.text
-    assert client.app.state.ops.audit_case_count(opened["case_id"]) == before + 1
+    assert client.app.state.ops.audit_case_count(opened["case_id"]) == before + 2
+    decisions = {
+        row["decision"]
+        for row in client.app.state.ops.execute(
+            "SELECT decision FROM audit_case WHERE case_id = ?",
+            (opened["case_id"],),
+        )
+    }
+    assert "reply_draft" in decisions
     current = [
         row
         for row in client.app.state.ops.current_audit_cases()
@@ -270,6 +278,128 @@ def test_migration_003_leaves_app_rw_select_only_on_the_audit_views() -> None:
     assert _privileges_are_select_only({name: {"SELECT"} for name in views})
     assert not _privileges_are_select_only({name: {"SELECT", "INSERT"} for name in views})
     assert not _privileges_are_select_only({"audit_current": {"SELECT"}})
+
+
+def test_migration_004_appends_demo_attack_and_leaves_audit_grants() -> None:
+    sql = (ROOT / "migrations" / "004_demo_attack.sql").read_text(encoding="utf-8")
+    assert sql.count("ADD COLUMN IF NOT EXISTS demo_attack boolean NOT NULL DEFAULT false") == 3
+    assert "ADD COLUMN IF NOT EXISTS reply_draft text" in sql
+    assert "ADD COLUMN IF NOT EXISTS reply_sent text" in sql
+    assert "DROP VIEW" not in sql.upper()
+    assert "CREATE OR REPLACE VIEW app.audit_current" not in sql
+    assert "CREATE OR REPLACE VIEW app.audit_live" in sql
+    view = sql[sql.index("CREATE OR REPLACE VIEW app.audit_live") : sql.index("REVOKE")]
+    assert view.index("cur.*") < view.index("AS demo_attack")
+    assert "GRANT SELECT ON app.audit_live TO app_rw" in sql
+    for phrase in (
+        "ON app.audit_case",
+        "ON app.audit_llm_call",
+        "ON app.audit_event",
+        "ON app.audit_current",
+    ):
+        assert phrase not in sql, phrase
+    assert "GRANT INSERT" not in sql
+    assert "GRANT UPDATE" not in sql
+    assert "GRANT DELETE" not in sql
+
+
+def test_migration_005_makes_reference_tables_select_only() -> None:
+    from app.ops.store import _sql_statements
+
+    sql = (ROOT / "migrations" / "005_readonly_reference.sql").read_text(encoding="utf-8")
+    revoke = (
+        "REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON "
+        "app.llm_price, app.analytics_assumption FROM app_rw"
+    )
+    grant = "GRANT SELECT ON app.llm_price, app.analytics_assumption TO app_rw"
+    assert revoke in sql
+    assert grant in sql
+    assert sql.index(revoke) < sql.index(grant)
+    assert "alter default privileges" not in sql.lower()
+    parts = _sql_statements(ROOT / "migrations" / "005_readonly_reference.sql")
+    assert parts == [revoke, grant]
+    applied = "\n".join(parts).lower()
+    for other in (
+        "eval_rw",
+        "audit_",
+        "app.cases",
+        "app.handoff",
+        "app.test_cases",
+        "public.",
+        "default",
+        "policy",
+    ):
+        assert other not in applied, other
+    store = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
+    assert "005_readonly_reference.sql" not in store
+
+
+def test_migration_006_appends_source_and_leaves_audit_grants() -> None:
+    sql = (ROOT / "migrations" / "006_judge_source.sql").read_text(encoding="utf-8")
+    assert "ADD COLUMN IF NOT EXISTS source text DEFAULT NULL" in sql
+    assert "NOT NULL" not in sql
+    assert "DROP VIEW" not in sql.upper()
+    assert "CREATE OR REPLACE VIEW app.audit_current" not in sql
+    assert "CREATE OR REPLACE VIEW app.audit_live" in sql
+    view = sql[sql.index("CREATE OR REPLACE VIEW app.audit_live") : sql.index("REVOKE")]
+    assert view.index("cur.*") < view.index("AS demo_attack") < view.index("AS source")
+    assert "judge" not in view.lower()
+    assert "GRANT SELECT ON app.audit_live TO app_rw" in sql
+    assert "REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON app.audit_live FROM app_rw" in sql
+    for phrase in (
+        "ON app.audit_case",
+        "ON app.audit_llm_call",
+        "ON app.audit_event",
+        "ON app.audit_current",
+        "GRANT INSERT",
+        "GRANT UPDATE",
+        "GRANT DELETE",
+    ):
+        assert phrase not in sql, phrase
+    store = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
+    assert "006_judge_source.sql" not in store
+
+
+def test_app_code_does_not_write_reference_tables() -> None:
+    """Postgres app_rw only selects these tables.
+
+    The local SQLite demo seeds them once inside OpsStore._init_sqlite.
+    That path does not run against app.llm_price or app.analytics_assumption.
+    """
+    verbs = ("insert", "update", "delete", "truncate")
+    tables = ("llm_price", "analytics_assumption")
+    found: list[str] = []
+    for root in (ROOT / "app", ROOT / "scripts", ROOT / "evals"):
+        if not root.exists():
+            continue
+        for path in root.rglob("*.py"):
+            relative = path.relative_to(ROOT).as_posix()
+            for line in path.read_text(encoding="utf-8").splitlines():
+                lowered = line.lower()
+                if not any(table in lowered for table in tables):
+                    continue
+                if not any(verb in lowered for verb in verbs):
+                    continue
+                found.append(f"{relative}: {line.strip()}")
+    assert found == [
+        'app/ops/store.py: "INSERT OR IGNORE INTO llm_price VALUES (?, ?, ?, ?, ?)",',
+        'app/ops/store.py: "INSERT OR IGNORE INTO analytics_assumption VALUES (?, ?, ?)",',
+    ]
+    store = (ROOT / "app" / "ops" / "store.py").read_text(encoding="utf-8")
+    assert 'if backend == "sqlite":\n            self._init_sqlite()' in store
+    assert store.count("self._init_sqlite()") == 1
+    init = store.split("def _init_sqlite", 1)[1].split("\n    def ", 1)[0]
+    assert "INSERT OR IGNORE INTO llm_price" in init
+    assert "INSERT OR IGNORE INTO analytics_assumption" in init
+    assert "app.llm_price" not in store
+    assert "app.analytics_assumption" not in store
+    for root in (ROOT / "app", ROOT / "scripts", ROOT / "evals"):
+        if not root.exists():
+            continue
+        for path in root.rglob("*.py"):
+            text = path.read_text(encoding="utf-8")
+            assert "app.llm_price" not in text
+            assert "app.analytics_assumption" not in text
 
 
 def test_app_code_does_not_read_eval_labels() -> None:

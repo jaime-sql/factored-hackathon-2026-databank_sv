@@ -12,18 +12,29 @@ import json
 import logging
 import re
 import sqlite3
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.errors import APIError
+from app.ops.console_action import is_console_decision
 from app.ops.guard import assert_statement_allowed
 
 logger = logging.getLogger(__name__)
 
+_SCHEMA_RETRY_SECONDS = 30.0
+
 _SCHEMA_WARNING = (
     "test-traffic schema is missing (is_test, test_cases, or audit_live); "
     "run migrations/002_is_test.sql as the database owner. "
-    "Case inserts omit is_test, test marks are ignored, and metrics read audit_current."
+    "Test-mode cases are refused until is_test can be stored. "
+    "Other case inserts omit is_test, and metrics read audit_current."
+)
+
+_TEST_SCHEMA_MESSAGE = (
+    "Test mode cannot be stored until migrations/002_is_test.sql is applied. "
+    "The case was not opened."
 )
 
 _PRICES = (
@@ -67,13 +78,15 @@ class OpsStore:
         self.path = path
         self.dsn = dsn
         self.readback_tamper: Any = None
-        self.migrations_ok = True
+        self._migrations_ok = False
+        self._schema_checked_at = 0.0
         self._schema_warned = False
         if backend == "sqlite":
             self._init_sqlite()
         else:
             self._ensure_postgres_is_test()
             self._ensure_postgres_view_grants()
+            self._ensure_postgres_judge()
         self.refresh_test_schema()
 
     def _q(self, sql: str) -> str:
@@ -134,20 +147,31 @@ class OpsStore:
             conn.commit()
             return int(cursor.rowcount)
 
+    @property
+    def migrations_ok(self) -> bool:
+        """True once the test schema has been seen. A miss is retried every 30s."""
+        if self._migrations_ok:
+            return True
+        if time.monotonic() - self._schema_checked_at < _SCHEMA_RETRY_SECONDS:
+            return False
+        return self.refresh_test_schema()
+
     def refresh_test_schema(self) -> bool:
-        """True when is_test, test_cases, and audit_live are all present."""
+        """Probe is_test, test_cases, and audit_live. A hit stays cached."""
+        self._schema_checked_at = time.monotonic()
         try:
             present = self._probe_test_schema()
         except Exception:
             present = False
         if present:
-            self.migrations_ok = True
+            self._migrations_ok = True
             return True
         self._mark_migrations_missing()
         return False
 
     def _mark_migrations_missing(self) -> None:
-        self.migrations_ok = False
+        self._migrations_ok = False
+        self._schema_checked_at = time.monotonic()
         if self._schema_warned:
             return
         self._schema_warned = True
@@ -176,25 +200,47 @@ class OpsStore:
         return bool(tables and views)
 
     def _insert_with_optional_test(
-        self, table: str, columns: str, params: tuple[object, ...], *, is_test: bool
+        self,
+        table: str,
+        columns: str,
+        params: tuple[object, ...],
+        *,
+        is_test: bool,
+        extras: tuple[tuple[str, object], ...] = (),
     ) -> None:
         without = (
             f"INSERT INTO {self._table(table)} ({columns}) VALUES ({_placeholders(len(params))})"
         )
         if not self.migrations_ok:
+            if is_test:
+                _refuse_unstored_test_case()
             self._write(without, params)
             return
-        try:
-            self._write(
-                f"INSERT INTO {self._table(table)} ({columns}, is_test) "
-                f"VALUES ({_placeholders(len(params) + 1)})",
-                params + (is_test,),
-            )
-        except Exception as exc:
-            if not _missing_test_schema(exc):
-                raise
+        optional = (("is_test", is_test),) + extras
+        # Keep is_test in every attempt. Dropping it would store an unmarked test case.
+        floor = 0 if is_test else -1
+        for count in range(len(optional), floor, -1):
+            chosen = optional[:count]
+            names = ", ".join(name for name, _value in chosen)
+            values = params + tuple(value for _name, value in chosen)
+            sql_columns = columns if not names else f"{columns}, {names}"
+            try:
+                self._write(
+                    f"INSERT INTO {self._table(table)} ({sql_columns}) "
+                    f"VALUES ({_placeholders(len(values))})",
+                    values,
+                )
+                return
+            except Exception as exc:
+                if not _missing_added_column(exc):
+                    raise
+                if is_test and "is_test" in str(exc).lower():
+                    self._mark_migrations_missing()
+                    _refuse_unstored_test_case()
+        if is_test:
             self._mark_migrations_missing()
-            self._write(without, params)
+            _refuse_unstored_test_case()
+        self._write(without, params)
 
     def _init_sqlite(self) -> None:
         with sqlite3.connect(self.path) as conn:
@@ -214,7 +260,10 @@ class OpsStore:
                   is_eval_case INTEGER NOT NULL DEFAULT 0,
                   eval_run_id TEXT,
                   case_source TEXT,
-                  is_test INTEGER NOT NULL DEFAULT 0
+                  is_test INTEGER NOT NULL DEFAULT 0,
+                  demo_attack INTEGER NOT NULL DEFAULT 0,
+                  reply_draft TEXT,
+                  reply_sent TEXT
                 );
                 CREATE TABLE IF NOT EXISTS audit_case (
                   audit_id TEXT PRIMARY KEY,
@@ -241,7 +290,9 @@ class OpsStore:
                   is_eval_case INTEGER NOT NULL DEFAULT 0,
                   eval_run_id TEXT,
                   case_source TEXT,
-                  is_test INTEGER NOT NULL DEFAULT 0
+                  is_test INTEGER NOT NULL DEFAULT 0,
+                  demo_attack INTEGER NOT NULL DEFAULT 0,
+                  source TEXT
                 );
                 CREATE TABLE IF NOT EXISTS audit_llm_call (
                   audit_id TEXT PRIMARY KEY,
@@ -261,7 +312,8 @@ class OpsStore:
                   prompt_version TEXT,
                   is_eval_case INTEGER NOT NULL,
                   eval_run_id TEXT,
-                  is_test INTEGER NOT NULL DEFAULT 0
+                  is_test INTEGER NOT NULL DEFAULT 0,
+                  demo_attack INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS audit_event (
                   audit_id TEXT PRIMARY KEY,
@@ -346,6 +398,7 @@ class OpsStore:
                     assumption,
                 )
             _add_sqlite_is_test(conn)
+            _add_sqlite_judge(conn)
             conn.executescript(_SQLITE_AUDIT_VIEWS)
 
     def _ensure_postgres_is_test(self) -> None:
@@ -385,6 +438,41 @@ class OpsStore:
                         return
         except Exception as exc:
             logger.warning("is_test migration skipped (%s)", type(exc).__name__)
+
+    def _ensure_postgres_judge(self) -> None:
+        """Apply migrations/004 when this role can. A refusal leaves startup up."""
+        try:
+            from app.db import connect_app
+            from app.paths import project_root
+
+            path = project_root() / "migrations" / "004_demo_attack.sql"
+            statements = _sql_statements(path)
+            with connect_app(self.dsn) as conn:
+                column = conn.execute(
+                    "SELECT 1 AS ok FROM information_schema.columns "
+                    "WHERE table_schema = 'app' AND table_name = 'cases' "
+                    "AND column_name = 'demo_attack'"
+                ).fetchone()
+                draft = conn.execute(
+                    "SELECT 1 AS ok FROM information_schema.columns "
+                    "WHERE table_schema = 'app' AND table_name = 'cases' "
+                    "AND column_name = 'reply_draft'"
+                ).fetchone()
+                if column and draft:
+                    return
+                for statement in statements:
+                    try:
+                        conn.execute(statement)
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+                        logger.warning(
+                            "demo-attack migration was not applied; "
+                            "run migrations/004_demo_attack.sql as the database owner"
+                        )
+                        return
+        except Exception as exc:
+            logger.warning("demo-attack migration skipped (%s)", type(exc).__name__)
 
     def _ensure_postgres_view_grants(self) -> None:
         """Apply migrations/003 when this role can. A refusal leaves startup up.
@@ -437,6 +525,7 @@ class OpsStore:
                 row.get("case_source"),
             ),
             is_test=bool(row.get("is_test")),
+            extras=(("demo_attack", bool(row.get("demo_attack"))),),
         )
 
     def insert_test_case(self, case_id: str, reason: str | None = None) -> int:
@@ -480,16 +569,30 @@ class OpsStore:
             "closed_at",
             "latest_audit_id",
             "transaction_key",
+            "reply_draft",
+            "reply_sent",
         }
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"case columns are not updated this way: {sorted(unknown)}")
+        self._update_case_fields(case_id, fields)
+
+    def _update_case_fields(self, case_id: str, fields: dict[str, Any]) -> None:
         assignments = ", ".join(f"{name} = ?" for name in fields)
         params = tuple(fields.values()) + (case_id,)
-        self._write(
-            f"UPDATE {self._table('cases')} SET {assignments} WHERE case_id = ?",
-            params,
-        )
+        try:
+            self._write(
+                f"UPDATE {self._table('cases')} SET {assignments} WHERE case_id = ?",
+                params,
+            )
+        except Exception as exc:
+            optional = {"reply_draft", "reply_sent"}
+            if not optional.intersection(fields) or not _missing_added_column(exc):
+                raise
+            logger.warning("reply draft was not stored (%s)", type(exc).__name__)
+            kept = {name: value for name, value in fields.items() if name not in optional}
+            if kept:
+                self._update_case_fields(case_id, kept)
 
     def get_case(self, case_id: str) -> dict[str, Any] | None:
         rows = self.execute(
@@ -540,26 +643,38 @@ class OpsStore:
                 row.get("case_source"),
             ),
             is_test=bool(row.get("is_test")),
+            extras=(
+                ("demo_attack", bool(row.get("demo_attack"))),
+                ("source", row.get("source")),
+            ),
         )
         return str(row["audit_id"])
 
     def current_audit_cases(self) -> list[dict[str, Any]]:
-        """Tips from audit_current. is_test comes from cases and test_cases.
+        """Routing tips from audit_current. is_test comes from cases and test_cases.
 
         audit_current keeps the column list it had when it was created, so a
         later is_test column on audit_case is not on the view. The queue, the
         packet, and the admin include filters read the flag from cases and
-        from test_cases membership instead.
+        from test_cases membership instead. Console action tips stay in the
+        SQL view and in audit_live; this read keeps the customer decision.
         """
         raw = self.execute(f"SELECT * FROM {self._table('audit_current')}")
-        rows = [_normalize_audit(row) for row in raw]
+        rows = [
+            row
+            for row in (_normalize_audit(row) for row in raw)
+            if not is_console_decision(row.get("decision"))
+        ]
         if not rows:
             return rows
-        flags = {str(row["case_id"]): bool(row.get("is_test")) for row in self.list_cases()}
+        cases = self.list_cases()
+        flags = {str(row["case_id"]): bool(row.get("is_test")) for row in cases}
+        attacks = {str(row["case_id"]): bool(row.get("demo_attack")) for row in cases}
         marked = self.test_case_ids()
         for row in rows:
             case_id = str(row.get("case_id") or "")
             row["is_test"] = flags.get(case_id, False) or case_id in marked
+            row["demo_attack"] = bool(row.get("demo_attack")) or attacks.get(case_id, False)
         return rows
 
     def live_audit_cases(self) -> list[dict[str, Any]]:
@@ -573,7 +688,15 @@ class OpsStore:
                 raise
             self._mark_migrations_missing()
             return self.current_audit_cases()
-        return [_normalize_audit(row) for row in raw]
+        rows = [_normalize_audit(row) for row in raw]
+        attacks = {str(row["case_id"]): bool(row.get("demo_attack")) for row in self.list_cases()}
+        kept: list[dict[str, Any]] = []
+        for row in rows:
+            case_id = str(row.get("case_id") or "")
+            if bool(row.get("demo_attack")) or attacks.get(case_id, False):
+                continue
+            kept.append(row)
+        return kept
 
     def audit_chain(self, case_id: str) -> list[dict[str, Any]]:
         """Tip from audit_current, then each superseded parent. Read-only."""
@@ -583,7 +706,10 @@ class OpsStore:
         )
         found: dict[str, dict[str, Any]] = {}
         for tip in tips:
-            self._walk_supersedes(_normalize_audit(tip), found, 0)
+            normalized = _normalize_audit(tip)
+            if is_console_decision(normalized.get("decision")):
+                continue
+            self._walk_supersedes(normalized, found, 0)
         return list(found.values())
 
     def _walk_supersedes(
@@ -662,6 +788,7 @@ class OpsStore:
                 row.get("eval_run_id"),
             ),
             is_test=bool(row.get("is_test")),
+            extras=(("demo_attack", bool(row.get("demo_attack"))),),
         )
 
     def current_llm_calls(self) -> list[dict[str, Any]]:
@@ -786,6 +913,14 @@ WHERE cur.eval_run_id IS NULL
   AND NOT EXISTS (
     SELECT 1 FROM test_cases AS marked
     WHERE marked.case_id = cur.case_id
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_case AS src
+    WHERE src.audit_id = cur.audit_id AND src.demo_attack = 1
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM cases AS marked_case
+    WHERE marked_case.case_id = cur.case_id AND marked_case.demo_attack = 1
   );
 """
 
@@ -797,6 +932,21 @@ def _add_sqlite_is_test(conn: sqlite3.Connection) -> None:
         columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
         if "is_test" not in columns:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0")
+
+
+def _add_sqlite_judge(conn: sqlite3.Connection) -> None:
+    for table in ("cases", "audit_case", "audit_llm_call"):
+        columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+        if "demo_attack" not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN demo_attack INTEGER NOT NULL DEFAULT 0")
+    case_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(cases)")}
+    if "reply_draft" not in case_columns:
+        conn.execute("ALTER TABLE cases ADD COLUMN reply_draft TEXT")
+    if "reply_sent" not in case_columns:
+        conn.execute("ALTER TABLE cases ADD COLUMN reply_sent TEXT")
+    audit_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(audit_case)")}
+    if "source" not in audit_columns:
+        conn.execute("ALTER TABLE audit_case ADD COLUMN source TEXT")
 
 
 def _sql_statements(path: Path) -> list[str]:
@@ -850,8 +1000,18 @@ def _privileges_are_select_only(found: dict[str, set[str]]) -> bool:
     return all(privileges == {"SELECT"} for privileges in found.values())
 
 
+def _refuse_unstored_test_case() -> None:
+    raise APIError(503, "test_schema_missing", _TEST_SCHEMA_MESSAGE)
+
+
 def _placeholders(count: int) -> str:
     return ", ".join("?" for _ in range(count))
+
+
+def _missing_added_column(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    markers = ("no such column", "no column", "does not exist", "undefined column")
+    return any(marker in text for marker in markers)
 
 
 def _missing_test_schema(exc: BaseException) -> bool:
@@ -895,12 +1055,14 @@ def _as_optional_bool(value: object) -> bool | None:
 def _normalize_case(row: dict[str, Any]) -> dict[str, Any]:
     row["is_eval_case"] = _as_bool(row.get("is_eval_case"))
     row["is_test"] = _as_bool(row.get("is_test"))
+    row["demo_attack"] = _as_bool(row.get("demo_attack"))
     return row
 
 
 def _normalize_audit(row: dict[str, Any]) -> dict[str, Any]:
     row["is_eval_case"] = _as_bool(row.get("is_eval_case"))
     row["is_test"] = _as_bool(row.get("is_test"))
+    row["demo_attack"] = _as_bool(row.get("demo_attack"))
     row["automation_attempted"] = _as_bool(row.get("automation_attempted"))
     row["handoff_packet_complete"] = _as_optional_bool(row.get("handoff_packet_complete"))
     row["guardrail_flags"] = _flags_out(row.get("guardrail_flags"))
