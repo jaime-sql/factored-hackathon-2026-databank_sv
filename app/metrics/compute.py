@@ -81,7 +81,15 @@ def compute_metrics(
     chosen = [row for row in chosen if not is_console_decision(row.get("decision"))]
     chosen_ids = {row["case_id"] for row in chosen}
     chosen_calls = [row for row in calls if row.get("case_id") in chosen_ids]
-    closed = [row for row in chosen if row.get("decision")]
+    # Captain's definition: contained = closed without a handoff / closed. A case waiting
+    # on the customer (final_resolution_status 'clarifying') is not closed, so it is in
+    # neither number; it counts as still open.
+    waiting = [row for row in chosen if row.get("final_resolution_status") == "clarifying"]
+    closed = [
+        row
+        for row in chosen
+        if row.get("decision") and row.get("final_resolution_status") != "clarifying"
+    ]
     volume: dict[str, int] = {}
     for row in chosen:
         key = str(row.get("case_type") or "other")
@@ -95,7 +103,7 @@ def compute_metrics(
         reason = str(row.get("handoff_reason") or "unspecified")
         reasons[reason] = reasons.get(reason, 0) + 1
     contained = [row for row in closed if row.get("decision") != "handoff"]
-    open_cases = [row for row in chosen if not row.get("decision")]
+    open_cases = [row for row in chosen if not row.get("decision")] + waiting
     durations = _durations(closed)
     latencies = [int(row.get("latency_ms") or 0) for row in chosen_calls]
     failed_calls = [row for row in chosen_calls if row.get("call_status") != "ok"]

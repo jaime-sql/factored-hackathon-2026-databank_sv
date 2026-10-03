@@ -86,91 +86,43 @@ def test_no_horizontal_overflow_at_390(tmp_path: Path) -> None:
         _wait_http(f"http://127.0.0.1:{port}/health", server)
         _wait_http(f"http://127.0.0.1:{debug}/json/version", chrome)
         script = r"""
-const http = require("http");
+const { openPage } = require("./tests/cdp_settle.js");
 const base = process.argv[1];
 const debugPort = process.argv[2];
-function get(path) {
-  return new Promise((resolve, reject) => {
-    http.get({ host: "127.0.0.1", port: debugPort, path }, (res) => {
-      let body = "";
-      res.on("data", (chunk) => { body += chunk; });
-      res.on("end", () => resolve(JSON.parse(body)));
-    }).on("error", reject);
-  });
-}
-function put(path) {
-  return new Promise((resolve, reject) => {
-    const req = http.request({ host: "127.0.0.1", port: debugPort, path, method: "PUT" }, (res) => {
-      let body = "";
-      res.on("data", (chunk) => { body += chunk; });
-      res.on("end", () => resolve(JSON.parse(body)));
-    });
-    req.on("error", reject);
-    req.end();
-  });
-}
+const READY = {
+  "/": "document.querySelectorAll('#personas button').length > 0",
+  "/agent": "document.getElementById('token') !== null",
+  "/metrics": "document.querySelectorAll('#tiles .tile').length > 0",
+};
 (async () => {
-  const version = await get("/json/version");
-  const ws = new WebSocket(version.webSocketDebuggerUrl);
-  await new Promise((resolve) => ws.addEventListener("open", resolve));
-  let id = 0;
-  const pending = new Map();
-  ws.addEventListener("message", (event) => {
-    const message = JSON.parse(event.data);
-    if (message.id && pending.has(message.id)) pending.get(message.id)(message);
+  const page = await openPage(debugPort);
+  const { send, evaluate, waitFor, navigate, reload, settle } = page;
+  await send("Emulation.setDeviceMetricsOverride", {
+    width: 390, height: 844, deviceScaleFactor: 1, mobile: false,
   });
-  function call(method, params) {
-    const next = ++id;
-    return new Promise((resolve) => {
-      pending.set(next, resolve);
-      ws.send(JSON.stringify({ id: next, method, params }));
-    });
-  }
-  const created = await call("Target.createTarget", { url: "about:blank" });
-  const session = await call("Target.attachToTarget", {
-    targetId: created.result.targetId,
-    flatten: true,
-  });
-  const sessionId = session.result.sessionId;
-  function send(method, params) {
-    const next = ++id;
-    return new Promise((resolve) => {
-      pending.set(next, resolve);
-      ws.send(JSON.stringify({ id: next, sessionId, method, params }));
-    });
-  }
-  await send("Page.enable");
-  await send("Runtime.enable");
-  const pages = ["/", "/agent", "/metrics"];
-  const langs = ["es", "pt"];
   const failures = [];
-  for (const lang of langs) {
-    for (const page of pages) {
-      await send("Page.navigate", { url: base + page });
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      await send("Runtime.evaluate", {
-        expression: `localStorage.setItem('hd_lang', ${JSON.stringify(lang)})`,
-      });
-      await send("Page.reload");
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      const measured = await send("Runtime.evaluate", {
-        expression: [
-          "JSON.stringify({",
-          "scroll: document.documentElement.scrollWidth,",
-          "client: document.documentElement.clientWidth,",
-          "body: document.body.scrollWidth",
-          "})",
-        ].join(""),
-        returnByValue: true,
-      });
-      const size = JSON.parse(measured.result.result.value);
+  for (const lang of ["es", "pt"]) {
+    for (const path of ["/", "/agent", "/metrics"]) {
+      await navigate(base + path);
+      await evaluate(`localStorage.setItem('hd_lang', ${JSON.stringify(lang)})`);
+      await reload();
+      await waitFor(
+        `document.documentElement.lang === ${JSON.stringify(lang)}`,
+        `${path} ${lang} lang`,
+      );
+      await waitFor(READY[path], `${path} rendered`);
+      await settle();
+      const size = JSON.parse(await evaluate(
+        "JSON.stringify({scroll: document.documentElement.scrollWidth, "
+        + "client: document.documentElement.clientWidth, body: document.body.scrollWidth})"
+      ));
       if (size.scroll > size.client + 1 || size.body > size.client + 1) {
-        failures.push({ lang, page, ...size });
+        failures.push({ lang, page: path, ...size });
       }
     }
   }
   console.log(JSON.stringify({ failures }));
-  ws.close();
+  page.ws.close();
 })().catch((error) => {
   console.error(error);
   process.exit(1);

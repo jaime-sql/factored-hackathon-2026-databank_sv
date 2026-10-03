@@ -1,105 +1,125 @@
 #!/usr/bin/env bash
-# Deploy Harbor Desk to Cloud Run.
+# Deploy Harbor Desk to the live Cloud Run service as a NO-TRAFFIC tagged revision.
 #
-# DATABASE_URL is read from the environment and uploaded to Secret Manager.
-# The service receives the secret name, not the URL. This script does not
-# write the URL into the repo or print it.
+#   deploy/cloudrun.sh [TAG] [GIT_REF]
 #
-# Required in the environment:
-#   GCP_PROJECT
-#   DATABASE_URL          app_rw connection string
-#   SESSION_SECRET        at least 32 characters, not the dev default
-# Optional:
-#   EVAL_RUNNER_TOKEN
-#   DEMO_AGENT_TOKEN      required in production when Clerk keys are absent
-#   DEMO_JUDGE_TOKEN      optional queue-only token; leave unset to disable
-#   CLERK_SECRET_KEY / CLERK_PUBLISHABLE_KEY
-#   GCP_REGION (default us-central1)
-#   SERVICE_NAME (default harbor-desk)
-#   LLM_PROVIDER (default template)
+# TAG      revision tag, default "next" -> https://TAG---databank-sv-app-4oixi2h3ua-uc.a.run.app
+# GIT_REF  commit to build, default origin/main. The image is built from
+#          `git archive GIT_REF`, so local edits never reach the build.
+#
+# Tag (QA) revisions get FORCE_TEST_CASES=true: every case they create, with its
+# audit rows, is stored as test traffic and stays out of live Métricas and the
+# live Consola queue. A tag starting with "live" is a live candidate and is
+# deployed WITHOUT the flag; only such a revision may be promoted.
+#
+# Running this never moves live traffic. To promote a checked live candidate:
+#   gcloud run services update-traffic databank-sv-app --region us-central1 \
+#     --project databank-sv-123456 --to-revisions REVISION=100
+#
+# Secrets are read from Secret Manager by the service; this script never reads,
+# prints, or writes their values:
+#   admin-token        -> DEMO_AGENT_TOKEN
+#   demo-judge-token   -> DEMO_JUDGE_TOKEN
+#   qa-test-token      -> QA_TEST_TOKEN
+#   eval-runner-token  -> EVAL_RUNNER_TOKEN
+#   database-url       -> DATABASE_URL
+#   session-secret     -> SESSION_SECRET
+#   openai-api-key     -> OPENAI_API_KEY
+#
+# Overrides: GCP_PROJECT, GCP_REGION, SERVICE_NAME, IMAGE_REPO.
+# DRY_RUN=1 prints the gcloud commands instead of running them.
 
 set -euo pipefail
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  sed -n '2,20p' "$0"
+  sed -n '2,31p' "$0"
   exit 0
 fi
 
-: "${GCP_PROJECT:?Set GCP_PROJECT}"
-: "${DATABASE_URL:?Set DATABASE_URL in the environment. It is stored in Secret Manager.}"
-: "${SESSION_SECRET:?Set SESSION_SECRET}"
+TAG="${1:-next}"
+GIT_REF="${2:-origin/main}"
+GCP_PROJECT="${GCP_PROJECT:-databank-sv-123456}"
+GCP_REGION="${GCP_REGION:-us-central1}"
+SERVICE_NAME="${SERVICE_NAME:-databank-sv-app}"
+IMAGE_REPO="${IMAGE_REPO:-${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/databank-sv/app}"
 
-if [[ "${#SESSION_SECRET}" -lt 32 || "${SESSION_SECRET}" == "dev-insecure-session-secret" ]]; then
-  echo "SESSION_SECRET must be a non-default value of at least 32 characters." >&2
+if [[ ! "${TAG}" =~ ^[a-z][a-z0-9-]{0,45}$ ]]; then
+  echo "TAG must be lowercase letters, digits or '-', starting with a letter." >&2
   exit 1
 fi
 
-GCP_REGION="${GCP_REGION:-us-central1}"
-SERVICE_NAME="${SERVICE_NAME:-harbor-desk}"
-LLM_PROVIDER="${LLM_PROVIDER:-template}"
+# --set-env-vars replaces the revision's env, so a live candidate never inherits the flag.
+if [[ "${TAG}" == live* ]]; then
+  ENV_VARS="ENVIRONMENT=production"
+else
+  ENV_VARS="ENVIRONMENT=production,FORCE_TEST_CASES=true"
+fi
 
-upsert_secret() {
-  local name="$1"
-  local value="$2"
-  if gcloud secrets describe "${name}" --project "${GCP_PROJECT}" >/dev/null 2>&1; then
-    printf '%s' "${value}" | gcloud secrets versions add "${name}" \
-      --project "${GCP_PROJECT}" --data-file=- >/dev/null
+SECRETS="DEMO_AGENT_TOKEN=admin-token:latest"
+SECRETS+=",DEMO_JUDGE_TOKEN=demo-judge-token:latest"
+SECRETS+=",QA_TEST_TOKEN=qa-test-token:latest"
+SECRETS+=",EVAL_RUNNER_TOKEN=eval-runner-token:latest"
+SECRETS+=",DATABASE_URL=database-url:latest"
+SECRETS+=",SESSION_SECRET=session-secret:latest"
+SECRETS+=",OPENAI_API_KEY=openai-api-key:latest"
+
+run() {
+  if [[ "${DRY_RUN:-0}" == "1" ]]; then
+    printf '+'
+    printf ' %q' "$@"
+    printf '\n'
   else
-    printf '%s' "${value}" | gcloud secrets create "${name}" \
-      --project "${GCP_PROJECT}" --replication-policy=automatic --data-file=- >/dev/null
+    "$@"
   fi
 }
 
-db_secret="${SERVICE_NAME}-database-url"
-session_secret="${SERVICE_NAME}-session-secret"
-upsert_secret "${db_secret}" "${DATABASE_URL}"
-upsert_secret "${session_secret}" "${SESSION_SECRET}"
+repo_root="$(git rev-parse --show-toplevel)"
+if [[ "${DRY_RUN:-0}" != "1" ]]; then
+  git -C "${repo_root}" fetch --quiet origin
+fi
+sha="$(git -C "${repo_root}" rev-parse --short=7 "${GIT_REF}^{commit}")"
+image="${IMAGE_REPO}:${sha}"
 
-secrets="DATABASE_URL=${db_secret}:latest,SESSION_SECRET=${session_secret}:latest"
-env_vars="ENVIRONMENT=production|LLM_PROVIDER=${LLM_PROVIDER}"
+src="$(mktemp -d)"
+trap 'rm -rf "${src}"' EXIT
+git -C "${repo_root}" archive "${GIT_REF}" | tar -x -C "${src}"
 
-if [[ -n "${EVAL_RUNNER_TOKEN:-}" ]]; then
-  eval_secret="${SERVICE_NAME}-eval-runner-token"
-  upsert_secret "${eval_secret}" "${EVAL_RUNNER_TOKEN}"
-  secrets="${secrets},EVAL_RUNNER_TOKEN=${eval_secret}:latest"
-fi
-if [[ -n "${DEMO_AGENT_TOKEN:-}" ]]; then
-  agent_secret="${SERVICE_NAME}-demo-agent-token"
-  upsert_secret "${agent_secret}" "${DEMO_AGENT_TOKEN}"
-  secrets="${secrets},DEMO_AGENT_TOKEN=${agent_secret}:latest"
-fi
-if [[ -n "${DEMO_JUDGE_TOKEN:-}" ]]; then
-  judge_secret="${SERVICE_NAME}-demo-judge-token"
-  upsert_secret "${judge_secret}" "${DEMO_JUDGE_TOKEN}"
-  secrets="${secrets},DEMO_JUDGE_TOKEN=${judge_secret}:latest"
-fi
-if [[ -n "${CLERK_SECRET_KEY:-}" ]]; then
-  clerk_secret="${SERVICE_NAME}-clerk-secret"
-  upsert_secret "${clerk_secret}" "${CLERK_SECRET_KEY}"
-  secrets="${secrets},CLERK_SECRET_KEY=${clerk_secret}:latest"
-fi
-if [[ -n "${CLERK_PUBLISHABLE_KEY:-}" ]]; then
-  env_vars="${env_vars}|CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}"
-fi
-if [[ -n "${OPENAI_API_KEY:-}" ]]; then
-  openai_secret="${SERVICE_NAME}-openai-key"
-  upsert_secret "${openai_secret}" "${OPENAI_API_KEY}"
-  secrets="${secrets},OPENAI_API_KEY=${openai_secret}:latest"
+echo "Building ${GIT_REF} (${sha}) from git archive."
+# --async plus polling: the deploy account cannot stream build logs, which makes a
+# blocking `builds submit` exit 1 even when the build succeeds.
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+  run gcloud builds submit "${src}" --project "${GCP_PROJECT}" --tag "${image}" --async
+else
+  build_id="$(gcloud builds submit "${src}" --project "${GCP_PROJECT}" --tag "${image}" \
+    --async --format='value(id)')"
+  status="QUEUED"
+  while [[ "${status}" == "QUEUED" || "${status}" == "WORKING" ]]; do
+    sleep 10
+    status="$(gcloud builds describe "${build_id}" --project "${GCP_PROJECT}" --format='value(status)')"
+  done
+  if [[ "${status}" != "SUCCESS" ]]; then
+    echo "Build ${build_id} ended with ${status}." >&2
+    exit 1
+  fi
+  echo "Build ${build_id}: SUCCESS"
 fi
 
-echo "Deploying ${SERVICE_NAME} to ${GCP_REGION}. Database credentials stay in Secret Manager."
-
-gcloud run deploy "${SERVICE_NAME}" \
-  --source . \
+echo "Deploying ${sha} to ${SERVICE_NAME} as tag '${TAG}' with no traffic (${ENV_VARS})."
+run gcloud run deploy "${SERVICE_NAME}" \
+  --image "${image}" \
   --project "${GCP_PROJECT}" \
   --region "${GCP_REGION}" \
   --platform managed \
+  --no-traffic \
+  --tag "${TAG}" \
   --allow-unauthenticated \
   --port 8080 \
-  --min-instances 0 \
+  --min-instances 1 \
   --max-instances 4 \
-  --memory 512Mi \
+  --memory 1Gi \
   --cpu 1 \
+  --concurrency 80 \
   --timeout 60 \
-  --set-secrets "${secrets}" \
-  --set-env-vars "^|^${env_vars}"
+  --cpu-boost \
+  --set-env-vars "${ENV_VARS}" \
+  --set-secrets "${SECRETS}"

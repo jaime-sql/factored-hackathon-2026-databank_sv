@@ -78,6 +78,8 @@ class OpsStore:
         self.path = path
         self.dsn = dsn
         self.readback_tamper: Any = None
+        # FORCE_TEST_CASES on a tag revision: every insert is test traffic.
+        self.force_test = False
         self._migrations_ok = False
         self._schema_checked_at = 0.0
         self._schema_warned = False
@@ -152,7 +154,9 @@ class OpsStore:
         """True once the test schema has been seen. A miss is retried every 30s."""
         if self._migrations_ok:
             return True
-        if time.monotonic() - self._schema_checked_at < _SCHEMA_RETRY_SECONDS:
+        # Compare against the retry deadline, not an elapsed difference: (t + 30) - t
+        # can round to 29.999… for large monotonic values and skip the retry.
+        if time.monotonic() < self._schema_checked_at + _SCHEMA_RETRY_SECONDS:
             return False
         return self.refresh_test_schema()
 
@@ -208,6 +212,7 @@ class OpsStore:
         is_test: bool,
         extras: tuple[tuple[str, object], ...] = (),
     ) -> None:
+        is_test = is_test or self.force_test
         without = (
             f"INSERT INTO {self._table(table)} ({columns}) VALUES ({_placeholders(len(params))})"
         )

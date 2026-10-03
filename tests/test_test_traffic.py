@@ -94,7 +94,7 @@ def test_flag_set_unset_and_wrong_token(qa_client: TestClient, client: TestClien
         headers={"X-Test-Token": "not-the-token"},
     )
     assert wrong.status_code == 200
-    assert wrong.json() == {"is_test": False}
+    assert wrong.json() == {"is_test": False, "accepted": False}
     assert "error" not in wrong.json()
     assert QA_TOKEN not in wrong.text
     assert "not-the-token" not in wrong.text
@@ -104,9 +104,12 @@ def test_flag_set_unset_and_wrong_token(qa_client: TestClient, client: TestClien
 
     armed = qa_client.post("/api/test-mode", headers={"X-Test-Token": QA_TOKEN})
     assert armed.status_code == 200
-    assert armed.json() == {"is_test": True}
+    assert armed.json() == {"is_test": True, "accepted": True}
     assert QA_TOKEN not in armed.text
     assert qa_client.cookies.get("hd_test")
+    # Once armed, a wrong token still reads is_test (the cookie) but is not accepted.
+    again = qa_client.post("/api/test-mode", headers={"X-Test-Token": "not-the-token"})
+    assert again.json() == {"is_test": True, "accepted": False}
     session = qa_client.post("/api/session", json={"persona": "maria"})
     assert session.status_code == 200
     assert session.json()["is_test"] is True
@@ -770,12 +773,18 @@ def test_health_retries_a_false_schema_and_then_keeps_it(
     qa_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ops = qa_client.app.state.ops
+    # Fake clock from the start. 253.48… is a start value where (t + 30) - t rounds to
+    # 29.99999999999997; an elapsed-time comparison skipped the retry on fresh CI VMs
+    # (low uptime, so small monotonic values).
+    clock = {"t": 253.4821336059894}
+    monkeypatch.setattr("app.ops.store.time.monotonic", lambda: clock["t"])
     _strip_test_schema(ops.path)
     assert ops.refresh_test_schema() is False
+    assert ops._schema_checked_at == clock["t"]
     assert qa_client.get("/health").json()["migrations_ok"] is False
-    clock = {"t": ops._schema_checked_at}
-    monkeypatch.setattr("app.ops.store.time.monotonic", lambda: clock["t"])
     ops._probe_test_schema = lambda: True  # type: ignore[method-assign]
+    assert qa_client.get("/health").json()["migrations_ok"] is False
+    clock["t"] = ops._schema_checked_at + _SCHEMA_RETRY_SECONDS - 0.5
     assert qa_client.get("/health").json()["migrations_ok"] is False
     clock["t"] = ops._schema_checked_at + _SCHEMA_RETRY_SECONDS
     assert qa_client.get("/health").json()["migrations_ok"] is True

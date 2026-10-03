@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     demo_judge_token: str = ""
     eval_runner_token: str = ""
     qa_test_token: str = ""
+    # Tag (QA) revisions only: store every case and its audit rows as test traffic.
+    force_test_cases: bool = False
     prompt_version: str = PROMPT_VERSION
 
     @property

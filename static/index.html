@@ -57,9 +57,17 @@
     </p>
     <form id="test-mode-form" class="test-arm-form" hidden>
       <label class="visually-hidden" id="test-token-label" for="test-token">Token de prueba</label>
-      <input id="test-token" type="password" autocomplete="off" maxlength="200" placeholder="Token de prueba" />
+      <input id="test-token" type="password" autocomplete="off" maxlength="200" placeholder="Token de prueba" aria-describedby="test-token-error" />
       <button type="submit" id="test-mode-send">Activar</button>
     </form>
+    <div id="test-mode-status" class="test-mode-status" aria-live="polite">
+      <p id="test-ok-row" class="test-ok-row" hidden>
+        <span id="test-ok-chip" class="test-ok-chip">Modo de prueba activo ✓</span>
+        <button type="button" id="test-mode-change" class="linkish">Cambiar</button>
+      </p>
+      <p id="test-mode-hint" class="test-mode-hint" hidden>Ahora elige un cliente y escribe tu mensaje.</p>
+      <p id="test-token-error" class="test-token-error" hidden>Token no válido</p>
+    </div>
   </main>
   <script src="/static/js/desk.js"></script>
   <script src="/static/js/tour.js"></script>

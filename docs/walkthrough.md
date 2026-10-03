@@ -85,7 +85,7 @@ There is no tool-calling LLM agent. The only LLM call is the background reply dr
 | `app/i18n.py` | ES/PT copy catalog served to the pages. |
 | `static/` | The pages: `index.html` + `js/desk.js` (customer), `agent.html` + `js/agent.js` (console), `metrics.html` + `js/metrics.js`, `js/tour.js` (the "¿Cómo funciona?" guide). |
 | `migrations/` | SQL `001`–`006` for the `app` schema. |
-| `deploy/cloudrun.sh`, `Dockerfile` | Container build and a generic Cloud Run deploy script (see the warning in section 6.2). |
+| `deploy/cloudrun.sh`, `Dockerfile` | Container build and the tag deploy script for `databank-sv-app` (no traffic, see section 6.2). |
 | `scripts/mark_demo_cases_test.py` | Marks existing case ids as test traffic. |
 | `pipeline/` | The data pipeline (section 3). |
 | `ml/` | The ML code and artifacts (section 4). |
@@ -451,7 +451,7 @@ A `--image` deploy keeps the env and secrets from the previous revision. The ser
 
 To change a mapping, add `--update-secrets QA_TEST_TOKEN=qa-test-token:latest` (etc.) to the deploy. Never put a value on the command line or in the repo.
 
-> **Warning:** `deploy/cloudrun.sh` is a generic source deploy (`--source .`, default service `harbor-desk`, secret names `<service>-…`). The live service was not deployed with it. Use the commands above for `databank-sv-app`. PR #7 rewrites the script for the live service; until it merges, don't use it.
+> `deploy/cloudrun.sh [TAG] [GIT_REF]` runs the build and the no-traffic tag deploy above in one step (default tag `next`, default ref `origin/main`). Tag deploys (`next`, `preview`, …) set `FORCE_TEST_CASES=true`, so every case they create is test traffic and `/health` shows `force_test: true`. A tag starting with `live` (for example `live-<sha>`) is a live candidate deployed without the flag; only such a revision may be promoted with the `update-traffic` command above. The script never moves traffic.
 
 **DB migrations** (Supabase `dmqwgbtrrnxkgcahunrc`). Apply them as the **database owner**, not `app_rw`, in order. Each file is idempotent.
 
@@ -530,7 +530,7 @@ Do this in one browser session, in order. Have two tokens ready (values come fro
 | App fails at startup | `DEMO_JUDGE_TOKEN` equals `EVAL_RUNNER_TOKEN`, or in production `DATABASE_URL`, `SESSION_SECRET` (≥ 32 chars) or `DEMO_AGENT_TOKEN` (≥ 16 chars) is missing or default. |
 | Tests fail or call OpenAI | Unset `OPENAI_API_KEY` and set `NODE_OPTIONS=--experimental-websocket` (6.1). Browser tests skip without Chrome/Chromium. |
 | `gcloud builds submit` can't stream logs | The build is still running. Check the Cloud Build console before deploying. |
-| A deploy with `deploy/cloudrun.sh` creates the wrong service | That script targets `harbor-desk`. Use the commands in 6.2. |
+| A QA case shows up in live Métricas | Check `/health` on the tag: `force_test` must be `true`. Redeploy the tag with `deploy/cloudrun.sh`. |
 | Test mode doesn't turn on | `QA_TEST_TOKEN` isn't set on the service, or the token is wrong (a wrong token returns 200 with the flag off). |
 | Consola rejects the QA token | Consola needs an agent token (`DEMO_AGENT_TOKEN` or `DEMO_JUDGE_TOKEN`). |
 | Draft says "Borrador en preparación…" | The draft runs in the background. Wait a few seconds. After 40 s you get "No se pudo generar el borrador" and **Reintentar**. |

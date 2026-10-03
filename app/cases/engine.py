@@ -237,9 +237,12 @@ class Engine:
         case_source: str | None,
         is_test: bool = False,
         demo_attack: bool = False,
+        force_test: bool = False,
     ) -> CaseResult:
         if eval_run_id or case_source:
             is_test = False
+        if force_test:
+            is_test = True
         if demo_attack:
             message = demo_attack_message(language)
         lang = detect_language(message or "", language)
