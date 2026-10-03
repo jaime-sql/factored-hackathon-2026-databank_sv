@@ -20,7 +20,7 @@ from app.auth.session import accepts_qa_test_token, read_session, sign_customer
 from app.config import Settings
 from app.ids import new_case_id
 from app.main import create_app
-from app.ops.store import OpsStore
+from app.ops.store import _SCHEMA_RETRY_SECONDS, OpsStore
 from scripts.mark_demo_cases_test import mark_cases_test
 from tests.conftest import login
 
@@ -702,6 +702,110 @@ def test_missing_test_schema_keeps_serving(
     exported = client.get("/audit/export", headers=ADMIN)
     assert exported.status_code == 200
     assert opened.json()["case_id"] in exported.text
+
+
+def test_missing_test_schema_refuses_a_test_mode_case(qa_client: TestClient) -> None:
+    ops = qa_client.app.state.ops
+    _strip_test_schema(ops.path)
+    headers = login(qa_client, "maria")
+    refused = qa_client.post(
+        "/cases",
+        headers={**headers, "X-Test-Token": QA_TOKEN},
+        json={"message": "hola"},
+    )
+    assert refused.status_code == 503, refused.text
+    body = refused.json()
+    assert body["error"] == "test_schema_missing"
+    assert "002_is_test" in body["message"]
+    assert "not opened" in body["message"]
+    with sqlite3.connect(ops.path) as conn:
+        assert conn.execute("SELECT count(*) FROM cases").fetchone()[0] == 0
+    again = qa_client.post(
+        "/cases",
+        headers={**headers, "X-Test-Token": QA_TOKEN},
+        json={"message": "hola"},
+    )
+    assert again.status_code == 503, again.text
+    opened = qa_client.post("/cases", headers=headers, json={"message": "hola"})
+    assert opened.status_code == 200, opened.text
+    assert opened.json()["is_test"] is False
+    assert opened.json()["demo_attack"] is False
+    with sqlite3.connect(ops.path) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
+        assert "is_test" not in columns
+        assert conn.execute("SELECT count(*) FROM cases").fetchone()[0] == 1
+
+
+def test_schema_probe_caches_true_and_retries_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ops = OpsStore("sqlite", path=str(tmp_path / "ops.sqlite"))
+    assert ops.migrations_ok is True
+    calls = {"n": 0}
+
+    def probe() -> bool:
+        calls["n"] += 1
+        return calls["n"] >= 2
+
+    ops._probe_test_schema = probe  # type: ignore[method-assign]
+    clock = {"t": 5_000.0}
+    monkeypatch.setattr("app.ops.store.time.monotonic", lambda: clock["t"])
+    assert ops.refresh_test_schema() is False
+    assert calls["n"] == 1
+    assert ops.migrations_ok is False
+    assert calls["n"] == 1
+    clock["t"] += _SCHEMA_RETRY_SECONDS - 0.1
+    assert ops.migrations_ok is False
+    assert calls["n"] == 1
+    clock["t"] += 0.1
+    assert ops.migrations_ok is True
+    assert calls["n"] == 2
+    clock["t"] += 10_000
+    ops._probe_test_schema = lambda: False  # type: ignore[method-assign]
+    assert ops.migrations_ok is True
+    assert calls["n"] == 2
+
+
+def test_health_retries_a_false_schema_and_then_keeps_it(
+    qa_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ops = qa_client.app.state.ops
+    _strip_test_schema(ops.path)
+    assert ops.refresh_test_schema() is False
+    assert qa_client.get("/health").json()["migrations_ok"] is False
+    clock = {"t": ops._schema_checked_at}
+    monkeypatch.setattr("app.ops.store.time.monotonic", lambda: clock["t"])
+    ops._probe_test_schema = lambda: True  # type: ignore[method-assign]
+    assert qa_client.get("/health").json()["migrations_ok"] is False
+    clock["t"] = ops._schema_checked_at + _SCHEMA_RETRY_SECONDS
+    assert qa_client.get("/health").json()["migrations_ok"] is True
+    assert qa_client.get("/healthz").json()["migrations_ok"] is True
+    ops._probe_test_schema = lambda: False  # type: ignore[method-assign]
+    clock["t"] += 120
+    assert qa_client.get("/health").json()["migrations_ok"] is True
+
+
+def test_post_cases_reports_is_test_and_demo_attack(
+    client: TestClient, qa_client: TestClient
+) -> None:
+    plain = client.post("/cases", headers=login(client, "maria"), json={"message": "hola"})
+    assert plain.status_code == 200, plain.text
+    assert plain.json()["is_test"] is False
+    assert plain.json()["demo_attack"] is False
+    session = qa_client.post(
+        "/api/session",
+        json={"persona": "maria"},
+        headers={"X-Test-Token": QA_TOKEN},
+    )
+    assert session.status_code == 200, session.text
+    opened = qa_client.post(
+        "/cases",
+        headers={"Authorization": f"Bearer {session.json()['token']}"},
+        json={"message": "hola"},
+    )
+    assert opened.status_code == 200, opened.text
+    assert opened.json()["is_test"] is True
+    assert opened.json()["demo_attack"] is False
 
 
 def test_test_session_excludes_abandoned_from_live_metrics(qa_client: TestClient) -> None:

@@ -194,3 +194,14 @@ def test_locale_toggle_on_each_page() -> None:
         text=True,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_demo_buttons_run_real_charges_and_scroll_to_why() -> None:
+    completed = subprocess.run(
+        ["node", "tests/test_demos.js"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr

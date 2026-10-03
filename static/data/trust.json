@@ -1,0 +1,44 @@
+[
+ {
+  "label_es": "Tablas que cuadran con la fuente del pipeline",
+  "label_pt": "Tabelas que batem com a fonte do pipeline",
+  "value": "6/6",
+  "ok": true,
+  "checked_at": "2026-10-03T16:33:35Z"
+ },
+ {
+  "label_es": "Etiquetas de evaluación aisladas de la app",
+  "label_pt": "Rótulos de avaliação isolados do app",
+  "value": "OK",
+  "ok": true,
+  "checked_at": "2026-10-03T16:33:35Z"
+ },
+ {
+  "label_es": "Seguridad por fila (RLS) activa en todas las tablas",
+  "label_pt": "Segurança por linha (RLS) ativa em todas as tabelas",
+  "value": "17/17",
+  "ok": true,
+  "checked_at": "2026-10-03T16:33:35Z"
+ },
+ {
+  "label_es": "Auditoría solo admite inserciones",
+  "label_pt": "Auditoria aceita somente inserções",
+  "value": "OK",
+  "ok": true,
+  "checked_at": "2026-10-03T16:33:35Z"
+ },
+ {
+  "label_es": "La app solo lee los datos públicos",
+  "label_pt": "O app só lê os dados públicos",
+  "value": "OK",
+  "ok": true,
+  "checked_at": "2026-10-03T16:33:35Z"
+ },
+ {
+  "label_es": "Reproducible con un comando",
+  "label_pt": "Reproduzível com um comando",
+  "value": "bash pipeline/run_all.sh",
+  "ok": true,
+  "checked_at": "2026-10-03T16:33:35Z"
+ }
+]

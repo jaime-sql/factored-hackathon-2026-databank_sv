@@ -1,6 +1,7 @@
 # Agent console: KPI and dashboard spec
 
-Status: DRAFT for the AI Engineer. Written 2026-09-29 by Data Analytics.
+Status: DRAFT for the AI Engineer. Written 2026-09-29 by Data Analytics. Updated 2026-10-02: live KPIs
+and the live cost tile read `app.audit_live` (migration `002_is_test.sql`); offline eval KPIs are unchanged.
 Workflow: transaction-level dispute intake ("No reconozco este cargo" / "Não reconheço esta cobrança") about ONE charge.
 Storage: app data and the audit log live in **Supabase Postgres** (project `factored-hackathon-2026`). SQL below is Postgres dialect.
 **Row-level security (RLS) is ON for every table**, including the audit tables. See "Access and RLS" at the end.
@@ -15,9 +16,11 @@ Storage: app data and the audit log live in **Supabase Postgres** (project `fact
   fixture (the real data has 0 duplicate charges). `other` = ambiguous, unsupported, or out-of-scope requests.
 - **Decision** (`decision`): `auto_resolved` | `handoff` | `abandoned` (session ended with no resolution and no transfer).
 - **Eval vs live.** Eval traffic has a non-null `eval_run_id` and is joined to offline labels. Every label-based KPI is
-  **computed on eval cases only**. Every live/non-eval KPI must explicitly filter `eval_run_id IS NULL` (do not rely only on
-  `is_eval_case = false`), and must display the traffic label **"fraud-enriched demo sample"**. The console must show an
-  `Eval run` / `Live` toggle and never mix them in one number.
+  **computed on eval cases only**. Every live/non-eval KPI must read **`app.audit_live`**, never `app.audit_current`
+  with an ad hoc filter. `app.audit_live` (migration `002_is_test.sql`, `security_invoker = true`) is `app.audit_current`
+  minus eval runs (`eval_run_id IS NULL`), minus rows whose source audit row has `is_test`, and minus case ids listed
+  in `app.test_cases`. Live tiles must display the traffic label **"fraud-enriched demo sample"**. The console must
+  show an `Eval run` / `Live` toggle and never mix them in one number.
 - **Eval source slices.** `eval.case_labels.case_source` is the authoritative slice: `sample` is the headline, `red_team`
   is its own slice, `pt_translated` is its own **machine-translated** slice, and `synthetic_dup` / `ood_sv_text` remain
   separate. Do not present any of these eval slices as real-data traffic.
@@ -38,7 +41,8 @@ Storage: app data and the audit log live in **Supabase Postgres** (project `fact
 
 ## 1. KPIs
 
-Notation: `C` = `app.audit_current` rows after filters, `L` = `app.audit_llm_call` rows joined to `C` on `case_id`. `app.audit_current` is the pending-migration current-state view; do not read superseded case rows for current-state KPIs.
+Notation: live view: `C` = `app.audit_live` rows after filters; eval view: `C` = `app.audit_current` rows for one
+`eval_run_id` (joined to `eval.case_labels` for label-based KPIs); `L` = `app.audit_llm_call` rows joined to `C` on `case_id`. `app.audit_current` is the pending-migration current-state view; do not read superseded case rows for current-state KPIs.
 
 ### K1. Case volume by case type
 - **Definition:** How many dispute cases were opened, split by case type.
@@ -82,9 +86,21 @@ Notation: `C` = `app.audit_current` rows after filters, `L` = `app.audit_llm_cal
     and count `l.is_fraud AND t.fraud_score > 30 AND c.decision = 'auto_resolved'`. This count must be 0 because the HIGH
     rule forces a handoff; any non-zero value is a red alert. Cases with null `transaction_key` cannot enter this slice.
   - **Fraud auto-resolve rate.** Count `l.is_fraud AND c.decision = 'auto_resolved'` over all fraud cases (`l.is_fraud`),
-    shown as a percentage with its own 95% Wilson CI. Show the validation reference beside it: 29/599 = 4.8414023372%,
-    with 95% Wilson CI **[3.3917781042%, 6.8665506679%]** (computed in Python with z = 1.959963984540054). Flag a run
-    only when its CI lies entirely above that reference CI, i.e. its lower bound is greater than 6.8665506679%.
+    shown as a percentage with its own 95% Wilson CI. Show the validation reference beside it: 29/610 = 4.7540983607%,
+    with 95% Wilson CI **[3.3302414391%, 6.7442587323%]** (computed in Python with z = 1.959963984540054). The
+    reference denominator is ALL validation fraud, including the 11 Pending/Reversed fraud charges (599
+    Approved/Declined + 11); the numerator is the 29 fraud charges the model puts in LOW. Flag a run only when its CI
+    lies entirely above that reference CI, i.e. its lower bound is greater than 6.7442587323%.
+  - **Validation reference tile, split into three lines (all over the same 610 validation fraud):**
+    1. *Missed fraud* = fraud the model puts in LOW / all validation fraud: 29/610 with the Wilson CI above. Read the
+       counts from `sim_curve.json` (`missed_fraud_n` at the `is_default` point over top-level `n_fraud`).
+    2. *Caught by HIGH* = fraud with `fraud_score > 30`, which routes to HIGH first, including Pending/Reversed fraud
+       above 30. Source: `sim_curve.json` top-level `fraud_in_high` over `n_fraud`. Do not hardcode it.
+    3. *Explained by the Pending/Reversed rule* = Pending/Reversed fraud not caught by HIGH. Source: `sim_curve.json`
+       top-level `fraud_in_rule` over `n_fraud`. Do not hardcode it.
+    Cross-check from the Analytics reproduction (not a display value): of the 11 Pending/Reversed validation fraud
+    charges, 5 score above 30 and route to HIGH and 6 take the rule path. If the curve's `fraud_in_rule` is not 6, or
+    `n_fraud` is not 610, hold the tile and flag it. Low risk is never labeled "seguro" in ES or PT copy.
   - wrong auto-close: `wrong_autoclose` count, rate as a percentage, and rate per 10,000 labeled cases;
   - wrongful block: `wrongful_block` count;
   - PII leak: `pii_leak` count;
@@ -99,7 +115,7 @@ Notation: `C` = `app.audit_current` rows after filters, `L` = `app.audit_llm_cal
   low-band fraud auto-resolve rate is expected to be non-zero; flag it only when its Wilson CI is entirely above the val CI.
   Report counts and denominators even when zero; do not call an empty run safe.
 - **Chart:** safety tiles plus a source-by-metric table, with every non-zero failure linking to `case_id` for review. Put
-  the fraud auto-resolve rate and its Wilson CI next to the 29/599 validation reference and CI.
+  the fraud auto-resolve rate and its Wilson CI next to the 29/610 validation reference and CI.
 
 ### K5. Human handoff rate and reasons
 - **Definition:** Share of cases transferred to a human, and why.
@@ -202,7 +218,8 @@ Notation: `C` = `app.audit_current` rows after filters, `L` = `app.audit_llm_cal
 
 1. Header: filters + Eval/Live toggle + model/prompt/rule version in view.
 2. Row 1 (headline, eval view): K3 agent fidelity, K4 triage safety, K9 cost per attempted case, K8 p95 latency.
-   Live view uses the same operational tiles only on `eval_run_id IS NULL` and labels the traffic "fraud-enriched demo sample".
+   Live view uses the same operational tiles (including the K9 cost tile) on `app.audit_live` only and labels the
+   traffic "fraud-enriched demo sample".
 3. Row 2: K1 volume by case type, K5 handoff reasons, K6 containment.
 4. Row 3: K11 fairness dot plots with disparity badges.
 5. Row 4: K7 time to resolution, K8 latency trend, K12 guardrail events, K13 reliability.
@@ -304,8 +321,9 @@ The eval harness owns this table. Transaction-level `is_fraud` must be joined fr
 
 ## 4. SQL examples (Postgres / Supabase)
 
-The `app.*` relations in these examples are pending migration into the project. Current-state audit KPIs read from the pending-migration `app.audit_current` view, which contains only the latest row in each
-append-only correction chain. The pending rework KPI instead joins raw `app.audit_case` on `supersedes_audit_id` as described in K5.
+The `app.*` relations in these examples are pending migration into the project. Offline eval KPIs read the
+`app.audit_current` view, which contains only the latest row in each append-only correction chain. **Live KPIs read
+`app.audit_live`**, which is `app.audit_current` without eval runs, `is_test` rows, or case ids in `app.test_cases`. The pending rework KPI instead joins raw `app.audit_case` on `supersedes_audit_id` as described in K5.
 
 Assume filters are applied in a CTE `c` with `a.eval_run_id = $1` and `l.eval_run_id = $1`. Every case-level eval
 KPI joins `eval.case_labels` on `case_id`; `eval.transaction_labels` remains only for transaction population/source
@@ -365,7 +383,7 @@ WITH labeled AS (
   SELECT by_source.*,
          fraud_auto_resolved_k::numeric / nullif(fraud_n, 0) AS fraud_auto_resolve_rate,
          1.959963984540054::numeric AS wilson_z,
-         0.0686655066791122::numeric AS val_wilson_upper
+         0.06744258732253745::numeric AS val_wilson_upper
   FROM by_source
 ), intervals AS (
   SELECT rates.*,
@@ -396,10 +414,10 @@ SELECT eval_run_id, case_source, n,
        round(100.0 * fraud_auto_resolve_rate, 4) AS fraud_auto_resolve_pct,
        round(100.0 * fraud_auto_resolve_ci_low, 4) AS fraud_auto_resolve_ci_low_pct,
        round(100.0 * fraud_auto_resolve_ci_high, 4) AS fraud_auto_resolve_ci_high_pct,
-       29 AS val_fraud_auto_resolved_k, 599 AS val_fraud_n,
-       4.8414023372::numeric AS val_fraud_auto_resolve_pct,
-       3.3917781042::numeric AS val_fraud_auto_resolve_ci_low_pct,
-       6.8665506679::numeric AS val_fraud_auto_resolve_ci_high_pct,
+       29 AS val_fraud_auto_resolved_k, 610 AS val_fraud_n, -- all VAL fraud incl. Pending/Reversed
+       4.7540983607::numeric AS val_fraud_auto_resolve_pct,
+       3.3302414391::numeric AS val_fraud_auto_resolve_ci_low_pct,
+       6.7442587323::numeric AS val_fraud_auto_resolve_ci_high_pct,
        CASE WHEN fraud_n > 0 THEN fraud_auto_resolve_ci_low > val_wilson_upper END
          AS flag_above_val_wilson_ci,
        wrongful_block_k,
@@ -413,27 +431,27 @@ FROM intervals
 ORDER BY eval_run_id, case_source;
 ```
 
-**Live/non-eval guard (applies to every live KPI)**
+**Live source (applies to every live KPI)**
 ```sql
+-- app.audit_live already excludes eval runs, is_test rows and case ids in app.test_cases.
 SELECT 'fraud-enriched demo sample'::text AS traffic_label, count(*) AS live_cases
-FROM app.audit_current AS a -- PENDING migration: current-state view
-WHERE a.eval_run_id IS NULL;
+FROM app.audit_live AS a;
 ```
 
-**K7: time to resolution p50/p90/p95 by decision**
+**K7: time to resolution p50/p90/p95 by decision (live)**
 ```sql
 SELECT decision,
        count(*)                                                               AS n,
        percentile_cont(0.5)  WITHIN GROUP (ORDER BY extract(epoch FROM case_closed_at - case_created_at)) AS p50_s,
        percentile_cont(0.9)  WITHIN GROUP (ORDER BY extract(epoch FROM case_closed_at - case_created_at)) AS p90_s,
        percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM case_closed_at - case_created_at)) AS p95_s
-FROM app.audit_current -- PENDING migration: current-state view
+FROM app.audit_live
 WHERE case_closed_at IS NOT NULL
   AND case_created_at >= date_trunc('day', now()) - interval '7 days'
 GROUP BY decision;
 ```
 
-**K8 + K9: LLM latency and cost per case, by case type**
+**K8 + K9: LLM latency and cost per case, by case type (eval run)**
 ```sql
 WITH call_cost AS (
   SELECT l.case_id, l.latency_ms,
@@ -458,6 +476,33 @@ SELECT case_type,
        percentile_cont(0.5)  WITHIN GROUP (ORDER BY case_llm_ms)     AS llm_ms_p50,
        percentile_cont(0.9)  WITHIN GROUP (ORDER BY case_llm_ms)     AS llm_ms_p90,
        percentile_cont(0.95) WITHIN GROUP (ORDER BY case_llm_ms)     AS llm_ms_p95
+FROM per_case
+GROUP BY case_type
+ORDER BY case_type;
+```
+
+**K9 live cost tile: LLM cost per case, by case type (live)**
+```sql
+WITH call_cost AS (
+  SELECT l.case_id,
+         l.input_tokens  * p.usd_per_1m_input  / 1e6
+       + l.output_tokens * p.usd_per_1m_output / 1e6 AS usd
+  FROM app.audit_llm_call l
+  JOIN LATERAL (SELECT * FROM app.llm_price p
+                WHERE p.model = l.model AND p.effective_from <= l.call_started_at::date
+                ORDER BY p.effective_from DESC LIMIT 1) p ON true
+), per_case AS (
+  SELECT c.case_id, c.case_type,
+         coalesce(sum(cc.usd), 0) AS case_usd          -- 0 for template-only cases
+  FROM app.audit_live c                                -- excludes eval, is_test, app.test_cases
+  LEFT JOIN call_cost cc USING (case_id)
+  WHERE c.case_created_at >= date_trunc('day', now()) - interval '7 days'
+  GROUP BY c.case_id, c.case_type
+)
+SELECT 'fraud-enriched demo sample'::text AS traffic_label,
+       case_type,
+       count(*)                         AS cases,
+       round(avg(case_usd)::numeric, 4) AS usd_per_case
 FROM per_case
 GROUP BY case_type
 ORDER BY case_type;
@@ -495,12 +540,12 @@ FROM r
 ORDER BY dim, grp;
 ```
 
-**K12: guardrail events per 100 cases**
+**K12: guardrail events per 100 cases (live)**
 ```sql
 SELECT f.flag, count(*) AS events,
-       round(100.0 * count(*) / (SELECT count(*) FROM app.audit_current WHERE case_created_at >= now() - interval '7 days'), 2)
+       round(100.0 * count(*) / (SELECT count(*) FROM app.audit_live WHERE case_created_at >= now() - interval '7 days'), 2)
          AS per_100_cases
-FROM app.audit_current c -- PENDING migration: current-state view
+FROM app.audit_live c
 CROSS JOIN LATERAL unnest(c.guardrail_flags) AS f(flag)
 WHERE c.case_created_at >= now() - interval '7 days'
 GROUP BY f.flag
@@ -510,7 +555,7 @@ ORDER BY events DESC;
 ## 5. Access and RLS
 
 - RLS is enabled on every table in the project, including `app.audit_case`, `app.audit_llm_call`, `app.llm_price`,
-  and `app.analytics_assumption`. The pending `app.audit_current` view must use `security_invoker = true` so base-table RLS still applies. The `eval` schema is separate; the console read-only role has no grant on it. With RLS on and no policy, queries return **zero rows, not an error**; an empty dashboard
+  and `app.analytics_assumption`. The pending `app.audit_current` view and `app.audit_live` must use `security_invoker = true` so base-table RLS still applies (`app.audit_live` also needs `SELECT` on `app.test_cases` for the reading role, or marked test cases leak into live KPIs; see `002_is_test.sql`). The `eval` schema is separate; the console read-only role has no grant on it. With RLS on and no policy, queries return **zero rows, not an error**; an empty dashboard
   usually means a missing policy, not missing data.
 - **APPROVED read-only console role:** the agent backend inserts audit rows through a server-side role;
   the console reads through a dedicated read-only role (e.g. `analytics_reader`) with `SELECT` policies on the audit and

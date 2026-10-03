@@ -67,6 +67,12 @@ const GUIDE = {
         pt: "Enviar entrega essa mensagem ao assistente.",
       },
       {
+        selector: "#break-it",
+        es: "Intenta romperlo envía un ataque de demostración y muestra la protección.",
+        pt: "Tente quebrá-lo envia um ataque de demonstração e mostra a proteção.",
+        label: { es: "Intenta romperlo", pt: "Tente quebrá-lo" },
+      },
+      {
         selector: "details.why summary",
         es: "¿Por qué? muestra la hora local, la banda y el motivo.",
         pt: "Por quê? mostra a hora local, a faixa e o motivo.",
@@ -222,7 +228,12 @@ const GUIDE = {
         dynamic: true,
       },
       {
-        selector: "#raw",
+        selector: "#health",
+        es: "Salud del sistema muestra las llamadas, la latencia y el costo.",
+        pt: "Saúde do sistema mostra as chamadas, a latência e o custo.",
+      },
+      {
+        selector: "#raw-wrap",
         es: "Este bloque es el mismo cálculo en JSON, para leer el detalle.",
         pt: "Este bloco é o mesmo cálculo em JSON, para ler o detalhe.",
       },
@@ -318,20 +329,36 @@ function installTour() {
     target = null;
   }
 
+  function headerFloor() {
+    const header = document.querySelector("header");
+    if (!header || typeof header.getBoundingClientRect !== "function") return 12;
+    const bottom = header.getBoundingClientRect().bottom;
+    return Math.max(12, bottom + 12);
+  }
+
   function place(el) {
     tip.style.transform = "none";
+    const margin = 12;
+    const floor = headerFloor();
     if (!el) {
       tip.style.left = "50%";
-      tip.style.top = "50%";
-      tip.style.transform = "translate(-50%, -50%)";
+      tip.style.top = `${floor}px`;
+      tip.style.transform = "translateX(-50%)";
       return;
     }
-    const margin = 12;
     const rect = el.getBoundingClientRect();
     const box = tip.getBoundingClientRect();
-    let top = rect.bottom + margin;
-    if (top + box.height > window.innerHeight - margin) top = rect.top - box.height - margin;
-    if (top < margin) top = margin;
+    let top = Math.max(rect.bottom + margin, floor);
+    if (top + box.height > window.innerHeight - margin) {
+      const above = rect.top - box.height - margin;
+      if (above >= floor) top = above;
+    }
+    // A target taller than the window (the metrics JSON block) fits neither
+    // below nor above it. Keep the box on screen so its buttons stay reachable.
+    if (top + box.height > window.innerHeight - margin) {
+      top = Math.max(floor, window.innerHeight - box.height - margin);
+    }
+    if (top < floor) top = floor;
     let left = rect.left;
     if (left + box.width > window.innerWidth - margin) left = window.innerWidth - box.width - margin;
     if (left < margin) left = margin;

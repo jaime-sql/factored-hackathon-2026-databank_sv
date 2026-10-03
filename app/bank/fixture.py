@@ -23,7 +23,7 @@ PERSONAS: tuple[dict[str, str], ...] = (
         "id": "ana",
         "customer_key": "ck_ar_ana",
         "bank_customer_key": "CUS_bea1a374f5bcbe2b4b20",
-        "label": "Ana · Argentina",
+        "label": "Ana · Rosario",
         "country": "Argentina",
         "segment": "Basic",
         "accent": "rioplatense",
@@ -34,7 +34,7 @@ PERSONAS: tuple[dict[str, str], ...] = (
         "id": "camilo",
         "customer_key": "ck_co_camilo",
         "bank_customer_key": "CUS_b202620b1dbf4256f447",
-        "label": "Camilo · Colombia",
+        "label": "Camilo · Barranquilla",
         "country": "Colombia",
         "segment": "Plus",
         "accent": "andino",
@@ -75,6 +75,19 @@ PERSONAS: tuple[dict[str, str], ...] = (
         "note": "Synthetic persona, duplicate charge",
     },
 )
+
+
+def persona_first_name(customer_key: str) -> str:
+    """First token of a demo persona label, or empty when the key is not a persona."""
+    for row in PERSONAS:
+        if customer_key not in {row["customer_key"], row["bank_customer_key"]}:
+            continue
+        label = row["label"].split("·", 1)[0].strip()
+        token = label.split()[0] if label else ""
+        if token and "[" not in token and "]" not in token:
+            return token
+        return ""
+    return ""
 
 
 def _features(tx: dict[str, object], customer: dict[str, str]) -> dict[str, object]:
