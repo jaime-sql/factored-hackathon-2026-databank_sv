@@ -55,6 +55,7 @@ class Match:
     tx: Transaction
     score: int
     hits: int
+    strong: bool = False
 
 
 def describe(tx: Transaction, customer: Customer, language: str) -> dict[str, Any]:
@@ -155,12 +156,14 @@ def search(
     for tx in ordered:
         score = 0
         hits = 0
+        strong = False
         if merchant:
             name = fold(tx.merchant_name)
             query = fold(merchant)
             if name and (query == name or query in name or _tokens(query) & _tokens(name)):
                 score += 6
                 hits += 1
+                strong = True
             elif merchant_category and tx.merchant_category == merchant_category:
                 score += 2
             elif merchant_kind and tx.transaction_type == merchant_kind:
@@ -179,6 +182,7 @@ def search(
             if gap <= max(0.51, abs(amount) * 0.005):
                 score += 6
                 hits += 1
+                strong = True
             elif gap <= abs(amount) * 0.1:
                 score += 1
         if wanted is not None:
@@ -191,13 +195,16 @@ def search(
                 score += 2 if not day_given else 1
                 hits += 0 if day_given else 1
         if score > 0:
-            matches.append(Match(tx, score, hits))
+            matches.append(Match(tx, score, hits, strong))
     if not matches:
         return [], False
     matches.sort(key=lambda m: (-m.score, -m.tx.transaction_ts_utc.timestamp()))
     top = matches[0]
     runner_up = matches[1].score if len(matches) > 1 else 0
-    confident = top.hits >= clues and top.score > runner_up
+    # An exact amount or merchant name that clearly beats the next charge is enough
+    # even when another clue (often a guessed year) does not line up.
+    clear_lead = top.strong and top.score - runner_up >= 4
+    confident = top.score > runner_up and (top.hits >= clues or clear_lead)
     if confident:
         return [top.tx], True
     return [m.tx for m in matches[:limit]], False
