@@ -157,6 +157,16 @@ class CaseResult:
         return payload
 
 
+@dataclass
+class Assessment:
+    route: str
+    band: str
+    version: str
+    case_type: str
+    prob: float | None
+    scored: TriageScore | None
+
+
 class Engine:
     def __init__(
         self,
@@ -172,6 +182,7 @@ class Engine:
         self.settings = settings
         self.triage = triage or LightGBMTriage()
         self._draft_local = threading.local()
+        self._agent_local = threading.local()
         self._draft_lock = threading.Lock()
         self._drafting: set[str] = set()
 
@@ -190,6 +201,16 @@ class Engine:
             yield pending
         finally:
             self._draft_local.pending = previous
+
+    @contextmanager
+    def agent_source(self) -> Iterator[None]:
+        """Audit rows written inside this block carry source='agent'."""
+        previous = getattr(self._agent_local, "source", None)
+        self._agent_local.source = "agent"
+        try:
+            yield
+        finally:
+            self._agent_local.source = previous
 
     def draft_in_progress(self, case_id: str) -> bool:
         with self._draft_lock:
@@ -321,75 +342,14 @@ class Engine:
         is_test: bool = False,
         demo_attack: bool = False,
     ) -> CaseResult:
-        if (
-            features is None
-            and synthetic_pair_sibling(tx.transaction_key)
-            and duplicate is not None
-            and duplicate.source_transaction_key
-        ):
-            # Demo choice: SYN_* has no fraud_features row, so the other model
-            # features come from source_transaction_key. The HIGH rule and the
-            # fraud_score copied onto that payload are this SYN row's own value.
-            features = self.bank.get_features(
-                customer.customer_key, str(duplicate.source_transaction_key)
-            )
-        config = self.thresholds.get()
-        route = preliminary_route(tx.fraud_score, tx.transaction_status, config)
+        assessed = self._assess(customer, tx, features, duplicate, flags)
+        route = assessed.route
+        band = assessed.band
+        version = assessed.version
+        case_type = assessed.case_type
+        prob = assessed.prob
         shown = present_time(tx.transaction_ts_utc, customer.tz, customer.customer_country, lang)
         amount = money(tx.amount, tx.currency, customer.customer_country)
-        scored: TriageScore | None = None
-        if route == "high":
-            band = "high"
-            version = RULE_VERSION
-            case_type = "triage"
-        elif route == "pending":
-            band = "out_of_scope"
-            version = RULE_VERSION
-            case_type = "pending"
-        elif route == "reversed":
-            band = "out_of_scope"
-            version = RULE_VERSION
-            case_type = "reversed"
-        elif features is None:
-            scored = fallback_score(
-                {"fraud_score": tx.fraud_score, "transaction_status": tx.transaction_status},
-                config,
-            )
-            band = "review"
-            version = FALLBACK_VERSION
-            flags.append("fallback_used")
-            case_type = "duplicate_synthetic" if duplicate is not None else "triage"
-        else:
-            payload = dict(features)
-            payload["transaction_key"] = tx.transaction_key
-            payload["transaction_status"] = tx.transaction_status
-            payload["fraud_score"] = tx.fraud_score
-            try:
-                scored = self.triage.score(payload, config)
-            except Exception:
-                logger.info("triage_fallback", extra={"transaction_key": tx.transaction_key})
-                scored = fallback_score(payload, config)
-            if scored.used_fallback:
-                flags.append("fallback_used")
-            if scored.band == "high":
-                flags.append("triage_band_mismatch")
-                band = "review"
-                version = scored.model_version
-            elif scored.band == "low" and scored.used_fallback:
-                flags.append("triage_band_mismatch")
-                band = "review"
-                version = FALLBACK_VERSION
-            else:
-                band = scored.band if scored.band in {"low", "review"} else "review"
-                version = scored.model_version
-            case_type = "duplicate_synthetic" if duplicate is not None else "triage"
-        prob = (
-            None
-            if scored is None or route in {"high", "pending", "reversed"}
-            else scored.model_risk_score
-        )
-        if route in {"pending", "reversed"}:
-            prob = None
         case_id = new_case_id()
         now = datetime.now(UTC)
         state, decision, closed, automation, reason, status, actions, reply = self._opening(
@@ -477,6 +437,93 @@ class Engine:
             demo_attack=demo_attack,
             is_test=is_test and not is_eval,
         )
+
+    def assess_charge(self, customer_key: str, transaction_key: str) -> Assessment | None:
+        """Band for one charge with the same rules and model as intake. Writes nothing."""
+        customer = self.bank.get_customer(customer_key)
+        tx = self.bank.get_transaction(customer_key, transaction_key)
+        if customer is None or tx is None:
+            return None
+        features = self.bank.get_features(customer_key, transaction_key)
+        duplicate = self.bank.get_duplicate(customer_key, transaction_key)
+        return self._assess(customer, tx, features, duplicate, [])
+
+    def _assess(
+        self,
+        customer: Customer,
+        tx: Transaction,
+        features: dict[str, object] | None,
+        duplicate: Any,
+        flags: list[str],
+    ) -> Assessment:
+        if (
+            features is None
+            and synthetic_pair_sibling(tx.transaction_key)
+            and duplicate is not None
+            and duplicate.source_transaction_key
+        ):
+            # Demo choice: SYN_* has no fraud_features row, so the other model
+            # features come from source_transaction_key. The HIGH rule and the
+            # fraud_score copied onto that payload are this SYN row's own value.
+            features = self.bank.get_features(
+                customer.customer_key, str(duplicate.source_transaction_key)
+            )
+        config = self.thresholds.get()
+        route = preliminary_route(tx.fraud_score, tx.transaction_status, config)
+        scored: TriageScore | None = None
+        if route == "high":
+            band = "high"
+            version = RULE_VERSION
+            case_type = "triage"
+        elif route == "pending":
+            band = "out_of_scope"
+            version = RULE_VERSION
+            case_type = "pending"
+        elif route == "reversed":
+            band = "out_of_scope"
+            version = RULE_VERSION
+            case_type = "reversed"
+        elif features is None:
+            scored = fallback_score(
+                {"fraud_score": tx.fraud_score, "transaction_status": tx.transaction_status},
+                config,
+            )
+            band = "review"
+            version = FALLBACK_VERSION
+            flags.append("fallback_used")
+            case_type = "duplicate_synthetic" if duplicate is not None else "triage"
+        else:
+            payload = dict(features)
+            payload["transaction_key"] = tx.transaction_key
+            payload["transaction_status"] = tx.transaction_status
+            payload["fraud_score"] = tx.fraud_score
+            try:
+                scored = self.triage.score(payload, config)
+            except Exception:
+                logger.info("triage_fallback", extra={"transaction_key": tx.transaction_key})
+                scored = fallback_score(payload, config)
+            if scored.used_fallback:
+                flags.append("fallback_used")
+            if scored.band == "high":
+                flags.append("triage_band_mismatch")
+                band = "review"
+                version = scored.model_version
+            elif scored.band == "low" and scored.used_fallback:
+                flags.append("triage_band_mismatch")
+                band = "review"
+                version = FALLBACK_VERSION
+            else:
+                band = scored.band if scored.band in {"low", "review"} else "review"
+                version = scored.model_version
+            case_type = "duplicate_synthetic" if duplicate is not None else "triage"
+        prob = (
+            None
+            if scored is None or route in {"high", "pending", "reversed"}
+            else scored.model_risk_score
+        )
+        if route in {"pending", "reversed"}:
+            prob = None
+        return Assessment(route, band, version, case_type, prob, scored)
 
     def _opening(
         self,
@@ -1233,7 +1280,7 @@ class Engine:
                 "case_source": case_source,
                 "is_test": bool(is_test) and not is_eval,
                 "demo_attack": bool(demo_attack),
-                "source": source,
+                "source": source or getattr(self._agent_local, "source", None),
             }
         )
 

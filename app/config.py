@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     qa_test_token: str = ""
     # Tag (QA) revisions only: store every case and its audit rows as test traffic.
     force_test_cases: bool = False
+    # AI agent intake (next only until promoted). Off: the guided flow is unchanged.
+    agent_enabled: bool = False
+    agent_timeout_seconds: float = Field(default=8.0, ge=1, le=30)
     prompt_version: str = PROMPT_VERSION
 
     @property

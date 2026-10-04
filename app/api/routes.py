@@ -11,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
+from app.agent.loop import transcript_for
 from app.auth.session import (
     accepts_qa_test_token,
     agent_role,
@@ -514,6 +515,7 @@ def handoff_case(
             "recorded_at": event["recorded_at"],
         }
         for event in events
+        if event["kind"] != "agent"
     ]
     t_low, high_value = _thresholds(request)
     view = packet_view(
@@ -527,6 +529,21 @@ def handoff_case(
     if evidence:
         view["band_evidence"] = evidence
     _attach_reply(request, case_id, view)
+    transcript = transcript_for(events)
+    if transcript is not None:
+        audit = request.app.state.ops.agent_steps(str(transcript.get("conversation_id") or ""))
+        transcript["audit"] = [
+            {
+                "step": row.get("step"),
+                "tool": row.get("tool"),
+                "tokens_in": row.get("tokens_in"),
+                "tokens_out": row.get("tokens_out"),
+                "latency_ms": row.get("latency_ms"),
+                "fallback": row.get("fallback"),
+            }
+            for row in audit
+        ]
+        view["agent"] = transcript
     if view.get("reply_draft_status") == "pending":
         engine = request.app.state.engine
         if not engine.draft_in_progress(case_id):

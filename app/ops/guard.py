@@ -13,6 +13,7 @@ AUDIT_TABLES = (
     "audit_event",
     "audit_current",
     "audit_llm_call_current",
+    "audit_agent_step",
 )
 INSERT_ONLY_TABLES = ("test_cases",)
 

@@ -28,6 +28,14 @@ def _demo_attack(row: dict[str, Any]) -> bool:
     return bool(row.get("demo_attack"))
 
 
+def _agent_explained(row: dict[str, Any]) -> bool:
+    return (
+        row.get("source") == "agent"
+        and row.get("decision") == "auto_resolved"
+        and row.get("final_resolution_status") in {"pending_explained", "reversed_explained"}
+    )
+
+
 def select_cases(
     cases: list[dict[str, Any]],
     *,
@@ -102,7 +110,11 @@ def compute_metrics(
     for row in handoffs:
         reason = str(row.get("handoff_reason") or "unspecified")
         reasons[reason] = reasons.get(reason, 0) + 1
-    contained = [row for row in closed if row.get("decision") != "handoff"]
+    # Analytics: a pending or reversed charge the AI agent explained and closed is its own
+    # line (ai_resolved). It stays out of dispute containment so it cannot inflate it.
+    ai_resolved = [row for row in closed if _agent_explained(row)]
+    dispute_closed = [row for row in closed if not _agent_explained(row)]
+    contained = [row for row in dispute_closed if row.get("decision") != "handoff"]
     open_cases = [row for row in chosen if not row.get("decision")] + waiting
     durations = _durations(closed)
     latencies = [int(row.get("latency_ms") or 0) for row in chosen_calls]
@@ -143,7 +155,13 @@ def compute_metrics(
                 len(handoffs),
             ),
         },
-        "k6_containment": _rate(len(contained), len(closed)),
+        "k6_containment": _rate(len(contained), len(dispute_closed)),
+        "ai_resolved": {
+            "count": len(ai_resolved),
+            "agent_closed": sum(1 for row in closed if row.get("source") == "agent"),
+            "note": "Pending or reversed charges the AI agent explained and closed. "
+            "Not part of containment.",
+        },
         "k7_time_to_resolution": {
             "p50_s": _percentile(durations, 0.5),
             "p90_s": _percentile(durations, 0.9),
