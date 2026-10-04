@@ -178,7 +178,7 @@ The agent eval set is frozen. Pass criteria and the build notes are in `ml/agent
 Open: after the agent deploys to `next` (target 9:00 AM CST Oct 4), run this set on `next` and post the results before the noon go/no-go. `next` runs with `FORCE_TEST_CASES`, so those cases stay out of live Métricas.
 
 ## Build progress
-AI agent intake (Hack Engineer). Branch `feat/ai-agent`, PR to `main`, not merged.
+AI agent intake (Hack Engineer). Branch `feat/ai-agent`, PR #16 to `main`, not merged. Last deploy to `next`: 5049386, revision `databank-sv-app-00039-dox` (Oct 3, 8:20 PM CST). Live (00035-tov) untouched.
 
 Done:
 - `AGENT_ENABLED` env flag, default off. Off means `/api/agent/message` is 404 and the page behaves as before. `deploy/cloudrun.sh` turns it on for `next*` tags only; `AGENT_ENABLED=true deploy/cloudrun.sh live-<sha>` is the promotion switch.
