@@ -182,17 +182,17 @@ AI agent intake (Hack Engineer). Branch `feat/ai-agent`, PR to `main`, not merge
 
 Done:
 - `AGENT_ENABLED` env flag, default off. Off means `/api/agent/message` is 404 and the page behaves as before. `deploy/cloudrun.sh` turns it on for `next*` tags only; `AGENT_ENABLED=true deploy/cloudrun.sh live-<sha>` is the promotion switch.
-- `app/agent/`: one gpt-4o-mini tool-calling loop (max 4 model calls, 8 s total, no retries). Tools `buscar_cargos`, `calcular_riesgo`, `explicar_estado`, `pedir_confirmacion_bloqueo`, `pasar_a_humano` wrap the existing engine (`Engine.assess_charge` reuses the same rules, model and thresholds; nothing new is scored). Any model error or timeout falls back to the guided flow with the grey "Modo guiado" note.
-- The model never blocks. `pedir_confirmacion_bloqueo` only opens the existing `awaiting_block_confirmation` case ("Confirmo el bloqueo" / "No, solo revisar"); the block still happens only through `POST /cases/{id}/actions` `confirm_block`. Tools only accept charges that `buscar_cargos` returned this turn.
+- `app/agent/`: one gpt-4o-mini tool-calling loop (max 4 model calls, 8 s total, no retries). Tools `buscar_cargos`, `calcular_riesgo`, `explicar_estado`, `pedir_confirmacion_bloqueo`, `pasar_a_humano` wrap the existing engine (`Engine.assess_charge` reuses the same rules, model and thresholds; a missing `fraud_features` row follows the engine's existing path). Any model error or timeout falls back to the guided flow with the grey "Modo guiado" note.
+- High risk always wins, server-side: `explicar_estado` on a HIGH charge opens the block question instead, and a single matched HIGH charge gets the block question even if the model only answered in text. Pending/reversed HIGH charges use a fixed ES/PT template ("Ese cargo está pendiente… ¿Bloqueamos tu tarjeta?").
+- LOW after `calcular_riesgo`: the engine's explanation with Reconozco / Disputa (closed without a human).
+- The model never blocks. The block happens only through `POST /cases/{id}/actions` `confirm_block` after "Confirmo el bloqueo". Tools only accept charges that `buscar_cargos` returned (or the customer picked).
 - Injection guard (Protegido) and PII masking run before the model. Model text that claims a block, refund or credit is replaced.
 - Customer page: free text goes to the agent (`static/js/agent_chat.js`), live step lines (NDJSON stream), "Agente IA" bubble with the matched charge, candidate chips. Charge buttons, demos and Intenta romperlo keep the guided flow.
-- Console packet shows the masked conversation, the agent steps and a token/latency summary (`audit_event` kind `agent`, read by `/api/handoff/{id}` as `view.agent`).
-- Audit: `app.audit_agent_step` (migration `migrations/007_agent_step.sql`, applied Oct 3 on Supabase): one row per step with `conversation_id`, `step`, `tool`, `tokens_in`, `tokens_out`, `latency_ms`, `fallback`. Agent cases carry `audit_case.source = 'agent'`. Métricas shows "Resueltos por el Agente IA" as its own tile when the flag is on; those cases are left out of containment.
+- Console packet: masked conversation, agent steps, token/latency summary (`view.agent`).
+- Audit: `app.audit_agent_step` (`migrations/007_agent_step.sql`, applied Oct 3 on Supabase), one row per step with `conversation_id`, `step`, `tool`, `tokens_in`, `tokens_out`, `latency_ms`, `fallback`, `outcome` (tool arguments, no customer text). Agent cases carry `audit_case.source = 'agent'`. Métricas shows "Resueltos por el Agente IA" as its own tile when the flag is on; those cases are left out of containment.
+- Eval on `next`: `EVAL_RUNNER_TOKEN=<eval-runner-token> python scripts/agent_eval_next.py --base https://next---databank-sv-app-4oixi2h3ua-uc.a.run.app --out outputs.jsonl`, then `python ml/agent_eval/score.py outputs.jsonl`. The runner reads only `id`, `customer_id` and `message`; the endpoint accepts `customer_key` only with the eval runner token.
 - Tests: `tests/test_agent.py`, `tests/test_cloudrun_script.py`.
 
 Left / notes:
-- Eval run against `next` (needs `ml/agent_eval/` on main). The endpoint accepts `EVAL_RUNNER_TOKEN` with `eval_run_id`/`case_source` like `/cases`; send `{"message": ..., "stream": false}` with a customer session.
 - The trust check counts RLS tables; `app.audit_agent_step` is one more table (RLS on, INSERT/SELECT only).
 - AGENTS.md test step 2 uses Ana, but Ana has no Uber charge in the data, so the agent offers candidate chips. Camilo has one Uber charge.
-
-Last deployed: see the next entry below.

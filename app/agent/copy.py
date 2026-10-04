@@ -26,6 +26,16 @@ _COPY: dict[str, dict[str, str]] = {
         "confirm_block": "Confirmo el bloqueo",
         "decline_block": "No, solo revisar",
         "band_pending": "sin riesgo de fraude, solo el estado",
+        "explained_low": "Le expliqué el cargo: riesgo bajo",
+        "high_status_asked": "Riesgo alto: pedí su confirmación antes de bloquear",
+        "high_pending": (
+            "Ese cargo está pendiente, todavía no se ha cobrado. Además, lo marcamos como "
+            "riesgo alto. ¿Bloqueamos tu tarjeta?"
+        ),
+        "high_reversed": (
+            "Ese cargo fue revertido, el monto ya volvió. Además, lo marcamos como riesgo "
+            "alto. ¿Bloqueamos tu tarjeta?"
+        ),
     },
     "pt": {
         "agent_label": "Agente IA",
@@ -52,6 +62,16 @@ _COPY: dict[str, dict[str, str]] = {
         "confirm_block": "Confirmo o bloqueio",
         "decline_block": "Não, só revisar",
         "band_pending": "sem risco de fraude, só o status",
+        "explained_low": "Expliquei a cobrança: risco baixo",
+        "high_status_asked": "Risco alto: pedi sua confirmação antes de bloquear",
+        "high_pending": (
+            "Essa cobrança está pendente, ainda não foi cobrada. Além disso, marcamos como "
+            "risco alto. Bloqueamos seu cartão?"
+        ),
+        "high_reversed": (
+            "Essa cobrança foi estornada, o valor já voltou. Além disso, marcamos como risco "
+            "alto. Bloqueamos seu cartão?"
+        ),
     },
 }
 

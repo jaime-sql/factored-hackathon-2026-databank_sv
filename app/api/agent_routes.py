@@ -36,6 +36,8 @@ class AgentMessageIn(BaseModel):
     stream: bool = False
     eval_run_id: str | None = None
     case_source: str | None = None
+    # Eval runner only (valid EVAL_RUNNER_TOKEN and eval_run_id): act as this customer.
+    customer_key: str | None = Field(default=None, max_length=64)
 
 
 def _enabled(request: Request) -> bool:
@@ -58,7 +60,6 @@ def agent_message(
     if not _enabled(request):
         raise APIError(404, "not_found", "Not found")
     settings = _settings(request)
-    customer_key = _customer(request)
     presented = (eval_runner_token or "").strip()
     if agent_role(settings, presented) == "judge" and (body.eval_run_id or body.case_source):
         raise APIError(403, "eval_fields_forbidden", "A judge token cannot set eval fields")
@@ -67,6 +68,14 @@ def agent_message(
     )
     is_eval = bool(eval_run_id or case_source)
     engine = request.app.state.engine
+    if body.customer_key and is_eval:
+        if engine.bank.get_customer(body.customer_key) is None:
+            raise APIError(404, "not_found", "Customer not found")
+        customer_key = body.customer_key
+    elif body.customer_key:
+        raise APIError(403, "forbidden", "customer_key needs the eval runner token")
+    else:
+        customer_key = _customer(request)
     runner = AgentRunner(
         engine, request.app.state.agent_model, timeout_seconds=settings.agent_timeout_seconds
     )

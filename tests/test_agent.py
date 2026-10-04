@@ -78,7 +78,7 @@ def say(text: str) -> LLMReply:
 def agent_client(tmp_path: Path) -> Iterator[TestClient]:
     with TestClient(create_app(_settings(tmp_path, agent_enabled=True))) as client:
         client.app.state.engine.triage = ScriptedTriage(
-            {"tx_camilo_abroad": "low", "tx_maria_low": "low", "tx_maria_review": "review"}
+            {"tx_camilo_abroad": "review", "tx_maria_low": "low", "tx_maria_review": "review"}
         )
         yield client
 
@@ -220,19 +220,19 @@ def test_pending_question_is_explained_and_closed_without_a_human(
     assert metrics["k6_containment"]["n"] == 0
 
 
-def test_explicar_estado_refuses_a_high_risk_pending_charge(agent_client: TestClient) -> None:
+def test_explicar_estado_on_a_high_pending_charge_asks_about_the_block(
+    agent_client: TestClient,
+) -> None:
     headers = login(agent_client, "maria")
     model = ScriptedModel(
         [
             tool("buscar_cargos", comercio="Uber"),
             tool("explicar_estado", transaction_key="tx_maria_pending_high"),
-            tool("pedir_confirmacion_bloqueo", transaction_key="tx_maria_pending_high"),
         ]
     )
     body = _send(agent_client, headers, model, message="¿Por qué está pendiente el Uber?")
-    assert [step["ok"] for step in body["steps"]] == [True, False, True]
-    tool_reply = json.loads(model.calls[2][-1]["content"])
-    assert tool_reply["siguiente"] == "pedir_confirmacion_bloqueo"
+    assert [step["ok"] for step in body["steps"]] == [True, True]
+    assert len(model.calls) == 2
     assert body["case"]["state"] == "awaiting_block_confirmation"
 
 
@@ -492,3 +492,174 @@ def test_search_without_a_merchant_name_uses_amount_and_type(agent_client: TestC
     assert not confident and 2 <= len(found) <= 3
     found, confident = search(txs, customer, {"comercio": "Netflix"})
     assert not confident
+
+
+# High risk always wins -----------------------------------------------------------------
+
+
+def test_status_question_on_a_high_pending_charge_asks_about_the_block(
+    agent_client: TestClient,
+) -> None:
+    headers = login(agent_client, "maria")
+    body = _send(
+        agent_client,
+        headers,
+        ScriptedModel(
+            [
+                tool("buscar_cargos", comercio="Uber"),
+                tool("explicar_estado", transaction_key="tx_maria_pending_high"),
+            ]
+        ),
+        message="¿Por qué está pendiente el cargo de Uber?",
+    )
+    case = body["case"]
+    assert case["state"] == "awaiting_block_confirmation"
+    assert body["reply"] == (
+        "Ese cargo está pendiente, todavía no se ha cobrado. Además, lo marcamos como "
+        "riesgo alto. ¿Bloqueamos tu tarjeta?"
+    )
+    assert [a["label"] for a in case["actions"]] == ["Confirmo el bloqueo", "No, solo revisar"]
+    assert agent_client.app.state.ops.list_handoffs() == []
+    assert _blocks(agent_client) == []
+
+
+def test_high_wins_even_when_the_model_only_answers_in_text(agent_client: TestClient) -> None:
+    headers = login(agent_client, "maria")
+    body = _send(
+        agent_client,
+        headers,
+        ScriptedModel(
+            [tool("buscar_cargos", comercio="Gasolinera"), say("Ese cargo fue revertido.")]
+        ),
+        message="¿qué pasó con el cargo de la gasolinera?",
+    )
+    assert body["case"]["state"] == "awaiting_block_confirmation"
+    assert body["steps"][-1]["tool"] == "pedir_confirmacion_bloqueo"
+    assert body["reply"].startswith("Ese cargo fue revertido, el monto ya volvió.")
+    assert body["reply"].endswith("¿Bloqueamos tu tarjeta?")
+    rows = agent_client.app.state.ops.agent_steps(body["conversation_id"])
+    assert rows[-1]["outcome"] == "enforced_high"
+
+
+def test_high_template_in_portuguese(agent_client: TestClient) -> None:
+    headers = login(agent_client, "maria")
+    body = _send(
+        agent_client,
+        headers,
+        ScriptedModel([tool("explicar_estado", transaction_key="tx_maria_pending_high")]),
+        message="por que está pendente?",
+        language="pt",
+        transaction_key="tx_maria_pending_high",
+    )
+    assert body["reply"] == (
+        "Essa cobrança está pendente, ainda não foi cobrada. Além disso, marcamos como "
+        "risco alto. Bloqueamos seu cartão?"
+    )
+    assert [a["label"] for a in body["case"]["actions"]] == [
+        "Confirmo o bloqueio",
+        "Não, só revisar",
+    ]
+
+
+def test_selected_high_charge_with_a_model_failure_still_asks_first(
+    agent_client: TestClient,
+) -> None:
+    headers = login(agent_client, "maria")
+    body = _send(
+        agent_client,
+        headers,
+        ScriptedModel([LLMError("down")]),
+        message="¿y este pendiente?",
+        transaction_key="tx_maria_pending_high",
+    )
+    assert body["mode"] == "guided"
+    assert body["case"]["state"] == "awaiting_block_confirmation"
+    assert body["reply"].startswith("Ese cargo está pendiente")
+
+
+# Missing fraud_features ----------------------------------------------------------------
+
+
+def test_calcular_riesgo_handles_charges_without_a_feature_row(
+    agent_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bank = agent_client.app.state.bank
+    monkeypatch.setattr(bank, "get_features", lambda customer_key, transaction_key: None)
+    headers = login(agent_client, "maria")
+    pending = _send(
+        agent_client,
+        headers,
+        ScriptedModel(
+            [
+                tool("calcular_riesgo", transaction_key="tx_maria_pending"),
+                tool("explicar_estado", transaction_key="tx_maria_pending"),
+            ]
+        ),
+        message="¿este cargo es riesgoso?",
+        transaction_key="tx_maria_pending",
+    )
+    assert pending["steps"][0]["ok"] is True
+    assert pending["steps"][0]["label"] == "Riesgo: sin riesgo de fraude, solo el estado"
+    assert pending["case"]["state"] == "rule_explained"
+    review = _send(
+        agent_client,
+        headers,
+        ScriptedModel(
+            [
+                tool("calcular_riesgo", transaction_key="tx_maria_nofeat"),
+                tool("pasar_a_humano", transaction_key="tx_maria_nofeat"),
+            ]
+        ),
+        message="no reconozco este cargo",
+        transaction_key="tx_maria_nofeat",
+    )
+    assert review["steps"][0]["label"] == "Riesgo: Revisión"
+    assert review["case"]["state"] == "handed_off"
+
+
+def test_low_band_is_explained_by_the_engine_after_calcular_riesgo(
+    agent_client: TestClient,
+) -> None:
+    headers = login(agent_client, "maria")
+    body = _send(
+        agent_client,
+        headers,
+        ScriptedModel([tool("calcular_riesgo", transaction_key="tx_maria_low")]),
+        message="¿este cargo es seguro?",
+        transaction_key="tx_maria_low",
+    )
+    assert body["case"]["state"] == "merchant_explained"
+    assert [a["id"] for a in body["case"]["actions"]] == ["recognize", "open_dispute"]
+
+
+# Eval runner -----------------------------------------------------------------------------
+
+
+def test_eval_runner_can_act_as_a_customer_only_with_its_token(agent_client: TestClient) -> None:
+    agent_client.app.state.agent_model = ScriptedModel([say("Solo ayudo con cargos.")])
+    body = {"message": "hola", "customer_key": "ck_mx_maria", "eval_run_id": "run-1"}
+    refused = agent_client.post("/api/agent/message", json=body)
+    assert refused.status_code == 403
+    ok = agent_client.post(
+        "/api/agent/message", json=body, headers={"EVAL_RUNNER_TOKEN": "runner-secret"}
+    )
+    assert ok.status_code == 200
+    rows = agent_client.app.state.ops.agent_steps(ok.json()["conversation_id"])
+    assert rows and rows[0]["eval_run_id"] == "run-1"
+
+
+def test_eval_runner_maps_results_to_eval_actions() -> None:
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("runner", root / "scripts" / "agent_eval_next.py")
+    assert spec and spec.loader
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    assert runner.action_of({"protected": True, "case": {"state": "closed"}}) == "refuse_protected"
+    assert runner.action_of({"case": {"state": "awaiting_block_confirmation"}}) == (
+        "confirm_block_then_handoff"
+    )
+    assert runner.action_of({"case": {"state": "rule_explained"}}) == "explain_and_close"
+    assert runner.action_of({"case": {"state": "handed_off"}}) == "handoff"
+    assert runner.action_of({"case": None, "candidates": [{}]}) == "ask_clarification"

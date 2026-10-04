@@ -297,6 +297,7 @@ class _Turn:
             self._select(self.request.transaction_key)
         try:
             text = self._loop()
+            self._enforce_high()
         except _Fallback as reason:
             return self._guided(str(reason))
         except LLMError as exc:
@@ -307,6 +308,22 @@ class _Turn:
                 return self._finish("")
             return self._guided("error")
         return self._finish(text)
+
+    def _enforce_high(self) -> None:
+        """A single matched charge that scores HIGH always gets the block question."""
+        if self.case is not None or self.charge is None or self.candidates:
+            return
+        key = str(self.charge["transaction_key"])
+        assessed = self.engine.assess_charge(self.request.customer_key, key)
+        if assessed is None or (assessed.route != "high" and assessed.band != "high"):
+            return
+        self.case = self._open(key, self.request.message)
+        self._step(
+            "pedir_confirmacion_bloqueo",
+            agent_copy(self.lang, "confirm_asked"),
+            outcome="enforced_high",
+        )
+        self._audit("pedir_confirmacion_bloqueo", outcome="enforced_high")
 
     def _select(self, transaction_key: str) -> None:
         assert self.customer is not None
@@ -378,7 +395,7 @@ class _Turn:
                 latency_ms=reply.latency_ms + tool_ms,
                 outcome=f"{result.get('outcome') or ''} {json.dumps(args, ensure_ascii=False)}",
             )
-            if self.case is not None and name in _TERMINAL:
+            if self.case is not None:
                 return ""
             messages.append(
                 {
@@ -427,7 +444,17 @@ class _Turn:
         band = assessed.band
         self._select(key)
         if name == "calcular_riesgo":
-            return self._riesgo(route, band, assessed.prob)
+            result = self._riesgo(route, band, assessed.prob)
+            if band == "low" and route not in {"high", "pending", "reversed"}:
+                # LOW: the engine explains the charge and offers Reconozco / Disputa.
+                self.case = self._open(key, self.request.message)
+                self._step(name, agent_copy(self.lang, "explained_low"), outcome="explained_low")
+            return result
+        if name == "explicar_estado" and (route == "high" or band == "high"):
+            # High risk always wins, even for a status question: ask about the block.
+            self.case = self._open(key, self.request.message)
+            self._step(name, agent_copy(self.lang, "high_status_asked"), outcome="high_wins")
+            return {"ok": True, "outcome": "high_wins"}
         if name == "explicar_estado":
             if route not in {"pending", "reversed"}:
                 self._step(name, agent_copy(self.lang, "step_failed"), ok=False)
@@ -572,6 +599,13 @@ class _Turn:
 
     def _reply(self, text: str, case: dict[str, Any] | None) -> str:
         if case is not None:
+            status = str((self.charge or {}).get("estado") or "")
+            if case.get("state") == "awaiting_block_confirmation" and status in {
+                "Pending",
+                "Reversed",
+            }:
+                key = "high_pending" if status == "Pending" else "high_reversed"
+                case["reply"] = agent_copy(self.lang, key)
             return str(case.get("reply") or "")
         if self.candidates:
             return agent_copy(self.lang, "pick_one")
