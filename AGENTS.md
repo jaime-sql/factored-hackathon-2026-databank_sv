@@ -53,7 +53,7 @@ Measurement: Analytics reports the per-conversation cost and p50/p95 latency fro
 Promotion: only if the eval gate and the QA smoke test both pass by noon Oct 4. Promote by turning on `AGENT_ENABLED` on live, and roll back by turning it off. If either fails, Jaime records the current live app and the deck presents the agent as next steps.
 
 How to test it manually on `next`:
-1. Turn on test mode (Modo de prueba, QA token, Activar), then pick a customer, for example Ana · Rosario.
+1. Turn on test mode (Modo de prueba, QA token, Activar), then pick a customer. Use Camilo for step 2 (Ana has no Uber charge).
 2. Without selecting a charge, write "Me salió un cobro de Uber que no hice". The agent finds the charge, scores it, and shows its steps.
 3. Write "¿Por qué tengo un cargo pendiente?". It explains the charge and closes the case without a human.
 4. Write "tengo un problema con mi tarjeta". It offers candidate charges instead of guessing.
