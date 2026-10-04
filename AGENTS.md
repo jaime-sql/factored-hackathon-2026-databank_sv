@@ -176,3 +176,26 @@ The frozen TEST eval already ran once (MLflow run `6b8156af68a440988e2ff36640aca
 The agent eval set is frozen. Pass criteria and the build notes are in `ml/agent_eval/README.md`. Do not edit `ml/agent_eval/cases.jsonl` after a result is in. Add a new version file.
 
 Open: after the agent deploys to `next` (target 9:00 AM CST Oct 4), run this set on `next` and post the results before the noon go/no-go. `next` runs with `FORCE_TEST_CASES`, so those cases stay out of live Métricas.
+
+## Build progress
+AI agent intake (Hack Engineer). Branch `feat/ai-agent`, PR #16 to `main`, not merged. Last deploy to `next`: cafa94d, revision `databank-sv-app-00040-yod` (Oct 3, 8:10 PM CST). Live (00035-tov) untouched.
+
+Done:
+- `AGENT_ENABLED` env flag, default off. Off means `/api/agent/message` is 404 and the page behaves as before. `deploy/cloudrun.sh` turns it on for `next*` tags only; `AGENT_ENABLED=true deploy/cloudrun.sh live-<sha>` is the promotion switch.
+- `app/agent/`: one gpt-4o-mini tool-calling loop (max 4 model calls, 8 s total, no retries). Tools `buscar_cargos`, `calcular_riesgo`, `explicar_estado`, `pedir_confirmacion_bloqueo`, `pasar_a_humano` wrap the existing engine (`Engine.assess_charge` reuses the same rules, model and thresholds; a missing `fraud_features` row follows the engine's existing path). Any model error or timeout falls back to the guided flow with the grey "Modo guiado" note.
+- High risk always wins, server-side: `explicar_estado` on a HIGH charge opens the block question instead, and a single matched HIGH charge gets the block question even if the model only answered in text. Pending/reversed HIGH charges use a fixed ES/PT template ("Ese cargo está pendiente… ¿Bloqueamos tu tarjeta?").
+- LOW after `calcular_riesgo`: the engine's explanation with Reconozco / Disputa (closed without a human).
+- The model never blocks. The block happens only through `POST /cases/{id}/actions` `confirm_block` after "Confirmo el bloqueo". Tools only accept charges that `buscar_cargos` returned (or the customer picked).
+- Injection guard (Protegido) and PII masking run before the model. Model text that claims a block, refund or credit is replaced.
+- Customer page: free text goes to the agent (`static/js/agent_chat.js`), live step lines (NDJSON stream), "Agente IA" bubble with the matched charge, candidate chips. Charge buttons, demos and Intenta romperlo keep the guided flow.
+- Console packet: masked conversation, agent steps, token/latency summary (`view.agent`).
+- Audit: `app.audit_agent_step` (`migrations/007_agent_step.sql`, applied Oct 3 on Supabase), one row per step with `conversation_id`, `step`, `tool`, `tokens_in`, `tokens_out`, `latency_ms`, `fallback`, `outcome` (tool arguments, no customer text). Agent cases carry `audit_case.source = 'agent'`. Métricas shows "Resueltos por el Agente IA" as its own tile when the flag is on; those cases are left out of containment.
+- Eval on `next`: `EVAL_RUNNER_TOKEN=<eval-runner-token> python scripts/agent_eval_next.py --base https://next---databank-sv-app-4oixi2h3ua-uc.a.run.app --out outputs.jsonl`, then `python ml/agent_eval/score.py outputs.jsonl`. The runner reads only `id`, `customer_id` and `message`; the endpoint accepts `customer_key` only with the eval runner token.
+- Round 2 (Oct 3 evening): a conversation is bound to one customer (`conv_<nonce>_<hmac(nonce, customer_key)>` with the session secret). An id from another customer, or a forged one, starts a new conversation and drops the client history (`conversation_reset: true`). Tools always use the session customer; model-sent keys are ignored. Picking a customer clears the chat and shows "Nueva conversación · <Nombre> · <Ciudad>" ("Nova conversa" in PT).
+- Status questions (pending, reversed, "qué pasó", "en qué estado"): `status_pick` ranks the customer's pending/reversed charges first, using merchant, category, type, amount and month words from the message. If exactly one fits, it is explained and closed (server-side, even if the model only answers in text). HIGH still wins.
+- Copy: Spanish uses usted ("¿Bloqueamos su tarjeta?"). Agent replies end with "Caso #XXXXXXXX", the first 8 characters of the case id, which is the same reference the console card now shows. Charge badges in the agent bubble follow the page language (Pendente, Aprovado, Estornado, Recusado).
+- Tests: `tests/test_agent.py`, `tests/test_cloudrun_script.py`.
+
+Left / notes:
+- The trust check counts RLS tables; `app.audit_agent_step` is one more table (RLS on, INSERT/SELECT only).
+- AGENTS.md test step 2 uses Ana, but Ana has no Uber charge in the data, so the agent offers candidate chips. Camilo has one Uber charge.

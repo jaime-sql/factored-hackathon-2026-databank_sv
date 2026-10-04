@@ -905,6 +905,7 @@ _UI = {
         "tile_containment": "Contención",
         "tile_eval": "Evaluación excluida",
         "tile_test": "Prueba excluida",
+        "tile_ai_resolved": "Resueltos por el Agente IA (aparte de la contención)",
         "eval_toggle": (
             "Muestra de demostración (enriquecida en fraude, tasa de riesgo alto cerca de "
             "11 veces la de los datos completos)"
@@ -1048,6 +1049,7 @@ _UI = {
         "tile_containment": "Contenção",
         "tile_eval": "Avaliação excluída",
         "tile_test": "Teste excluído",
+        "tile_ai_resolved": "Resolvidos pelo Agente IA (fora da contenção)",
         "eval_toggle": (
             "Amostra de demonstração (enriquecida em fraude, taxa de risco alto cerca de "
             "11 vezes a dos dados completos)"

@@ -282,6 +282,15 @@ async function refreshCharges() {
 }
 
 async function signIn(persona) {
+  if (
+    persona !== state.persona &&
+    typeof document.dispatchEvent === "function" &&
+    typeof Event === "function"
+  ) {
+    const changed = new Event("hd-persona");
+    changed.persona = persona;
+    document.dispatchEvent(changed);
+  }
   const headers = { "content-type": "application/json" };
   if (state.testMode && state.testToken) headers["X-Test-Token"] = state.testToken;
   const response = await fetch("/api/session", {
@@ -632,6 +641,11 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
   const message = input.value.trim();
   if (!message) return;
   input.value = "";
+  const agent = globalThis.HD_AGENT;
+  if (agent && agent.enabled && typeof agent.send === "function") {
+    await agent.send(message);
+    return;
+  }
   await postCase({ message, language: state.language });
 });
 

@@ -213,7 +213,9 @@ function displayThreshold(raw) {
 }
 
 function cardTitle(item) {
-  const short = String(item.case_id || "").slice(0, 8);
+  // Same reference the customer sees in the agent reply ("Caso #F295033B").
+  const raw = String(item.case_id || "").replaceAll("-", "").slice(0, 8).toUpperCase();
+  const short = raw ? `#${raw}` : "";
   return [item.merchant || "", item.amount || "", short].join(" · ");
 }
 
@@ -381,8 +383,78 @@ function renderPacket(panel, view, trail) {
     }
     nodes.push(why);
   }
+  if (view.agent) nodes.push(agentSection(view.agent));
   panel.replaceChildren(...nodes);
   appendDraft(panel, view);
+}
+
+const AGENT_COPY = {
+  es: {
+    title: "Conversación con el Agente IA",
+    steps: "Pasos del agente",
+    customer: "Cliente",
+    agent: "Agente IA",
+    guided: "Modo guiado",
+    summary: (n, tin, tout, ms) => `${n} pasos · ${tin} tokens de entrada · ${tout} de salida · ${ms} ms`,
+  },
+  pt: {
+    title: "Conversa com o Agente IA",
+    steps: "Etapas do agente",
+    customer: "Cliente",
+    agent: "Agente IA",
+    guided: "Modo guiado",
+    summary: (n, tin, tout, ms) => `${n} etapas · ${tin} tokens de entrada · ${tout} de saída · ${ms} ms`,
+  },
+};
+
+// Conversation and agent steps from the stored transcript. Customer text is already masked.
+function agentSection(agent) {
+  const copy = AGENT_COPY[packetLanguage()];
+  const box = document.createElement("section");
+  box.className = "agent-packet";
+  const title = document.createElement("h3");
+  title.textContent = copy.title;
+  box.appendChild(title);
+  const talk = document.createElement("ol");
+  talk.className = "agent-conversation";
+  for (const turn of agent.conversation || []) {
+    const item = document.createElement("li");
+    item.dataset.role = turn.role === "assistant" ? "assistant" : "user";
+    const who = document.createElement("strong");
+    who.textContent = `${turn.role === "assistant" ? copy.agent : copy.customer}: `;
+    item.append(who, document.createTextNode(String(turn.text || "")));
+    talk.appendChild(item);
+  }
+  box.appendChild(talk);
+  const heading = document.createElement("h4");
+  heading.textContent = copy.steps;
+  box.appendChild(heading);
+  const steps = document.createElement("ol");
+  steps.className = "agent-steps";
+  for (const step of agent.steps || []) {
+    const item = document.createElement("li");
+    item.className = "agent-step";
+    item.dataset.state = step.ok ? "done" : "failed";
+    item.dataset.tool = step.tool || "";
+    item.textContent = `${step.ok ? "✓" : "–"} ${step.label || ""} (${step.tool || ""})`;
+    steps.appendChild(item);
+  }
+  box.appendChild(steps);
+  const audit = agent.audit || [];
+  if (audit.length) {
+    const sum = (key) => audit.reduce((total, row) => total + Number(row[key] || 0), 0);
+    const line = document.createElement("p");
+    line.className = "meta";
+    line.textContent = copy.summary(audit.length, sum("tokens_in"), sum("tokens_out"), sum("latency_ms"));
+    box.appendChild(line);
+  }
+  if (agent.mode === "guided") {
+    const note = document.createElement("p");
+    note.className = "agent-guided";
+    note.textContent = copy.guided;
+    box.appendChild(note);
+  }
+  return box;
 }
 
 const DRAFT_POLL_MS = 2000;

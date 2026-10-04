@@ -10,6 +10,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.agent.llm import openai_chat
+from app.api.agent_routes import agent_router
 from app.api.routes import router
 from app.band_evidence import BandEvidenceSource
 from app.bank.fixture import PERSONAS, init_bank
@@ -60,6 +62,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         app.state.triage = LightGBMTriage()
         app.state.engine = Engine(bank, ops, app.state.thresholds, active, app.state.triage)
+        if getattr(app.state, "agent_model", None) is None:
+            app.state.agent_model = openai_chat(active)
         yield
 
     app = FastAPI(title="Harbor Desk", lifespan=lifespan)
@@ -72,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(router)
+    app.include_router(agent_router)
     write_catalog_script()
     static = project_root() / "static"
     if static.exists():

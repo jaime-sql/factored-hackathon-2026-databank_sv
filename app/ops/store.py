@@ -370,6 +370,23 @@ class OpsStore:
                   value REAL NOT NULL,
                   note TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS audit_agent_step (
+                  audit_id TEXT PRIMARY KEY,
+                  conversation_id TEXT NOT NULL,
+                  case_id TEXT,
+                  step INTEGER NOT NULL,
+                  tool TEXT NOT NULL,
+                  tokens_in INTEGER NOT NULL DEFAULT 0,
+                  tokens_out INTEGER NOT NULL DEFAULT 0,
+                  latency_ms INTEGER NOT NULL DEFAULT 0,
+                  fallback INTEGER NOT NULL DEFAULT 0,
+                  outcome TEXT,
+                  model TEXT,
+                  recorded_at TEXT NOT NULL,
+                  is_test INTEGER NOT NULL DEFAULT 0,
+                  is_eval_case INTEGER NOT NULL DEFAULT 0,
+                  eval_run_id TEXT
+                );
                 CREATE TABLE IF NOT EXISTS test_cases (
                   case_id TEXT PRIMARY KEY,
                   marked_at TEXT NOT NULL,
@@ -795,6 +812,51 @@ class OpsStore:
             is_test=bool(row.get("is_test")),
             extras=(("demo_attack", bool(row.get("demo_attack"))),),
         )
+
+    def append_agent_step(self, row: dict[str, Any]) -> bool:
+        """Append one agent step. False (and a log line) when it could not be stored."""
+        try:
+            self._write(
+                f"INSERT INTO {self._table('audit_agent_step')} ("
+                "audit_id, conversation_id, case_id, step, tool, tokens_in, tokens_out, "
+                "latency_ms, fallback, outcome, model, recorded_at, is_test, is_eval_case, "
+                "eval_run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    row["audit_id"],
+                    row["conversation_id"],
+                    row.get("case_id"),
+                    int(row["step"]),
+                    str(row["tool"]),
+                    int(row.get("tokens_in") or 0),
+                    int(row.get("tokens_out") or 0),
+                    int(row.get("latency_ms") or 0),
+                    bool(row.get("fallback")),
+                    row.get("outcome"),
+                    row.get("model"),
+                    row.get("recorded_at") or _now(),
+                    bool(row.get("is_test")) or self.force_test,
+                    bool(row.get("is_eval_case")),
+                    row.get("eval_run_id"),
+                ),
+            )
+            return True
+        except Exception as exc:
+            logger.warning("agent step was not stored (%s)", type(exc).__name__)
+            return False
+
+    def agent_steps(self, conversation_id: str) -> list[dict[str, Any]]:
+        try:
+            rows = self.execute(
+                f"SELECT * FROM {self._table('audit_agent_step')} "
+                "WHERE conversation_id = ? ORDER BY recorded_at, step",
+                (conversation_id,),
+            )
+        except Exception:
+            return []
+        for row in rows:
+            row["fallback"] = _as_bool(row.get("fallback"))
+            row["is_test"] = _as_bool(row.get("is_test"))
+        return rows
 
     def current_llm_calls(self) -> list[dict[str, Any]]:
         return self.execute(f"SELECT * FROM {self._table('audit_llm_call_current')}")
