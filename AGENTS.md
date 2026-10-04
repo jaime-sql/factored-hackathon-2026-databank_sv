@@ -105,3 +105,44 @@ Details are in `pipeline/README.md`. `docs/data-quality.md` is the profiling ref
 - `out/last_run.json` doesn't exist yet, so the trust check's `last_run` is null. Run `run_all.sh` once on Oct 4.
 - Oct 4: a clean-copy reproducibility run of the `pipeline/README.md` commands.
 - Jaime has to decide whether to remove the default `DATABRICKS_HOST` in `pipeline/databricks_load.py`.
+
+## Analytics (handoff from Hack Analytics)
+
+Write-up: `docs/analytics.md` (§8 is the locked set). Scripts: `analytics/`, rerun table in `analytics/README.md`.
+
+### Locked numbers (do not change)
+| number | source (file @ commit) |
+|---|---|
+| Automation 18.01% at cut 0.0002756 (`t_low_default` 0.000275603870032301); missed fraud 29/610 = 4.75%, Wilson 95% CI 3.33–6.74%; HIGH 330, all fraud | `static/data/sim_curve.json` @ 598c341 (`default_point_summary`, `n_high`, `fraud_in_high`), validation |
+| 0.53 missed frauds per 10k charges = (29 + 6) / 663,624 × 10,000 | same file: `missed_fraud.k` + `fraud_in_rule`, `n_charges` @ 598c341 |
+| Cost per case $2.72 vs $3.32 human-only, saving $0.60 (18.0%); low/high scenarios save $0.30 / $1.00 | `sim_curve.json` @ 598c341 (`cost_model`, `default_point_summary`), written by `analytics/simulator_cost.py`; PROJECTION |
+| LLM cost $6.52e-5 per call, mean of 22 QA audit rows | `sim_curve.json` @ 598c341 (`cost_model.llm_cost_source`) |
+| Routing-to-human ratio Mexico 0.96×, Colombia 1.05×, Argentina 1.01×; Mexico missed fraud 21/292 vs 8/318 (Colombia 4/181 + Argentina 4/137) | `static/data/fairness.json` @ 545d99c, validation |
+| Fisher exact two-sided p = 0.0074 for 21/292 vs 8/318 | follows from the `fairness.json` counts; stated in `docs/analytics.md` §8 |
+| Test automation 16.03%; test PR-AUC 0.584 (LightGBM) vs 0.583 (rule `fraud_score > 30`), a tie | `ml/artifacts/test_results.json` @ 6d97a42, test (check only) |
+
+### Rules
+- The deck and docs never quote live Métricas tiles. They quote only the numbers above.
+- Containment = cases closed without handoff ÷ closed cases. Clarifying cases are excluded from numerator and denominator.
+- Every number traces to a repo file at a named commit.
+
+### Re-running (from the repo root)
+- Chart 05 (needs only `static/data/sim_curve.json` and matplotlib): `python analytics/chart_05_dispute_mix.py` → `analytics/charts/05_dispute_case_mix.png`.
+- Need the local DuckDB (`BANK_DUCKDB_PATH`, not in the repo), run from `analytics/`:
+  - `python demand_metrics.py > run.log` → `out/tx_*`, `cp_*`, `res_*`, `cost_*` CSVs, `demand_metrics.sql`, charts 01–03.
+  - `python cost_projection.py` → `out/cost_proj_*.csv`, chart 04.
+  - `python dispute_case_mix.py` → `out/dispute_mix_*.csv` (also needs `HACK_ML_ARTIFACTS` with `val_results.json` and `thresholds.json`).
+- Cost simulator (stdlib only, fills cost fields in the curve): `python analytics/simulator_cost.py --llm-cost-json eval_cost.json --in-place`, or `--curve CURVE.json --llm-cost-usd X --out OUT.json`.
+
+### Open: agent measurement (Oct 4, by 12:00 PM CST)
+- From the agent audit rows (`conversation_id`, `step`, `tool`, `tokens_in`, `tokens_out`, `latency_ms`, fallback flag), report cost per conversation and p50/p95 latency.
+- `next` stores every case as a test, so measure on the ML Engineer's `ml/agent_eval` runs on `next`. Label the figures "measured on the eval set (n=…)", never as live traffic.
+- Show agent-closed non-dispute cases (pending/reversed explanations) as their own Métricas line so they don't inflate dispute containment.
+
+### Open: Oct 5 snapshot
+- Before Jaime sends the submission email, export the live audit log (`app.audit_live`) excluding `demo_attack` and `is_test` rows. Label it demo-seeded with its n.
+- Live Casos was reset to 0 on Oct 3, so only post-reset non-test cases count.
+
+### Optional
+- `docs/simulator_spec.md` T5d: fix the "US$1,66" formatting in the Spanish label.
+- ES vs PT comparison, with PT labeled machine-translated.
