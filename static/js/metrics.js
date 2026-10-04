@@ -164,7 +164,19 @@ function renderTiles(tiles, body, text) {
     text ? text.tile_test : "Prueba excluida",
     formatCount(body.excluded_test_cases == null ? 0 : body.excluded_test_cases),
   );
-  tiles.replaceChildren(cases, handoff, containment, evalTile, testTile);
+  const shown = [cases, handoff, containment, evalTile, testTile];
+  if (body.agent_enabled && body.ai_resolved) {
+    shown.splice(
+      3,
+      0,
+      tile(
+        "ai_resolved",
+        text && text.tile_ai_resolved ? text.tile_ai_resolved : "Resueltos por el Agente IA (aparte de la contención)",
+        formatCount(body.ai_resolved.count || 0),
+      ),
+    );
+  }
+  tiles.replaceChildren(...shown);
 }
 
 function clearSection(id) {

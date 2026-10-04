@@ -757,6 +757,7 @@ def metrics(
     if language in {"es", "pt"}:
         payload = localize_metrics(payload, language)
         payload["eval_toggle_label"] = str(ui_copy(language)["eval_toggle"])
+    payload["agent_enabled"] = bool(_settings(request).agent_enabled)
     payload["trust"] = trust_panel()
     payload["simulator"] = simulator_panel()
     payload["fairness"] = fairness_panel()

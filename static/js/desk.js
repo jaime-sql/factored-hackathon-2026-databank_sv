@@ -632,6 +632,11 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
   const message = input.value.trim();
   if (!message) return;
   input.value = "";
+  const agent = globalThis.HD_AGENT;
+  if (agent && agent.enabled && typeof agent.send === "function") {
+    await agent.send(message);
+    return;
+  }
   await postCase({ message, language: state.language });
 });
 

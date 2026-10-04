@@ -105,3 +105,23 @@ Details are in `pipeline/README.md`. `docs/data-quality.md` is the profiling ref
 - `out/last_run.json` doesn't exist yet, so the trust check's `last_run` is null. Run `run_all.sh` once on Oct 4.
 - Oct 4: a clean-copy reproducibility run of the `pipeline/README.md` commands.
 - Jaime has to decide whether to remove the default `DATABRICKS_HOST` in `pipeline/databricks_load.py`.
+
+## Build progress
+AI agent intake (Hack Engineer). Branch `feat/ai-agent`, PR to `main`, not merged.
+
+Done:
+- `AGENT_ENABLED` env flag, default off. Off means `/api/agent/message` is 404 and the page behaves as before. `deploy/cloudrun.sh` turns it on for `next*` tags only; `AGENT_ENABLED=true deploy/cloudrun.sh live-<sha>` is the promotion switch.
+- `app/agent/`: one gpt-4o-mini tool-calling loop (max 4 model calls, 8 s total, no retries). Tools `buscar_cargos`, `calcular_riesgo`, `explicar_estado`, `pedir_confirmacion_bloqueo`, `pasar_a_humano` wrap the existing engine (`Engine.assess_charge` reuses the same rules, model and thresholds; nothing new is scored). Any model error or timeout falls back to the guided flow with the grey "Modo guiado" note.
+- The model never blocks. `pedir_confirmacion_bloqueo` only opens the existing `awaiting_block_confirmation` case ("Confirmo el bloqueo" / "No, solo revisar"); the block still happens only through `POST /cases/{id}/actions` `confirm_block`. Tools only accept charges that `buscar_cargos` returned this turn.
+- Injection guard (Protegido) and PII masking run before the model. Model text that claims a block, refund or credit is replaced.
+- Customer page: free text goes to the agent (`static/js/agent_chat.js`), live step lines (NDJSON stream), "Agente IA" bubble with the matched charge, candidate chips. Charge buttons, demos and Intenta romperlo keep the guided flow.
+- Console packet shows the masked conversation, the agent steps and a token/latency summary (`audit_event` kind `agent`, read by `/api/handoff/{id}` as `view.agent`).
+- Audit: `app.audit_agent_step` (migration `migrations/007_agent_step.sql`, applied Oct 3 on Supabase): one row per step with `conversation_id`, `step`, `tool`, `tokens_in`, `tokens_out`, `latency_ms`, `fallback`. Agent cases carry `audit_case.source = 'agent'`. Métricas shows "Resueltos por el Agente IA" as its own tile when the flag is on; those cases are left out of containment.
+- Tests: `tests/test_agent.py`, `tests/test_cloudrun_script.py`.
+
+Left / notes:
+- Eval run against `next` (needs `ml/agent_eval/` on main). The endpoint accepts `EVAL_RUNNER_TOKEN` with `eval_run_id`/`case_source` like `/cases`; send `{"message": ..., "stream": false}` with a customer session.
+- The trust check counts RLS tables; `app.audit_agent_step` is one more table (RLS on, INSERT/SELECT only).
+- AGENTS.md test step 2 uses Ana, but Ana has no Uber charge in the data, so the agent offers candidate chips. Camilo has one Uber charge.
+
+Last deployed: see the next entry below.
