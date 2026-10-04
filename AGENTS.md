@@ -147,6 +147,36 @@ Write-up: `docs/analytics.md` (§8 is the locked set). Scripts: `analytics/`, re
 - `docs/simulator_spec.md` T5d: fix the "US$1,66" formatting in the Spanish label.
 - ES vs PT comparison, with PT labeled machine-translated.
 
+## ML
+
+Code is in `ml/`: `ml/triage/` (features, scoring, metrics), `ml/scripts/` (training and the validation write-up), `ml/evals/` (the one TEST run). `ml/scripts/common.py` sets `ROOT` to `/workspace/hack-ml`. `ml/triage/features.py` reads `/workspace/hackathon-data/out/gold/fraud_features.parquet`. Both paths are outside this repo. `load_splits` loads TRAIN and VAL only and raises on TEST unless `ALLOW_TEST_EVAL=1`.
+
+Re-run training and the validation evaluation with the command recorded in `ml/scripts/03_write_doc.py`:
+
+```
+cd scripts && ../.venv/bin/python 01_search.py && ../.venv/bin/python 02_finalize.py && ../.venv/bin/python 04_rule_high_bands.py && ../.venv/bin/python 05_pending_reversed_high.py && ../.venv/bin/python 03_write_doc.py
+```
+
+In this repo those files are under `ml/scripts/`. From the repo root, run that same sequence so `import common` resolves:
+
+```
+cd ml/scripts && python 01_search.py && python 02_finalize.py && python 04_rule_high_bands.py && python 05_pending_reversed_high.py && python 03_write_doc.py
+```
+
+`01_search.py` is the TRAIN/VAL search (rule, logistic regression, LightGBM). `02_finalize.py` freezes the model and the VAL comparison. `04_rule_high_bands.py` re-derives `t_low` on VAL. `05_pending_reversed_high.py` counts the Pending/Reversed HIGH rule. `03_write_doc.py` renders the VAL doc from `val_results.json`. These five scripts do not read command-line flags.
+
+VAL self-test, no refit: `ml/triage/score.py` accepts only `--selftest`. The docstring command is `.venv/bin/python -m triage.score --selftest`. From this repo that is `cd ml && python -m triage.score --selftest`, so `triage` is `ml/triage`. The app package `triage/score.py` has no `--selftest` entry point. The self-test scores VAL and never loads TEST. It needs `ml/artifacts/` (the booster and thresholds) and the VAL parquet above.
+
+Routing, in order: HIGH is `fraud_score > 30`, checked first, including Pending and Reversed. A missing `fraud_score` is not HIGH. Pending/Reversed charges that are not HIGH go to the rule path. Approved/Declined charges that are not HIGH go to REVIEW if the LightGBM raw score is `>= t_low` = `0.000275603870032301`, otherwise LOW.
+
+`static/data/sim_curve.json` and `docs/evaluation.md` are the locked sources. Do not change them.
+
+The frozen TEST eval already ran once (MLflow run `6b8156af68a440988e2ff36640aca29b`). Do not re-run it and do not tune on it. `ml/evals/run_test_eval.py` exits unless `ALLOW_TEST_EVAL=1`, and exits again when its output file already exists.
+
+The agent eval set is frozen. Pass criteria and the build notes are in `ml/agent_eval/README.md`. Do not edit `ml/agent_eval/cases.jsonl` after a result is in. Add a new version file.
+
+Open: after the agent deploys to `next` (target 9:00 AM CST Oct 4), run this set on `next` and post the results before the noon go/no-go. `next` runs with `FORCE_TEST_CASES`, so those cases stay out of live Métricas.
+
 ## Build progress
 AI agent intake (Hack Engineer). Branch `feat/ai-agent`, PR to `main`, not merged.
 
