@@ -6,6 +6,9 @@ The agent chooses among `buscar_cargos`, `explicar_estado` (pending/reversed), `
 
 `cases.jsonl` is v1. Once this file is merged, do not edit it after a result has been seen. A change is a new version file (`cases_v2.jsonl`), not a rewrite of v1.
 
+`ml-frozen-v2` is a sealed 20-case holdout, committed here as a hash only until the single scored run.
+The case file stays off the repo so it cannot be tuned. See [`v2/README.md`](v2/README.md) for the commitment, the verify command, and how to run and score it.
+
 Runs happen on the `next` revision only (`FORCE_TEST_CASES` / `force_test`), so the cases stay out of live Métricas.
 
 ## What each line is
