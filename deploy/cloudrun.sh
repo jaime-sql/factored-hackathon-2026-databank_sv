@@ -12,6 +12,10 @@
 # live Consola queue. A tag starting with "live" is a live candidate and is
 # deployed WITHOUT the flag; only such a revision may be promoted.
 #
+# AI agent: tags starting with "next" get AGENT_ENABLED=true. Every other tag,
+# including live candidates, keeps it off unless AGENT_ENABLED=true is set in the
+# environment of this script (the promotion switch; AGENT_ENABLED=false turns it off).
+#
 # Running this never moves live traffic. To promote a checked live candidate:
 #   gcloud run services update-traffic databank-sv-app --region us-central1 \
 #     --project databank-sv-123456 --to-revisions REVISION=100
@@ -32,7 +36,7 @@
 set -euo pipefail
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  sed -n '2,31p' "$0"
+  sed -n '2,36p' "$0"
   exit 0
 fi
 
@@ -53,6 +57,14 @@ if [[ "${TAG}" == live* ]]; then
   ENV_VARS="ENVIRONMENT=production"
 else
   ENV_VARS="ENVIRONMENT=production,FORCE_TEST_CASES=true"
+fi
+
+agent="${AGENT_ENABLED:-}"
+if [[ -z "${agent}" && "${TAG}" == next* ]]; then
+  agent="true"
+fi
+if [[ "${agent}" == "true" ]]; then
+  ENV_VARS+=",AGENT_ENABLED=true"
 fi
 
 SECRETS="DEMO_AGENT_TOKEN=admin-token:latest"

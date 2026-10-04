@@ -22,8 +22,9 @@ SECRETS = {
 }
 
 
-def _dry_run(*args: str) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, "DRY_RUN": "1"}
+def _dry_run(*args: str, **extra: str) -> subprocess.CompletedProcess[str]:
+    env = {key: value for key, value in os.environ.items() if key != "AGENT_ENABLED"}
+    env.update({"DRY_RUN": "1", **extra})
     return subprocess.run(
         ["bash", str(SCRIPT), *args],
         cwd=ROOT,
@@ -93,3 +94,23 @@ def test_script_never_moves_traffic_or_handles_secret_values() -> None:
     assert "secrets versions" not in commands
     assert "secrets create" not in commands
     assert "--source" not in commands
+
+
+@needs_git
+def test_next_turns_the_agent_on_and_other_tags_do_not() -> None:
+    deploys = {}
+    for tag in ("next", "preview", "live-abc1234"):
+        result = _dry_run(tag, "HEAD")
+        assert result.returncode == 0, result.stderr
+        deploys[tag] = next(line for line in result.stdout.splitlines() if "run deploy" in line)
+    assert "AGENT_ENABLED=true" in deploys["next"]
+    assert "AGENT_ENABLED" not in deploys["preview"]
+    assert "AGENT_ENABLED" not in deploys["live-abc1234"]
+
+
+@needs_git
+def test_agent_flag_can_be_set_explicitly() -> None:
+    on = _dry_run("live-abc1234", "HEAD", AGENT_ENABLED="true")
+    off = _dry_run("next", "HEAD", AGENT_ENABLED="false")
+    assert "AGENT_ENABLED=true" in next(x for x in on.stdout.splitlines() if "run deploy" in x)
+    assert "AGENT_ENABLED" not in next(x for x in off.stdout.splitlines() if "run deploy" in x)
