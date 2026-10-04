@@ -66,3 +66,42 @@ How to test it manually on `next`:
 - The console token flows (AI draft, Resolver, Intenta romperlo) have not been tested end to end by QA. Jaime can test them manually with the steps in `docs/walkthrough.md`.
 - An uptime alert on `/health` needs the Monitoring Editor role, so Jaime has to add it himself. Not urgent.
 - Submission email draft and checklist for Oct 5.
+
+## Data pipeline (Hack Data Engineer)
+Details are in `pipeline/README.md`. `docs/data-quality.md` is the profiling reference.
+
+**Re-run everything with one command** (about 1.5–2 min), from the data build machine. It needs `raw/` and `cache/`, which are not in this repo:
+- `bash pipeline/run_all.sh` builds DuckDB bronze → silver → gold, then the app slice (`app_slice.sqlite`) and the synthetic duplicate fixture. It runs `pipeline/tests/test_leakage.py`, `test_isolation.py` and `test_pii.py`, exports the masked Parquet, and writes `out/last_run.json`. It stops at the first failure.
+- `bash pipeline/run_all.sh --databricks` does the same, then also loads the masked copies into Databricks.
+- The env vars, by name only:
+  - `PSEUDO_SALT` (in `.env`) is always needed.
+  - `DATABRICKS_TOKEN` is needed for `--databricks`. `DATABRICKS_HOST` is optional, and `pipeline/databricks_load.py` has a default for it.
+  - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_DEFAULT_REGION` are needed only to refresh `raw/` from S3. No pipeline script reads them.
+  - `APP_DB_URL` (the app_rw connection) and `SUPABASE_DB_URL` (owner) are needed for `trust_check.py`. `SUPABASE_DB_URL` is also needed for `load_supabase.py`.
+- Secrets always come through secure input or Secret Manager. Never commit them, print them or paste them in chat.
+
+**Trust checks:** `uv run -q --no-project --with-requirements pipeline/requirements.txt python pipeline/trust_check.py --out static/data/trust.json`. Métricas shows the result in "Confianza de los datos". The current expected values (last run Oct 3, 10:33 AM CST, all pass):
+1. Tables matching the pipeline: 6/6. That's customers 1,091, transactions 40,322, transaction_labels 40,322, fraud_features 38,910, synthetic_duplicates 600, meta 4.
+2. Eval labels isolated: app_rw gets "permission denied" on `eval.transaction_labels`.
+3. RLS on 17/17 tables in `public`, `eval` and `app`.
+4. Audit append-only: app_rw has only INSERT and SELECT on the audit tables, and only SELECT on the audit views.
+5. app_rw is read-only on `public`, with no write grants.
+6. Reproducible: `bash pipeline/run_all.sh` and `pipeline/requirements.txt` exist.
+
+**Where the data lives:**
+- Source: the read-only S3 bucket `factored-datathon-2026-s3-157725502942-us-east-2-an` (us-east-2), copied locally to `raw/`. The pipeline uses transactions, customers and products.
+- Databricks: `workspace.bronze`, `workspace.silver` and `workspace.gold`, masked only. Unmasked PII never leaves the build machine.
+  - Bronze and silver each have `transactions_masked` 4,425,008, `customers_masked` 150,000 and `products_masked` 400,000.
+  - Gold has `transactions_masked` 4,425,008, `customers_masked` 150,000, `fraud_features` 4,291,915, `fraud_splits` 4,291,915 and `synthetic_duplicates` 600. Gold has no products table.
+- Supabase: project `dmqwgbtrrnxkgcahunrc` holds the app slice, built from gold. `public` has the app tables. `eval` holds the labels and is not readable by app_rw. `load_supabase.py` and `trust_check.py` refuse any other project.
+- Never touch the Supabase project iglesiaSJB (`kwbhytabavegnqfeidjw`).
+
+**Data facts the agent build relies on** (app slice, 40,322 charges):
+- 30,596 charges have no `merchant_name`.
+- There are 24 distinct merchants.
+- Status counts: Approved 36,967, Declined 1,943, Pending 929, Reversed 483.
+
+**Open items:**
+- `out/last_run.json` doesn't exist yet, so the trust check's `last_run` is null. Run `run_all.sh` once on Oct 4.
+- Oct 4: a clean-copy reproducibility run of the `pipeline/README.md` commands.
+- Jaime has to decide whether to remove the default `DATABRICKS_HOST` in `pipeline/databricks_load.py`.
