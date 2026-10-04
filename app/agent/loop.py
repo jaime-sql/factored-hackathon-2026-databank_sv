@@ -8,6 +8,8 @@ Any model error or timeout falls back to the guided flow.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import re
@@ -20,7 +22,15 @@ from typing import Any
 
 from app.agent.copy import agent_copy
 from app.agent.llm import ChatModel, LLMError, LLMReply
-from app.agent.tools import CATEGORIES, STATUSES, TYPES, describe, search
+from app.agent.tools import (
+    CATEGORIES,
+    STATUSES,
+    TYPES,
+    describe,
+    is_status_question,
+    search,
+    status_pick,
+)
 from app.cases.engine import CaseResult, Engine
 from app.guardrails.injection import detect_injection
 from app.guardrails.pii import redact
@@ -30,7 +40,8 @@ from app.ids import new_case_id, new_id
 logger = logging.getLogger("app.agent")
 
 MAX_STEPS = 4
-_CONVERSATION_ID = re.compile(r"^conv_[0-9a-f]{32}$")
+_CONVERSATION_ID = re.compile(r"^conv_([0-9a-f]{32})_([0-9a-f]{16})$")
+_DEFAULT_SECRET = "agent-conversation"
 _TERMINAL = {"explicar_estado", "pedir_confirmacion_bloqueo", "pasar_a_humano"}
 # A model reply may not claim an action the server did not take.
 _CLAIMS = re.compile(
@@ -150,7 +161,7 @@ def system_prompt(language: str) -> str:
         "4. Si el mensaje no trata de cargos ni de su tarjeta, responde en una frase que "
         "solo ayudas con cargos de su lista.\n"
         f"Responde siempre en {reply_language}, en máximo dos frases, sin inventar montos, "
-        "fechas ni comercios."
+        "fechas ni comercios. En español trata al cliente de usted (su tarjeta, usted)."
     )
 
 
@@ -192,11 +203,26 @@ class AgentRunner:
         *,
         timeout_seconds: float = 8.0,
         clock: Callable[[], float] = time.monotonic,
+        secret: str = _DEFAULT_SECRET,
     ) -> None:
         self.engine = engine
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.clock = clock
+        self.secret = secret or _DEFAULT_SECRET
+
+    def conversation_for(self, customer_key: str, nonce: str | None = None) -> str:
+        """A conversation id bound to one customer: conv_<nonce>_<hmac(nonce, customer)>."""
+        nonce = nonce or uuid.uuid4().hex
+        mac = hmac.new(self.secret.encode(), f"{nonce}:{customer_key}".encode(), hashlib.sha256)
+        return f"conv_{nonce}_{mac.hexdigest()[:16]}"
+
+    def owns(self, conversation_id: str | None, customer_key: str) -> bool:
+        found = _CONVERSATION_ID.match(conversation_id or "")
+        if not found:
+            return False
+        expected = self.conversation_for(customer_key, found[1])
+        return hmac.compare_digest(expected, str(conversation_id))
 
     # Public entry ---------------------------------------------------------------------
     def run(
@@ -216,8 +242,16 @@ class _Turn:
         self.request = request
         self.emit = emit
         self.lang = detect_language(request.message or "", request.language)
-        cid = request.conversation_id or ""
-        self.conversation_id = cid if _CONVERSATION_ID.match(cid) else f"conv_{uuid.uuid4().hex}"
+        # A conversation belongs to one customer. An id minted for someone else (or a
+        # missing one) starts a new conversation and drops the client-sent history.
+        if runner.owns(request.conversation_id, request.customer_key):
+            self.conversation_id = str(request.conversation_id)
+            self.reset = False
+        else:
+            self.conversation_id = runner.conversation_for(request.customer_key)
+            self.reset = bool(request.conversation_id)
+            request.history = []
+        self.status_question = is_status_question(request.message or "")
         self.steps: list[Step] = []
         self.step_no = 0
         self.case: CaseResult | None = None
@@ -298,6 +332,7 @@ class _Turn:
         try:
             text = self._loop()
             self._enforce_high()
+            self._enforce_status()
         except _Fallback as reason:
             return self._guided(str(reason))
         except LLMError as exc:
@@ -324,6 +359,21 @@ class _Turn:
             outcome="enforced_high",
         )
         self._audit("pedir_confirmacion_bloqueo", outcome="enforced_high")
+
+    def _enforce_status(self) -> None:
+        """A status question about one pending/reversed charge is explained and closed."""
+        if self.case is not None or self.charge is None or self.candidates:
+            return
+        if not self.status_question or self.charge["estado"] not in {"Pending", "Reversed"}:
+            return
+        key = str(self.charge["transaction_key"])
+        self.case = self._open(key, self.request.message)
+        self._step(
+            "explicar_estado",
+            agent_copy(self.lang, "explained", status=self.charge.get("estado_texto", "")),
+            outcome="enforced_status",
+        )
+        self._audit("explicar_estado", outcome="enforced_status")
 
     def _select(self, transaction_key: str) -> None:
         assert self.customer is not None
@@ -503,8 +553,18 @@ class _Turn:
 
     def _buscar(self, args: dict[str, Any]) -> dict[str, Any]:
         assert self.customer is not None
+        # Always the session customer's charges; any customer field the model sends is ignored.
         transactions = self.engine.bank.get_transactions(self.request.customer_key)
-        found, confident = search(transactions, self.customer, args)
+        picked = None
+        if self.status_question or str(args.get("estado") or "").capitalize() in {
+            "Pending",
+            "Reversed",
+        }:
+            picked = status_pick(transactions, self.customer, args, self.request.message or "")
+        if picked is not None:
+            found, confident = picked
+        else:
+            found, confident = search(transactions, self.customer, args)
         described = [describe(tx, self.customer, self.lang) for tx in found]
         self.allowed.update(item["transaction_key"] for item in described)
         if confident and described:
@@ -584,6 +644,7 @@ class _Turn:
             self._transcript(reply, mode)
         return {
             "conversation_id": self.conversation_id,
+            "conversation_reset": self.reset,
             "mode": mode,
             "label": agent_copy(self.lang, "agent_label"),
             "note": agent_copy(self.lang, "guided_note") if mode == "guided" else "",
@@ -606,7 +667,13 @@ class _Turn:
             }:
                 key = "high_pending" if status == "Pending" else "high_reversed"
                 case["reply"] = agent_copy(self.lang, key)
-            return str(case.get("reply") or "")
+            reply = str(case.get("reply") or "")
+            if not case.get("protected") and case.get("case_id"):
+                ref = agent_copy(self.lang, "case_ref", ref=case_ref(str(case["case_id"])))
+                case["case_ref"] = case_ref(str(case["case_id"]))
+                reply = f"{reply}\n\n{ref}" if reply else ref
+                case["reply"] = reply
+            return reply
         if self.candidates:
             return agent_copy(self.lang, "pick_one")
         cleaned = redact(text or "").strip()[:400]
@@ -645,6 +712,11 @@ class _Turn:
             )
         except Exception:
             logger.exception("agent transcript was not stored")
+
+
+def case_ref(case_id: str) -> str:
+    """Short case reference, the same 8 characters the console card shows."""
+    return "#" + case_id.replace("-", "")[:8].upper()
 
 
 def _next_tool(route: str, band: str) -> str:

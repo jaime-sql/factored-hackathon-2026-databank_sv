@@ -77,7 +77,10 @@ def agent_message(
     else:
         customer_key = _customer(request)
     runner = AgentRunner(
-        engine, request.app.state.agent_model, timeout_seconds=settings.agent_timeout_seconds
+        engine,
+        request.app.state.agent_model,
+        timeout_seconds=settings.agent_timeout_seconds,
+        secret=settings.session_secret,
     )
     agent_request = AgentRequest(
         customer_key=customer_key,

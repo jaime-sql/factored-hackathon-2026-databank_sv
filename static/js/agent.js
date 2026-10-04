@@ -213,7 +213,9 @@ function displayThreshold(raw) {
 }
 
 function cardTitle(item) {
-  const short = String(item.case_id || "").slice(0, 8);
+  // Same reference the customer sees in the agent reply ("Caso #F295033B").
+  const raw = String(item.case_id || "").replaceAll("-", "").slice(0, 8).toUpperCase();
+  const short = raw ? `#${raw}` : "";
   return [item.merchant || "", item.amount || "", short].join(" · ");
 }
 

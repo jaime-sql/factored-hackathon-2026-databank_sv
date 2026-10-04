@@ -354,3 +354,4 @@ header, main { min-width: 0; }
 .agent-packet h3, .agent-packet h4 { margin: 0.4rem 0; font-size: 0.95rem; }
 .agent-conversation { margin: 0; padding-left: 1.1rem; overflow-wrap: anywhere; }
 .agent-conversation li { margin: 0.2rem 0; }
+.agent-divider { margin: 0.2rem 0 0.8rem; padding-bottom: 0.4rem; border-bottom: 1px solid #e3ddd2; color: #6b655c; font-family: system-ui, "Segoe UI", sans-serif; font-size: 0.8rem; text-align: center; }

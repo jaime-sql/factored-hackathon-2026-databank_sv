@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -514,10 +515,11 @@ def test_status_question_on_a_high_pending_charge_asks_about_the_block(
     )
     case = body["case"]
     assert case["state"] == "awaiting_block_confirmation"
-    assert body["reply"] == (
+    assert body["reply"].startswith(
         "Ese cargo está pendiente, todavía no se ha cobrado. Además, lo marcamos como "
-        "riesgo alto. ¿Bloqueamos tu tarjeta?"
+        "riesgo alto. ¿Bloqueamos su tarjeta?"
     )
+    assert body["reply"].endswith("Caso " + body["case"]["case_ref"])
     assert [a["label"] for a in case["actions"]] == ["Confirmo el bloqueo", "No, solo revisar"]
     assert agent_client.app.state.ops.list_handoffs() == []
     assert _blocks(agent_client) == []
@@ -536,7 +538,7 @@ def test_high_wins_even_when_the_model_only_answers_in_text(agent_client: TestCl
     assert body["case"]["state"] == "awaiting_block_confirmation"
     assert body["steps"][-1]["tool"] == "pedir_confirmacion_bloqueo"
     assert body["reply"].startswith("Ese cargo fue revertido, el monto ya volvió.")
-    assert body["reply"].endswith("¿Bloqueamos tu tarjeta?")
+    assert "¿Bloqueamos su tarjeta?" in body["reply"]
     rows = agent_client.app.state.ops.agent_steps(body["conversation_id"])
     assert rows[-1]["outcome"] == "enforced_high"
 
@@ -551,7 +553,7 @@ def test_high_template_in_portuguese(agent_client: TestClient) -> None:
         language="pt",
         transaction_key="tx_maria_pending_high",
     )
-    assert body["reply"] == (
+    assert body["reply"].startswith(
         "Essa cobrança está pendente, ainda não foi cobrada. Além disso, marcamos como "
         "risco alto. Bloqueamos seu cartão?"
     )
@@ -663,3 +665,223 @@ def test_eval_runner_maps_results_to_eval_actions() -> None:
     assert runner.action_of({"case": {"state": "rule_explained"}}) == "explain_and_close"
     assert runner.action_of({"case": {"state": "handed_off"}}) == "handoff"
     assert runner.action_of({"case": None, "candidates": [{}]}) == "ask_clarification"
+
+
+# One conversation per customer -------------------------------------------------------------
+
+
+def test_switching_customer_starts_a_new_conversation(agent_client: TestClient) -> None:
+    maria = login(agent_client, "maria")
+    first = _send(
+        agent_client,
+        maria,
+        ScriptedModel([tool("buscar_cargos", comercio="Uber")]),
+        message="algo de un Uber",
+    )
+    assert first["conversation_reset"] is False
+    teo = login(agent_client, "teo")
+    model = ScriptedModel([say("Solo ayudo con cargos de su lista.")])
+    second = _send(
+        agent_client,
+        teo,
+        model,
+        message="hola",
+        conversation_id=first["conversation_id"],
+        history=[
+            {"role": "user", "text": "algo de un Uber"},
+            {"role": "assistant", "text": "El cargo de Uber de María sigue pendiente."},
+        ],
+    )
+    assert second["conversation_id"] != first["conversation_id"]
+    assert second["conversation_reset"] is True
+    sent = json.dumps(model.calls[0], ensure_ascii=False)
+    assert "María" not in sent and "Uber" not in sent
+
+
+def test_same_customer_keeps_the_conversation(agent_client: TestClient) -> None:
+    maria = login(agent_client, "maria")
+    first = _send(
+        agent_client,
+        maria,
+        ScriptedModel([tool("buscar_cargos", comercio="Uber")]),
+        message="algo de un Uber",
+    )
+    model = ScriptedModel([say("Entendido.")])
+    again = _send(
+        agent_client,
+        maria,
+        model,
+        message="gracias",
+        conversation_id=first["conversation_id"],
+        history=[{"role": "user", "text": "algo de un Uber"}],
+    )
+    assert again["conversation_id"] == first["conversation_id"]
+    assert again["conversation_reset"] is False
+    assert "algo de un Uber" in json.dumps(model.calls[0], ensure_ascii=False)
+
+
+def test_forged_conversation_ids_are_reset(agent_client: TestClient) -> None:
+    maria = login(agent_client, "maria")
+    forged = "conv_" + "a" * 32 + "_" + "b" * 16
+    body = _send(
+        agent_client, maria, ScriptedModel([say("Hola.")]), message="hola", conversation_id=forged
+    )
+    assert body["conversation_id"] != forged
+    assert body["conversation_reset"] is True
+
+
+def test_tools_only_see_the_session_customers_charges(agent_client: TestClient) -> None:
+    maria = login(agent_client, "maria")
+    model = ScriptedModel(
+        [
+            tool("buscar_cargos", comercio="Ferretería", customer_key="ck_mx_teo"),
+            tool("explicar_estado", transaction_key="tx_teo_pending_high"),
+            tool("pedir_confirmacion_bloqueo", transaction_key="tx_teo_pending_high"),
+            say("No encontré ese cargo."),
+        ]
+    )
+    body = _send(agent_client, maria, model, message="¿y la ferretería?")
+    keys = {c["transaction_key"] for c in body["candidates"]}
+    assert all(key.startswith("tx_maria") for key in keys)
+    assert body["case"] is None
+    tool_results = [m for call in model.calls for m in call if m.get("role") == "tool"]
+    assert "tx_teo" not in json.dumps(tool_results)
+    assert [step["ok"] for step in body["steps"]][1:] == [False, False]
+    # A chip key from another customer is ignored too.
+    picked = _send(
+        agent_client,
+        maria,
+        ScriptedModel([say("¿Cuál cargo?")]),
+        message="este",
+        transaction_key="tx_teo_pending_high",
+    )
+    assert picked["charge"] is None and picked["case"] is None
+
+
+# Status questions ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("message", "args", "expected"),
+    [
+        ("¿por qué sigue pendiente lo de la farmacia?", {}, "tx_maria_pending"),
+        ("lo del cine que me devolvieron, ¿ya quedó?", {"estado": "Reversed"}, "tx_maria_reversed"),
+        ("¿en qué estado está el pago de 180?", {}, "tx_maria_pending"),
+    ],
+)
+def test_status_questions_explain_and_close(
+    agent_client: TestClient, message: str, args: dict[str, Any], expected: str
+) -> None:
+    maria = login(agent_client, "maria")
+    # The model only searches and then answers in text; the server still closes the case.
+    body = _send(
+        agent_client,
+        maria,
+        ScriptedModel([tool("buscar_cargos", **args), say("Ya le expliqué.")]),
+        message=message,
+    )
+    assert body["charge"]["transaction_key"] == expected
+    assert body["case"]["state"] == "rule_explained"
+    assert agent_client.app.state.ops.list_handoffs() == []
+
+
+def test_status_question_on_a_high_reversed_charge_still_asks_about_the_block(
+    agent_client: TestClient,
+) -> None:
+    maria = login(agent_client, "maria")
+    body = _send(
+        agent_client,
+        maria,
+        ScriptedModel([tool("buscar_cargos"), say("Listo.")]),
+        message="¿ya me regresaron lo de la gasolinera?",
+    )
+    assert body["case"]["state"] == "awaiting_block_confirmation"
+    assert body["reply"].startswith("Ese cargo fue revertido")
+    assert _blocks(agent_client) == []
+
+
+def test_status_pick_ranks_pending_and_reversed_first() -> None:
+    from app.agent.tools import is_status_question, status_pick
+    from app.bank.models import Customer
+
+    assert is_status_question("¿Por qué sigue pendiente?")
+    assert is_status_question("o que aconteceu com o estorno?")
+    assert not is_status_question("no reconozco este cargo, ¿qué pasó?")
+    customer = Customer.from_row(
+        {
+            "customer_key": "c",
+            "customer_country": "Mexico",
+            "customer_segment": "Basic",
+            "tz": "America/Mexico_City",
+        }
+    )
+
+    def tx(key: str, status: str, merchant: str, category: str, amount: float) -> Any:
+        from app.bank.models import Transaction
+
+        return Transaction.from_row(
+            {
+                "transaction_key": key,
+                "customer_key": "c",
+                "transaction_ts_utc": "2026-09-01T12:00:00+00:00",
+                "amount": amount,
+                "amount_usd": amount / 18,
+                "currency": "MXN",
+                "merchant_name": merchant,
+                "merchant_category": category,
+                "transaction_type": "Purchase",
+                "transaction_status": status,
+                "customer_country": "Mexico",
+                "customer_segment": "Basic",
+            }
+        )
+
+    charges = [
+        tx("a", "Approved", "Streaming Music", "Entertainment", 99),
+        tx("p", "Pending", "", "Food", 120),
+        tx("r", "Reversed", "Luz del Norte", "Services", 450),
+    ]
+    one, sure = status_pick(charges, customer, {}, "¿qué pasó con el pago de luz que se revirtió?")
+    assert sure and [c.transaction_key for c in one] == ["r"]
+    one, sure = status_pick(charges, customer, {}, "¿sigue pendiente lo de la comida?")
+    assert sure and [c.transaction_key for c in one] == ["p"]
+    many, sure = status_pick(charges, customer, {}, "¿en qué estado están mis cargos?")
+    assert not sure and {c.transaction_key for c in many} == {"p", "r"}
+    assert status_pick(charges, customer, {}, "¿qué pasó con Streaming Music?") is None
+
+
+# Copy -----------------------------------------------------------------------------------------
+
+
+def test_case_reference_matches_the_console(agent_client: TestClient) -> None:
+    camilo = login(agent_client, "camilo")
+    body = _send(
+        agent_client,
+        camilo,
+        ScriptedModel(
+            [
+                tool("buscar_cargos", comercio="Uber"),
+                tool("calcular_riesgo", transaction_key="tx_camilo_abroad"),
+                tool("pasar_a_humano", transaction_key="tx_camilo_abroad"),
+            ]
+        ),
+        message="No reconozco el Uber",
+    )
+    case_id = body["case"]["case_id"]
+    ref = "#" + case_id.replace("-", "")[:8].upper()
+    assert body["case"]["case_ref"] == ref
+    assert body["reply"].endswith(f"Caso {ref}")
+
+
+def test_spanish_agent_copy_uses_usted_and_pt_status_badges() -> None:
+    from app.agent.copy import agent_catalog
+
+    catalog = agent_catalog()
+    for text in catalog["es"].values():
+        assert not re.search(r"\b(tu|tus|tienes|puedes|quieres|elige)\b", text), text
+    assert catalog["pt"]["status_Pending"] == "Pendente"
+    assert catalog["pt"]["status_Approved"] == "Aprovado"
+    assert catalog["pt"]["status_Reversed"] == "Estornado"
+    assert catalog["pt"]["status_Declined"] == "Recusado"
+    assert catalog["es"]["new_conversation"] == "Nueva conversación"
+    assert catalog["pt"]["new_conversation"] == "Nova conversa"

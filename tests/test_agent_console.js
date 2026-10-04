@@ -698,7 +698,7 @@ async function checkLoadQueue() {
   }
   walk(flagged);
   assert.ok(texts.includes("Prueba"));
-  assert.ok(texts.includes("M · 10 MXN · c1"));
+  assert.ok(texts.includes("M · 10 MXN · #C1"));
   assert.equal(texts.includes("c1"), false);
   const panel = flagged.children.find((child) => child.className === "packet-panel");
   assert.equal(panel.tagName, "DIV");
@@ -739,7 +739,7 @@ async function checkLoadQueue() {
     for (const child of el.children || []) walkTitle(child);
   }
   walkTitle(titled);
-  assert.ok(titleTexts.includes("A••• · 20 MXN · abcdef12"));
+  assert.ok(titleTexts.includes("A••• · 20 MXN · #ABCDEF12"));
   assert.equal(titleTexts.includes(full), false);
 }
 

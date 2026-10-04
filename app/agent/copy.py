@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.i18n import transaction_status_label
+
 _COPY: dict[str, dict[str, str]] = {
     "es": {
         "agent_label": "Agente IA",
@@ -27,14 +29,16 @@ _COPY: dict[str, dict[str, str]] = {
         "decline_block": "No, solo revisar",
         "band_pending": "sin riesgo de fraude, solo el estado",
         "explained_low": "Le expliqué el cargo: riesgo bajo",
+        "case_ref": "Caso {ref}",
+        "new_conversation": "Nueva conversación",
         "high_status_asked": "Riesgo alto: pedí su confirmación antes de bloquear",
         "high_pending": (
             "Ese cargo está pendiente, todavía no se ha cobrado. Además, lo marcamos como "
-            "riesgo alto. ¿Bloqueamos tu tarjeta?"
+            "riesgo alto. ¿Bloqueamos su tarjeta?"
         ),
         "high_reversed": (
             "Ese cargo fue revertido, el monto ya volvió. Además, lo marcamos como riesgo "
-            "alto. ¿Bloqueamos tu tarjeta?"
+            "alto. ¿Bloqueamos su tarjeta?"
         ),
     },
     "pt": {
@@ -63,6 +67,8 @@ _COPY: dict[str, dict[str, str]] = {
         "decline_block": "Não, só revisar",
         "band_pending": "sem risco de fraude, só o status",
         "explained_low": "Expliquei a cobrança: risco baixo",
+        "case_ref": "Caso {ref}",
+        "new_conversation": "Nova conversa",
         "high_status_asked": "Risco alto: pedi sua confirmação antes de bloquear",
         "high_pending": (
             "Essa cobrança está pendente, ainda não foi cobrada. Além disso, marcamos como "
@@ -83,4 +89,8 @@ def agent_copy(language: str, key: str, **values: object) -> str:
 
 
 def agent_catalog() -> dict[str, dict[str, str]]:
-    return {lang: dict(rows) for lang, rows in _COPY.items()}
+    catalog = {lang: dict(rows) for lang, rows in _COPY.items()}
+    for lang, rows in catalog.items():
+        for status in ("Pending", "Reversed", "Approved", "Declined"):
+            rows[f"status_{status}"] = transaction_status_label(lang, status)
+    return catalog

@@ -208,3 +208,183 @@ def search(
     if confident:
         return [top.tx], True
     return [m.tx for m in matches[:limit]], False
+
+
+# Status questions -------------------------------------------------------------------------
+
+_PENDING_WORDS = ("pendiente", "pendientes", "pendente", "pendentes", "retenido", "procesando")
+_REVERSED_WORDS = ("revert", "reversad", "reversa", "devuelt", "devolvi", "estorn", "regres")
+_STATUS_PHRASES = (
+    "estado",
+    "status",
+    "que paso",
+    "que pasa",
+    "o que aconteceu",
+    "por que aparece",
+    "por que sigue",
+    "todavia",
+    "aun no",
+    "ainda",
+    "no se ha cobrado",
+    "nao foi cobrad",
+    "sigue apareciendo",
+    "en proceso",
+    "se cobro o no",
+    "ya se cobro",
+)
+_DISPUTE_PHRASES = (
+    "no reconozco",
+    "no lo reconozco",
+    "nao reconheco",
+    "fraude",
+    "no hice",
+    "no fui yo",
+    "nao fui eu",
+    "robo",
+    "robaron",
+    "clonad",
+)
+_MONTHS = {
+    "ene": 1, "enero": 1, "jan": 1, "janeiro": 1,
+    "feb": 2, "febrero": 2, "fev": 2, "fevereiro": 2,
+    "mar": 3, "marzo": 3, "marco": 3,
+    "abr": 4, "abril": 4,
+    "may": 5, "mayo": 5, "mai": 5, "maio": 5,
+    "jun": 6, "junio": 6, "junho": 6,
+    "jul": 7, "julio": 7, "julho": 7,
+    "ago": 8, "agosto": 8,
+    "sep": 9, "sept": 9, "septiembre": 9, "set": 9, "setembro": 9,
+    "oct": 10, "octubre": 10, "out": 10, "outubro": 10,
+    "nov": 11, "noviembre": 11, "novembro": 11,
+    "dic": 12, "diciembre": 12, "dez": 12, "dezembro": 12,
+}  # fmt: skip
+_STOP = set(
+    "que por para con del los las una uno este esta ese esa cargo cargos cobro cobros "
+    "pago aparece sigue tengo tiene mis mio cobranca cobrancas minha meu sobre como "
+    "cuando donde porque aun todavia ainda estado status".split()
+)
+
+
+def _status_words(message: str) -> str:
+    text = fold(message)
+    if any(word in text for word in _REVERSED_WORDS):
+        return "Reversed"
+    if any(word in text.split() for word in _PENDING_WORDS):
+        return "Pending"
+    return ""
+
+
+def is_status_question(message: str) -> bool:
+    """The customer asks where a charge stands (pending, reversed, what happened)."""
+    text = f" {fold(message)} "
+    if _status_words(message):
+        return True
+    if any(f" {phrase}" in text for phrase in _DISPUTE_PHRASES):
+        return False
+    return any(f" {phrase} " in text or f" {phrase}" in text for phrase in _STATUS_PHRASES)
+
+
+def _message_amounts(message: str) -> list[float]:
+    found = []
+    for raw in re.findall(r"\d[\d.,]*", message or ""):
+        clean = raw.rstrip(".,")
+        if re.search(r",\d{1,2}$", clean):
+            clean = clean.replace(".", "").replace(",", ".")
+        else:
+            clean = clean.replace(",", "")
+        try:
+            value = float(clean)
+        except ValueError:
+            continue
+        if value > 0:
+            found.append(value)
+    return found
+
+
+def _fits(
+    tx: Transaction, customer: Customer, args: dict[str, Any], message: str
+) -> tuple[int, int]:
+    """(clues given, fit score) from the model's arguments and the message.
+
+    A merchant name or an exact amount weighs 3; a category, type or month weighs 1.
+    """
+    words = _tokens(message) - _STOP
+    clues = 0
+    hits = 0
+    merchant_words = _tokens(args.get("comercio")) | words
+    name = _tokens(tx.merchant_name)
+    category_words = set(_CATEGORY_WORDS.get(tx.merchant_category or "", "").split())
+    type_words = set(_TYPE_WORDS.get(tx.transaction_type or "", "").split())
+    all_category_words = {w for v in _CATEGORY_WORDS.values() for w in v.split()}
+    all_type_words = {w for v in _TYPE_WORDS.values() for w in v.split()}
+    named = merchant_words & (all_category_words | all_type_words)
+    if args.get("comercio") or named:
+        clues += 1
+        if name & merchant_words:
+            hits += 3
+        elif category_words & merchant_words or type_words & merchant_words:
+            hits += 1
+    if args.get("categoria"):
+        clues += 1
+        if _category_for(str(args["categoria"])) == tx.merchant_category:
+            hits += 1
+    amounts = _message_amounts(message)
+    try:
+        if args.get("monto") not in (None, ""):
+            amounts.append(float(args["monto"]))
+    except (TypeError, ValueError):
+        pass
+    amounts = [a for a in amounts if not (1900 <= a <= 2100 and float(a).is_integer())]
+    if amounts:
+        clues += 1
+        if any(abs(float(tx.amount) - a) <= max(0.51, a * 0.01) for a in amounts):
+            hits += 3
+    local = describe(tx, customer, "es")["fecha"]
+    year, month, _day = (int(part) for part in local.split("-"))
+    months_said = {_MONTHS[w] for w in fold(message).split() if w in _MONTHS}
+    wanted = _parse_date(args.get("fecha"))
+    if wanted is not None:
+        months_said.add(wanted.month)
+    if months_said:
+        clues += 1
+        if month in months_said:
+            hits += 1
+    return clues, hits
+
+
+def status_pick(
+    transactions: list[Transaction],
+    customer: Customer,
+    args: dict[str, Any],
+    message: str,
+    *,
+    limit: int = 3,
+) -> tuple[list[Transaction], bool] | None:
+    """Pending and reversed charges first for a status question.
+
+    Returns (charges, confident), or None when no pending/reversed charge fits, so the
+    normal search runs. Confident when exactly one pending/reversed charge plausibly fits.
+    """
+    pool = [tx for tx in transactions if tx.transaction_status in {"Pending", "Reversed"}]
+    asked = _status_words(message)
+    given = str(args.get("estado") or "").strip().capitalize()
+    asked = asked or (given if given in {"Pending", "Reversed"} else "")
+    if asked and any(tx.transaction_status == asked for tx in pool):
+        pool = [tx for tx in pool if tx.transaction_status == asked]
+    if not pool:
+        return None
+    pool.sort(key=lambda tx: tx.transaction_ts_utc, reverse=True)
+    scored = [(tx, *_fits(tx, customer, args, message)) for tx in pool]
+    clues = max(item[1] for item in scored)
+    if clues == 0:
+        if len(pool) == 1:
+            return [pool[0]], True
+        return pool[:limit], False
+    best = max(item[2] for item in scored)
+    if best == 0:
+        # The words point somewhere else (maybe an approved charge): use the normal search.
+        return None
+    top = [item[0] for item in scored if item[2] == best]
+    if len(top) == 1:
+        return top, True
+    return top[:limit], False

@@ -7,6 +7,7 @@
     copy: {},
     conversationId: null,
     history: [],
+    persona: null,
     busy: false,
   };
   globalThis.HD_AGENT = agent;
@@ -37,14 +38,32 @@
     agent.history = agent.history.slice(-6);
   }
 
-  function reset() {
+  function personaLabel(personaId) {
+    const found = (state.personas || []).find((row) => row.id === personaId);
+    if (!found) return "";
+    const labels = found.labels || {};
+    return labels[lang()] || found.label || "";
+  }
+
+  function divider(personaId) {
+    const label = personaLabel(personaId);
+    const node = el("p", "agent-divider");
+    node.dataset.persona = personaId || "";
+    node.textContent = [t("new_conversation"), label].filter(Boolean).join(" · ");
+    return node;
+  }
+
+  // A new customer always gets a new conversation: new id, no history, no chips, and a
+  // cleared thread with a "Nueva conversación · <Nombre> · <Ciudad>" divider on top.
+  function reset(personaId) {
     agent.conversationId = null;
     agent.history = [];
+    agent.persona = personaId || null;
     const box = thread();
-    if (box && box.dataset && box.dataset.agent === "1") {
-      box.replaceChildren();
-      delete box.dataset.agent;
-    }
+    if (!box) return;
+    box.replaceChildren();
+    if (box.dataset) box.dataset.agent = "1";
+    if (personaId) box.appendChild(divider(personaId));
   }
 
   function startThread() {
@@ -88,18 +107,39 @@
     if (label) label.textContent = step.label;
   }
 
+  function statusText(status, fallback) {
+    return t(`status_${status}`) || fallback || "";
+  }
+
+  function chargeMeta(node) {
+    const status = statusText(node.dataset.status, node.dataset.statusText);
+    node.textContent = [node.dataset.date, node.dataset.amount, status].filter(Boolean).join(" · ");
+  }
+
   function chargeCard(charge) {
     const card = el("div", "agent-charge");
     card.append(el("strong", "", charge.comercio || ""));
-    card.append(
-      el(
-        "span",
-        "meta",
-        [charge.fecha_corta, charge.monto, charge.estado_texto].filter(Boolean).join(" · ")
-      )
-    );
+    const meta = el("span", "meta agent-charge-meta");
+    meta.dataset.date = charge.fecha_corta || "";
+    meta.dataset.amount = charge.monto || "";
+    meta.dataset.status = charge.estado || "";
+    meta.dataset.statusText = charge.estado_texto || "";
+    chargeMeta(meta);
+    card.append(meta);
     return card;
   }
+
+  // Badges and the divider follow the page language when it is toggled.
+  document.addEventListener("hd-lang", () => {
+    const box = thread();
+    if (!box || !box.querySelectorAll) return;
+    for (const node of Array.from(box.querySelectorAll(".agent-charge-meta"))) chargeMeta(node);
+    for (const node of Array.from(box.querySelectorAll(".agent-divider"))) {
+      node.textContent = [t("new_conversation"), personaLabel(node.dataset.persona)]
+        .filter(Boolean)
+        .join(" · ");
+    }
+  });
 
   function bubble(result) {
     const card = el("article", "card agent-bubble");
@@ -152,6 +192,7 @@
   }
 
   function showResult(box, result) {
+    if (result.conversation_reset) agent.history = [];
     agent.conversationId = result.conversation_id || agent.conversationId;
     const card = bubble(result);
     box.appendChild(card);
@@ -234,6 +275,7 @@
 
   async function send(message, transactionKey) {
     if (agent.busy || !state.token) return;
+    if (agent.persona !== state.persona) reset(state.persona);
     agent.busy = true;
     const box = startThread();
     if (message) box.appendChild(el("p", "agent-user", message));
@@ -278,13 +320,11 @@
       agent.enabled = false;
     }
     if (!agent.enabled) return;
-    const original = globalThis.signIn;
-    if (typeof original === "function") {
-      globalThis.signIn = async function (persona) {
-        if (persona !== state.persona) reset();
-        return original(persona);
-      };
-    }
+    agent.persona = state.persona || null;
+    document.addEventListener("hd-persona", (event) => {
+      const persona = event.persona;
+      if (persona !== agent.persona) reset(persona);
+    });
   }
 
   boot();

@@ -282,6 +282,15 @@ async function refreshCharges() {
 }
 
 async function signIn(persona) {
+  if (
+    persona !== state.persona &&
+    typeof document.dispatchEvent === "function" &&
+    typeof Event === "function"
+  ) {
+    const changed = new Event("hd-persona");
+    changed.persona = persona;
+    document.dispatchEvent(changed);
+  }
   const headers = { "content-type": "application/json" };
   if (state.testMode && state.testToken) headers["X-Test-Token"] = state.testToken;
   const response = await fetch("/api/session", {
